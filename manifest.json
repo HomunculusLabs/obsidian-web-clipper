@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Obsidian Web Clipper",
+  "version": "1.0.0",
+  "description": "Clip web pages, PDFs, and YouTube videos to clean markdown for Obsidian",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "clipboardWrite",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["lib/turndown.js", "lib/readability.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "clip-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+O",
+        "mac": "Command+Shift+O"
+      },
+      "description": "Clip current page to Obsidian"
+    }
+  }
+}
