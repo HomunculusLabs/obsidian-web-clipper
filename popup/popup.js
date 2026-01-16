@@ -3,6 +3,27 @@ let currentTab = null;
 let pageType = 'web';
 let clipperContent = null;
 
+// Common SPA domains for special handling
+const SPA_DOMAINS = [
+  'react.dev',
+  'vuejs.org',
+  'nextjs.org',
+  'docs.github.com',
+  'developer.mozilla.org',
+  'stackoverflow.com',
+  'reddit.com',
+  'twitter.com',
+  'x.com',
+  'facebook.com',
+  'instagram.com',
+  'linkedin.com',
+  'notion.so',
+  'atlassian.net',
+  'figma.com',
+  'linear.app',
+  'discord.com'
+];
+
 // Page type detection
 const PAGE_TYPES = {
   YOUTUBE: {
@@ -128,6 +149,24 @@ async function ensureContentScriptLoaded(tabId) {
   }
 }
 
+// Check if current URL is likely an SPA
+function isLikelySPA(url) {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    return SPA_DOMAINS.some(domain => urlObj.hostname === domain || urlObj.hostname.endsWith('.' + domain));
+  } catch {
+    return false;
+  }
+}
+
+// Wait for dynamic content on SPAs
+async function waitForDynamicContent(tabId) {
+  // Extra wait for SPA content to fully render
+  const waitTime = isLikelySPA(currentTab?.url) ? 1000 : 300;
+  await new Promise(resolve => setTimeout(resolve, waitTime));
+}
+
 // Handle clip action
 async function handleClip() {
   const clipBtn = document.getElementById('clipBtn');
@@ -140,10 +179,14 @@ async function handleClip() {
     // Ensure content script is loaded first
     await ensureContentScriptLoaded(currentTab.id);
 
+    // Wait for dynamic content (especially for SPAs)
+    await waitForDynamicContent(currentTab.id);
+
     // Get content from content script
     const results = await chrome.tabs.sendMessage(currentTab.id, {
       action: 'clip',
-      pageType: pageType
+      pageType: pageType,
+      isSPA: isLikelySPA(currentTab?.url)
     });
 
     if (results && results.markdown) {

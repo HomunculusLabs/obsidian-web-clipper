@@ -86,7 +86,8 @@ async function handleClip(request) {
 // Detect page type from URL
 function detectPageType(url) {
   // YouTube
-  if (/^https?:\/\/(www\.)?youtube\.com\/watch/.test(url)) {
+  if (/^https?:\/\/(www\.)?youtube\.com\/watch/.test(url) ||
+      /^https?:\/\/(www\.)?youtube\.com\/shorts/.test(url)) {
     return 'youtube';
   }
 
@@ -99,6 +100,135 @@ function detectPageType(url) {
   return 'web';
 }
 
+// Check YouTube video type and restrictions
+function getYouTubeVideoType() {
+  const url = window.location.href;
+
+  // Check for Shorts
+  if (/^https?:\/\/(www\.)?youtube\.com\/shorts/.test(url)) {
+    return { type: 'shorts', supported: true };
+  }
+
+  // Check for live stream
+  const isLive = document.querySelector('.ytp-live-badge') !== null ||
+                 document.querySelector('[data-live="true"]') !== null ||
+                 document.body.textContent.includes('Watching live');
+
+  if (isLive) {
+    return { type: 'live', supported: false, message: 'Live streams do not have transcripts available.' };
+  }
+
+  // Check for age-restricted
+  const isAgeRestricted = document.body.textContent.includes('sign in to confirm your age') ||
+                          document.querySelector('.ytp-age-gate') !== null ||
+                          document.querySelector('#account-container')?.textContent.includes('age');
+
+  if (isAgeRestricted) {
+    return { type: 'age-restricted', supported: false, message: 'This video is age-restricted and the transcript cannot be accessed.' };
+  }
+
+  // Check for unavailable video
+  const isUnavailable = document.body.textContent.includes('This video is unavailable') ||
+                        document.querySelector('.yt-alert-message')?.textContent.includes('unavailable');
+
+  if (isUnavailable) {
+    return { type: 'unavailable', supported: false, message: 'This video is unavailable or private.' };
+  }
+
+  return { type: 'normal', supported: true };
+}
+
+// Check if content appears to be paywalled
+function isPaywalled(article, documentClone) {
+  if (!article || !article.content) {
+    return true;
+  }
+
+  // Check content length - very short content may indicate paywall
+  const contentLength = article.content.length;
+  const textContent = article.textContent || '';
+  const textLength = textContent.trim().length;
+
+  // Check for common paywall indicators
+  const bodyText = documentClone.body?.textContent || '';
+  const paywallIndicators = [
+    'subscribe',
+    'subscription',
+    'premium',
+    'paywall',
+    'limited access',
+    'create an account',
+    'sign in to continue',
+    'free trial',
+    'upgrade to read',
+    'member exclusive',
+    'premium content'
+  ];
+
+  // Check if page has many paywall indicators
+  let paywallSignCount = 0;
+  const lowerBodyText = bodyText.toLowerCase();
+  paywallIndicators.forEach(indicator => {
+    if (lowerBodyText.includes(indicator)) {
+      paywallSignCount++;
+    }
+  });
+
+  // Short content with paywall indicators
+  if (textLength < 500 && paywallSignCount >= 2) {
+    return true;
+  }
+
+  // Content significantly shorter than total page text
+  if (bodyText.length > 2000 && textLength < bodyText.length * 0.1) {
+    return true;
+  }
+
+  return false;
+}
+
+// Extract visible content as fallback for paywalled pages
+function extractVisibleContent() {
+  // Get main content areas
+  const selectors = [
+    'main',
+    'article',
+    '[role="main"]',
+    '.content',
+    '.article-content',
+    '.post-content',
+    '.entry-content',
+    '#content',
+    'main p'
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      const paragraphs = element.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
+      if (paragraphs.length > 2) {
+        const content = Array.from(paragraphs)
+          .map(p => p.textContent.trim())
+          .filter(text => text.length > 0)
+          .join('\n\n');
+        if (content.length > 200) {
+          return content;
+        }
+      }
+    }
+  }
+
+  // Last resort: get visible paragraphs from body
+  const allParagraphs = document.querySelectorAll('body p');
+  const visibleContent = Array.from(allParagraphs)
+    .map(p => p.textContent.trim())
+    .filter(text => text.length > 50)
+    .slice(0, 20) // Limit to first 20 paragraphs
+    .join('\n\n');
+
+  return visibleContent || 'No extractable content found.';
+}
+
 // Extract web page content using Readability
 function extractWebPageContent(result) {
   // Use Readability to extract article content
@@ -106,6 +236,21 @@ function extractWebPageContent(result) {
   const article = new Readability(documentClone, {
     charThreshold: 100
   }).parse();
+
+  // Check for paywall
+  if (isPaywalled(article, documentClone)) {
+    result.metadata.paywalled = true;
+
+    // Try to get visible content as fallback
+    const visibleContent = extractVisibleContent();
+
+    result.markdown = `# ${result.title}\n\n` +
+      `> ⚠️ **This page may be paywalled or have limited access.**\n` +
+      `> The content below is extracted from the visible page text and may be incomplete.\n\n` +
+      `---\n\n${visibleContent}`;
+
+    return result;
+  }
 
   if (!article || !article.content) {
     throw new Error('Could not extract article content');
@@ -129,11 +274,26 @@ function extractWebPageContent(result) {
 async function extractYouTubeContent(result) {
   result.metadata.type = 'video';
 
+  // Check video type and restrictions first
+  const videoType = getYouTubeVideoType();
+
   // Get video info first
   const videoInfo = getYouTubeVideoInfo();
   result.metadata.channel = videoInfo.channel || '';
   result.metadata.duration = videoInfo.duration || '';
   result.metadata.title = videoInfo.title || result.title;
+  result.metadata.videoType = videoType.type;
+
+  // Handle unsupported video types
+  if (!videoType.supported) {
+    result.markdown = `# ${videoInfo.title || result.title}\n\n` +
+      `**Channel:** ${videoInfo.channel || 'Unknown'}\n` +
+      `**Duration:** ${videoInfo.duration || 'Unknown'}\n` +
+      `**Type:** ${videoType.type}\n\n` +
+      `> ⚠️ **Note:** ${videoType.message}\n\n` +
+      `You can still save the video metadata for reference.`;
+    return result;
+  }
 
   // Try to get transcript from ytInitialPlayerResponse
   const transcript = await getYouTubeTranscript();
@@ -143,7 +303,11 @@ async function extractYouTubeContent(result) {
     result.markdown = formatTranscript(transcript, videoInfo);
   } else {
     // Fallback: just provide video info
-    result.markdown = `# ${videoInfo.title || result.title}\n\n**Channel:** ${videoInfo.channel || 'Unknown'}\n**Duration:** ${videoInfo.duration || 'Unknown'}\n\n> Note: Transcript not available. You may need to enable captions on the video.`;
+    result.markdown = `# ${videoInfo.title || result.title}\n\n` +
+      `**Channel:** ${videoInfo.channel || 'Unknown'}\n` +
+      `**Duration:** ${videoInfo.duration || 'Unknown'}\n\n` +
+      `> ⚠️ **Transcript not available.** This video may not have captions enabled, or they may be disabled by the uploader.\n\n` +
+      `You can still save the video metadata for reference.`;
   }
 
   return result;
@@ -346,13 +510,62 @@ function formatTimestamp(seconds) {
 function extractPDFContent(result) {
   result.metadata.type = 'document';
 
+  // Check for password-protected PDF
+  const isPasswordProtected = document.body.textContent.includes('password') ||
+                              document.querySelector('#passwordText') !== null ||
+                              document.querySelector('.passwordPrompt') !== null;
+
+  if (isPasswordProtected) {
+    result.metadata.passwordProtected = true;
+    result.markdown = `# ${result.title}\n\n` +
+      `> ⚠️ **This PDF is password-protected.**\n\n` +
+      `Text extraction is not available for password-protected PDFs viewed in the browser.\n\n` +
+      `**Source:** ${result.url}`;
+    return result;
+  }
+
+  // Check for scanned/image-based PDF (no text layer)
+  const hasTextLayer = document.querySelector('.textLayer') !== null ||
+                       document.querySelector('canvas + span') !== null;
+
+  if (!hasTextLayer) {
+    // Check if there are canvas elements (indicating scanned PDF)
+    const hasCanvas = document.querySelectorAll('canvas').length > 0;
+    const bodyText = document.body?.textContent?.trim() || '';
+
+    if (hasCanvas && bodyText.length < 100) {
+      result.metadata.scannedPDF = true;
+      result.markdown = `# ${result.title}\n\n` +
+        `> ⚠️ **This appears to be a scanned/image-based PDF.**\n\n` +
+        `Text extraction is not available for image-based PDFs. You may need to use OCR software to extract the text.\n\n` +
+        `**Source:** ${result.url}`;
+      return result;
+    }
+  }
+
   // For PDFs viewed in browser's PDF viewer
   const textContent = extractPDFText();
 
-  if (textContent) {
+  if (textContent && textContent.length > 100) {
+    // Check if PDF content is very long
+    if (textContent.length > 50000) {
+      result.metadata.truncated = true;
+      result.markdown = `# ${result.title}\n\n` +
+        `> ⚠️ **This is a large PDF.** The extracted content below may be truncated.\n\n` +
+        `---\n\n${textContent.substring(0, 50000)}\n\n... *[content truncated]*`;
+    } else {
+      result.markdown = `# ${result.title}\n\n${textContent}`;
+    }
+  } else if (textContent) {
     result.markdown = `# ${result.title}\n\n${textContent}`;
   } else {
-    result.markdown = `# ${result.title}\n\n> PDF text extraction not available in this viewer.\n> Consider downloading the file and using a PDF extraction tool.`;
+    result.markdown = `# ${result.title}\n\n` +
+      `> ⚠️ **PDF text extraction not available in this viewer.**\n\n` +
+      `Possible reasons:\n` +
+      `- The PDF contains only images (scanned document)\n` +
+      `- The browser's PDF viewer doesn't expose text content\n\n` +
+      `**Source:** ${result.url}\n\n` +
+      `Consider downloading the file and using a dedicated PDF extraction tool.`;
   }
 
   return result;
@@ -398,7 +611,16 @@ function extractPDFText() {
   }
 
   // Fallback: try body text
-  return document.body?.textContent || '';
+  const bodyText = document.body?.textContent || '';
+  if (bodyText.length > 200) {
+    // Clean up common PDF viewer artifacts
+    return bodyText
+      .replace(/\s+/g, ' ')
+      .replace(/(\w)(\d+)/g, '$1 $2') // Separate stuck-together numbers
+      .trim();
+  }
+
+  return bodyText;
 }
 
 // Get basic page info without full extraction
