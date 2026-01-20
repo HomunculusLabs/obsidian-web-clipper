@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Obsidian Web Clipper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="page-type" id="pageType">
+        <span class="page-icon" id="pageIcon">🌐</span>
+        <span class="page-label" id="pageLabel">Web Page</span>
+      </div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+    </header>
+
+    <div class="content">
+      <div class="field">
+        <label for="titleInput">Title</label>
+        <input type="text" id="titleInput" placeholder="Page title will appear here">
+      </div>
+
+      <div class="field">
+        <label for="folderInput">Save Folder</label>
+        <select id="folderInput">
+          <option value="2 - Source Material/Clips">2 - Source Material/Clips</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="tagsInput">Tags</label>
+        <input type="text" id="tagsInput" placeholder="web-clip">
+      </div>
+
+      <button class="clip-btn" id="clipBtn">
+        <span class="btn-text">Clip to Obsidian</span>
+      </button>
+
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
