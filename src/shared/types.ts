@@ -24,6 +24,9 @@ export interface ClipMetadata {
 
   paywalled?: boolean;
 
+  pdfPageCount?: number;
+  pdfHasTextLayer?: boolean;
+
   passwordProtected?: boolean;
   scannedPDF?: boolean;
   truncated?: boolean;

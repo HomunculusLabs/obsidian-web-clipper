@@ -13,6 +13,9 @@ import { sanitizeFilename } from "../shared/sanitize";
 
 type StatusType = "success" | "error" | "loading";
 
+const MAX_URI_CONTENT_CHARS = 180000;
+let usedClipboardFallback = false;
+
 let currentTab: chrome.tabs.Tab | null = null;
 let pageType: PageType = "web";
 let clipperContent: ClipResult | null = null;
@@ -209,7 +212,7 @@ async function getCurrentTab(): Promise<chrome.tabs.Tab> {
 function updateUI(): void {
   if (!currentTab) return;
 
-  setPageType(detectPageType(currentTab.url));
+  setPageType(pageType);
 
   const titleInput = getEl<HTMLInputElement>("titleInput");
   if (titleInput) {
@@ -291,6 +294,8 @@ async function ensureContentScriptLoaded(tabId: number): Promise<void> {
 }
 
 async function saveToObsidian(result: ClipResult): Promise<void> {
+  usedClipboardFallback = false;
+
   const titleInput = getEl<HTMLInputElement>("titleInput");
   const folderInput = getEl<HTMLSelectElement>("folderInput");
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
@@ -344,11 +349,38 @@ async function saveToObsidian(result: ClipResult): Promise<void> {
   const encodedContent = encodeURIComponent(markdown);
 
   const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName).trim() || "Main Vault";
-  const obsidianUri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(
+  const baseObsidianUri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(
     filePath
-  )}&content=${encodedContent}`;
+  )}`;
 
   type OpenUriResponse = { success: boolean; error?: string };
+
+  if (encodedContent.length > MAX_URI_CONTENT_CHARS) {
+    await runtimeSendMessage<RuntimeRequest, unknown>({
+      action: "copyToClipboard",
+      data: markdown
+    });
+
+    usedClipboardFallback = true;
+    showStatus(
+      "success",
+      "Content copied to clipboard (too large for Obsidian URI). Paste into a new note."
+    );
+
+    // Best-effort: open Obsidian without content so the user can paste.
+    try {
+      await runtimeSendMessage<RuntimeRequest, OpenUriResponse>({
+        action: "openObsidianUri",
+        uri: baseObsidianUri
+      });
+    } catch {
+      // Ignore; clipboard copy already succeeded.
+    }
+
+    return;
+  }
+
+  const obsidianUri = `${baseObsidianUri}&content=${encodedContent}`;
 
   const response = await runtimeSendMessage<RuntimeRequest, OpenUriResponse>({
     action: "openObsidianUri",
@@ -387,7 +419,11 @@ async function handleClip(): Promise<void> {
       includeTimestamps: settings.includeTimestamps
     };
 
+    console.log("[Popup] Sending clip request:", request);
+    console.log("[Popup] Tab URL:", currentTab.url);
+
     const rawResponse = await tabsSendMessage<TabRequest, unknown>(currentTab.id, request);
+    console.log("[Popup] Got response:", rawResponse);
     const response = normalizeTabResponse(rawResponse);
 
     // Discriminated union access pattern: check ok before result.
@@ -399,7 +435,10 @@ async function handleClip(): Promise<void> {
     clipperContent = response.result;
 
     await saveToObsidian(response.result);
-    showStatus("success", "Sent to Obsidian");
+
+    if (!usedClipboardFallback) {
+      showStatus("success", "Sent to Obsidian");
+    }
   } catch (err) {
     const message =
       err instanceof Error
@@ -417,7 +456,21 @@ async function handleClip(): Promise<void> {
 async function init(): Promise<void> {
   await loadSettings();
   currentTab = await getCurrentTab();
+
+  // Fallback for restricted pages where content scripts cannot be injected/messaged.
   pageType = detectPageType(currentTab.url);
+
+  const tabId = currentTab.id;
+  if (tabId) {
+    try {
+      await ensureContentScriptLoaded(tabId);
+      const pageInfo = await tabsSendMessage<TabRequest, PageInfo>(tabId, { action: "getPageInfo" });
+      pageType = pageInfo.type || pageType;
+    } catch {
+      // Keep URL-based fallback.
+    }
+  }
+
   updateUI();
   setupEventListeners();
 }

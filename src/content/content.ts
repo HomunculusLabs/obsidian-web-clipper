@@ -1,6 +1,8 @@
 import TurndownService from "turndown";
 import { Readability } from "@mozilla/readability";
 
+import { extractPdfTextFromUrl } from "../shared/pdf";
+
 import type { ClipResult, PageType, YouTubeVideoType } from "../shared/types";
 import type { PageInfo, TabRequest, TabResponse } from "../shared/messages";
 
@@ -93,6 +95,13 @@ async function handleClip(request: ClipRequest): Promise<TabResponse> {
   const detectedType = detectPageType(url);
   const pageType: PageType = request.pageType ?? detectedType;
 
+  console.log("[Clip] handleClip called");
+  console.log("[Clip] URL:", url);
+  console.log("[Clip] detectedType:", detectedType);
+  console.log("[Clip] request.pageType:", request.pageType);
+  console.log("[Clip] final pageType:", pageType);
+  console.log("[Clip] document.contentType:", document.contentType);
+
   const title = document.title || "Untitled";
 
   const baseResult: ClipResult = {
@@ -117,7 +126,7 @@ async function handleClip(request: ClipRequest): Promise<TabResponse> {
         );
         break;
       case "pdf":
-        result = extractPDFContent(baseResult);
+        result = await extractPDFContent(baseResult);
         break;
       case "web":
       default:
@@ -643,125 +652,58 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// Extract PDF content (basic implementation)
-function extractPDFContent(result: ClipResult): ClipResult {
+// Extract PDF content using PDF.js
+async function extractPDFContent(result: ClipResult): Promise<ClipResult> {
   result.metadata.type = "document";
+  console.log("[PDF] extractPDFContent called");
+  console.log("[PDF] result.url:", result.url);
+  console.log("[PDF] window.location.href:", window.location.href);
+  console.log("[PDF] document.contentType:", document.contentType);
 
-  const bodyText = document.body?.textContent || "";
+  try {
+    console.log("[PDF] Calling extractPdfTextFromUrl...");
+    const { text, pageCount, truncated, hasTextLayer } =
+      await extractPdfTextFromUrl(result.url, {
+        maxPages: 200,
+        maxChars: 120000,
+        includePageHeadings: true
+      });
+    console.log("[PDF] Extraction complete. Pages:", pageCount, "hasTextLayer:", hasTextLayer);
 
-  // Check for password-protected PDF
-  const isPasswordProtected =
-    bodyText.includes("password") ||
-    document.querySelector("#passwordText") !== null ||
-    document.querySelector(".passwordPrompt") !== null;
+    result.metadata.pdfPageCount = pageCount;
+    result.metadata.pdfHasTextLayer = hasTextLayer;
+    result.metadata.truncated = truncated || result.metadata.truncated;
 
-  if (isPasswordProtected) {
-    result.metadata.passwordProtected = true;
-    result.markdown =
-      `# ${result.title}\n\n` +
-      `> ⚠️ **This PDF is password-protected.**\n\n` +
-      `Text extraction is not available for password-protected PDFs viewed in the browser.\n\n` +
-      `**Source:** ${result.url}`;
-    return result;
-  }
-
-  // Check for scanned/image-based PDF (no text layer)
-  const hasTextLayer =
-    document.querySelector(".textLayer") !== null ||
-    document.querySelector("canvas + span") !== null;
-
-  if (!hasTextLayer) {
-    const hasCanvas = document.querySelectorAll("canvas").length > 0;
-    const trimmedBodyText = (document.body?.textContent || "").trim();
-
-    if (hasCanvas && trimmedBodyText.length < 100) {
+    if (!hasTextLayer) {
       result.metadata.scannedPDF = true;
       result.markdown =
         `# ${result.title}\n\n` +
-        `> ⚠️ **This appears to be a scanned/image-based PDF.**\n\n` +
-        `Text extraction is not available for image-based PDFs. You may need to use OCR software to extract the text.\n\n` +
+        `> ⚠️ **No selectable text found in this PDF.**\n\n` +
+        `This PDF may be scanned or image-based. Try OCR, or download the file and extract text with an OCR-capable tool.\n\n` +
         `**Source:** ${result.url}`;
       return result;
     }
-  }
 
-  const textContent = extractPDFText();
+    const truncatedNote = truncated
+      ? `> ⚠️ **Note:** Extracted text was truncated to keep the clip size reasonable.\n\n`
+      : "";
 
-  if (textContent && textContent.length > 100) {
-    if (textContent.length > 50000) {
-      result.metadata.truncated = true;
+    result.markdown = `# ${result.title}\n\n${truncatedNote}${text || ""}`.trimEnd();
+    return result;
+  } catch (error) {
+    const message = getErrorMessage(error);
+    if (message.toLowerCase().includes("password")) {
+      result.metadata.passwordProtected = true;
       result.markdown =
         `# ${result.title}\n\n` +
-        `> ⚠️ **This is a large PDF.** The extracted content below may be truncated.\n\n` +
-        `---\n\n${textContent.substring(0, 50000)}\n\n... *[content truncated]*`;
-    } else {
-      result.markdown = `# ${result.title}\n\n${textContent}`;
-    }
-  } else if (textContent) {
-    result.markdown = `# ${result.title}\n\n${textContent}`;
-  } else {
-    result.markdown =
-      `# ${result.title}\n\n` +
-      `> ⚠️ **PDF text extraction not available in this viewer.**\n\n` +
-      `Possible reasons:\n` +
-      `- The PDF contains only images (scanned document)\n` +
-      `- The browser's PDF viewer doesn't expose text content\n\n` +
-      `**Source:** ${result.url}\n\n` +
-      `Consider downloading the file and using a dedicated PDF extraction tool.`;
-  }
-
-  return result;
-}
-
-// Extract text from PDF viewer (basic)
-function extractPDFText(): string {
-  const textLayer = document.querySelector<HTMLElement>(".textLayer");
-
-  if (textLayer) {
-    const spans = textLayer.querySelectorAll<HTMLSpanElement>("span");
-    const lines: string[] = [];
-
-    let currentLine = "";
-    let lastY: number | null = null;
-
-    spans.forEach((span) => {
-      const transform = span.style.transform || "";
-      const match = transform.match(/translate\(([^,]+),\s*([^\)]+)\)/);
-
-      if (match) {
-        const y = parseFloat(match[2]);
-
-        if (lastY !== null && Number.isFinite(y) && Math.abs(y - lastY) > 12) {
-          if (currentLine.trim()) {
-            lines.push(currentLine.trim());
-          }
-          currentLine = "";
-        }
-
-        if (Number.isFinite(y)) {
-          lastY = y;
-        }
-
-        currentLine += (span.textContent || "") + " ";
-      }
-    });
-
-    if (currentLine.trim()) {
-      lines.push(currentLine.trim());
+        `> ⚠️ **This PDF is password-protected.**\n\n` +
+        `Text extraction requires a password and is not available without unlocking the PDF.\n\n` +
+        `**Source:** ${result.url}`;
+      return result;
     }
 
-    return lines.join("\n\n");
+    throw error;
   }
-
-  const bodyText = document.body?.textContent || "";
-  if (bodyText.length > 200) {
-    return bodyText
-      .replace(/\s+/g, " ")
-      .replace(/(\w)(\d+)/g, "$1 $2")
-      .trim();
-  }
-
-  return bodyText;
 }
 
 // Get basic page info without full extraction
@@ -770,6 +712,7 @@ function getPageInfo(): PageInfo {
   return {
     url,
     title: document.title || "Untitled",
-    type: detectPageType(url)
+    type: detectPageType(url),
+    contentType: document.contentType || ""
   };
 }

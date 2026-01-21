@@ -6,7 +6,12 @@ import type { ClipResult, PageType } from "./types";
 export type RuntimeRequest =
   | { action: "getSettings" }
   | { action: "copyToClipboard"; data: string }
-  | { action: "openObsidianUri"; uri: string };
+  | { action: "openObsidianUri"; uri: string }
+  | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number };
+
+export type ExtractPdfResponse =
+  | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }
+  | { success: false; error: string };
 
 /**
  * Messages sent to a tab's content script via chrome.tabs.sendMessage().
@@ -29,4 +34,5 @@ export type PageInfo = {
   url: string;
   title: string;
   type: PageType;
+  contentType?: string;
 };

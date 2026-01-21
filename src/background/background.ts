@@ -1,6 +1,7 @@
-import type { RuntimeRequest } from '../shared/messages';
+import type { RuntimeRequest, ExtractPdfResponse } from '../shared/messages';
 import { DEFAULT_SETTINGS, SETTINGS_KEYS, type Settings } from '../shared/settings';
 import { storageGet, storageSet, tabsCreate } from '../shared/chromeAsync';
+import { extractPdfFromUrl } from './pdfExtractor';
 
 type CopyToClipboardResponse = { success: boolean; error?: string };
 type OpenObsidianUriResponse = { success: boolean; error?: string };
@@ -11,7 +12,8 @@ function isRuntimeRequest(value: unknown): value is RuntimeRequest {
   return (
     v.action === 'getSettings' ||
     v.action === 'copyToClipboard' ||
-    v.action === 'openObsidianUri'
+    v.action === 'openObsidianUri' ||
+    v.action === 'extractPdf'
   );
 }
 
@@ -150,6 +152,26 @@ chrome.runtime.onMessage.addListener(
         }
 
         sendResponse(response);
+        return;
+      }
+
+      if (request.action === 'extractPdf') {
+        try {
+          const result = await extractPdfFromUrl(
+            request.url,
+            request.maxPages ?? 200,
+            request.maxChars ?? 120000
+          );
+          const response: ExtractPdfResponse = {
+            success: true,
+            ...result
+          };
+          sendResponse(response);
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : typeof err === 'string' ? err : 'Failed to extract PDF';
+          sendResponse({ success: false, error: message });
+        }
         return;
       }
     })().catch((err: unknown) => {

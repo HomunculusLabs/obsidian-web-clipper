@@ -7,7 +7,9 @@
     "activeTab",
     "storage",
     "clipboardWrite",
-    "scripting"
+    "scripting",
+    "contextMenus",
+    "offscreen"
   ],
   "host_permissions": [
     "https://*/*",
@@ -45,5 +47,11 @@
       },
       "description": "Clip current page to Obsidian"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["pdfjs/pdf.worker.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

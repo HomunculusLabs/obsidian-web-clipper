@@ -14,12 +14,12 @@
     "http://*/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background/background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["lib/turndown.js", "lib/readability.js", "content.js"],
+      "js": ["content/content.js"],
       "run_at": "document_idle"
     }
   ],
