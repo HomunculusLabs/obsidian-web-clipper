@@ -1,6 +1,8 @@
 // PDF extraction via offscreen document
 // Service workers can't run PDF.js directly (no DOM), so we delegate to offscreen
 
+import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
+
 export type PdfExtractResult = {
   text: string;
   pageCount: number;
@@ -48,16 +50,24 @@ export async function extractPdfFromUrl(
 
   await ensureOffscreenDocument();
 
-  const response = await chrome.runtime.sendMessage({
+  const request: PdfOffscreenRequest = {
     type: "extract-pdf",
     url,
     maxPages,
     maxChars
-  });
+  };
+
+  const rawResponse = await chrome.runtime.sendMessage(request);
+  const response = rawResponse as PdfOffscreenResponse;
 
   if (!response.success) {
     throw new Error(response.error || "PDF extraction failed");
   }
 
-  return response.result;
+  return {
+    text: response.text,
+    pageCount: response.pageCount,
+    truncated: response.truncated,
+    hasTextLayer: response.hasTextLayer
+  };
 }

@@ -1,66 +1,23 @@
-import { DEFAULT_SETTINGS, SETTINGS_KEYS, type Settings } from "../shared/settings";
-import { storageGet, storageSet } from "../shared/chromeAsync";
-
-type StatusType = "success" | "error";
+import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
+import {
+  loadSettings as loadSettingsFromStorage,
+  saveSettings as saveSettingsToStorage
+} from "../shared/settingsService";
+import { getEl, showStatus, populateForm } from "./ui";
+import { addFolder, renderSavedFolders } from "./folderList";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
-let statusTimer: number | null = null;
-
-function getEl<T extends HTMLElement>(id: string): T | null {
-  return document.getElementById(id) as T | null;
-}
-
-function showStatus(type: StatusType, message: string): void {
-  const status = getEl<HTMLDivElement>("status");
-  if (!status) return;
-
-  status.className = `status ${type}`;
-  status.textContent = message;
-
-  if (statusTimer !== null) {
-    window.clearTimeout(statusTimer);
-    statusTimer = null;
-  }
-
-  statusTimer = window.setTimeout(() => {
-    status.className = "status";
-    status.textContent = "";
-    statusTimer = null;
-  }, 3000);
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 async function loadSettings(): Promise<void> {
-  const stored = await storageGet<Settings>(SETTINGS_KEYS);
-  settings = { ...DEFAULT_SETTINGS, ...(stored as Partial<Settings>) };
-  populateForm();
-}
-
-function populateForm(): void {
-  const vaultName = getEl<HTMLInputElement>("vaultName");
-  const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
-  const defaultTags = getEl<HTMLInputElement>("defaultTags");
-  const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
-
-  if (vaultName) vaultName.value = settings.vaultName || "";
-  if (defaultFolder) defaultFolder.value = settings.defaultFolder || "";
-  if (defaultTags) defaultTags.value = settings.defaultTags || "";
-
-  if (includeTimestamps) {
-    includeTimestamps.checked = settings.includeTimestamps !== false;
-  }
+  settings = await loadSettingsFromStorage();
+  populateForm(settings);
 }
 
 function setupEventListeners(): void {
   const saveBtn = getEl<HTMLButtonElement>("saveBtn");
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
-      void saveSettings();
+      void saveCurrentSettings();
     });
   }
 
@@ -74,7 +31,7 @@ function setupEventListeners(): void {
   const addFolderBtn = getEl<HTMLButtonElement>("addFolder");
   if (addFolderBtn) {
     addFolderBtn.addEventListener("click", () => {
-      void addFolder();
+      void addFolder(settings);
     });
   }
 
@@ -83,13 +40,13 @@ function setupEventListeners(): void {
     newFolder.addEventListener("keypress", (e: KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        void addFolder();
+        void addFolder(settings);
       }
     });
   }
 }
 
-async function saveSettings(): Promise<void> {
+async function saveCurrentSettings(): Promise<void> {
   const vaultName = getEl<HTMLInputElement>("vaultName");
   const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
@@ -97,8 +54,7 @@ async function saveSettings(): Promise<void> {
 
   settings = {
     vaultName: (vaultName?.value || "").trim() || DEFAULT_SETTINGS.vaultName,
-    defaultFolder:
-      (defaultFolder?.value || "").trim() || DEFAULT_SETTINGS.defaultFolder,
+    defaultFolder: (defaultFolder?.value || "").trim() || DEFAULT_SETTINGS.defaultFolder,
     defaultTags: (defaultTags?.value || "").trim() || DEFAULT_SETTINGS.defaultTags,
     includeTimestamps: includeTimestamps?.checked ?? DEFAULT_SETTINGS.includeTimestamps,
     savedFolders: Array.isArray(settings.savedFolders)
@@ -106,7 +62,7 @@ async function saveSettings(): Promise<void> {
       : [...DEFAULT_SETTINGS.savedFolders]
   };
 
-  await storageSet<Settings>(settings);
+  await saveSettingsToStorage(settings);
   showStatus("success", "Settings saved successfully!");
 }
 
@@ -117,76 +73,17 @@ async function resetSettings(): Promise<void> {
   if (!ok) return;
 
   settings = { ...DEFAULT_SETTINGS };
-  populateForm();
-  renderSavedFolders();
+  populateForm(settings);
+  renderSavedFolders(settings);
 
-  await storageSet<Settings>(settings);
+  await saveSettingsToStorage(settings);
   showStatus("success", "Settings reset to defaults!");
-}
-
-async function addFolder(): Promise<void> {
-  const input = getEl<HTMLInputElement>("newFolder");
-  if (!input) return;
-
-  const folder = input.value.trim();
-
-  if (!folder) {
-    showStatus("error", "Please enter a folder path");
-    return;
-  }
-
-  if (settings.savedFolders.includes(folder)) {
-    showStatus("error", "Folder already exists");
-    return;
-  }
-
-  settings.savedFolders.push(folder);
-  input.value = "";
-  renderSavedFolders();
-
-  await storageSet<Pick<Settings, "savedFolders">>({
-    savedFolders: settings.savedFolders
-  });
-}
-
-async function removeFolder(folder: string): Promise<void> {
-  settings.savedFolders = settings.savedFolders.filter((f) => f !== folder);
-  renderSavedFolders();
-
-  await storageSet<Pick<Settings, "savedFolders">>({
-    savedFolders: settings.savedFolders
-  });
-}
-
-function renderSavedFolders(): void {
-  const container = getEl<HTMLDivElement>("savedFolders");
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  for (const folder of settings.savedFolders) {
-    const div = document.createElement("div");
-    div.className = "folder-tag";
-    div.innerHTML = `
-      <span>${escapeHtml(folder)}</span>
-      <button class="remove-btn" data-folder="${escapeHtml(folder)}">&times;</button>
-    `;
-    container.appendChild(div);
-  }
-
-  container.querySelectorAll<HTMLButtonElement>(".remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const folder = btn.dataset.folder;
-      if (!folder) return;
-      void removeFolder(folder);
-    });
-  });
 }
 
 async function init(): Promise<void> {
   await loadSettings();
   setupEventListeners();
-  renderSavedFolders();
+  renderSavedFolders(settings);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

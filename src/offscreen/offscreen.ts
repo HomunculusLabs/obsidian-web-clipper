@@ -1,6 +1,7 @@
 // Offscreen document for PDF.js processing
 // This runs in a hidden document context with DOM access
 import * as pdfjs from "pdfjs-dist";
+import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
 
 // Set worker path - offscreen documents have document access
 pdfjs.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("pdfjs/pdf.worker.js");
@@ -137,18 +138,22 @@ async function extractPdf(
 }
 
 // Listen for messages from the service worker
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.type !== "extract-pdf") return false;
+chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+  const respond = sendResponse as (response: PdfOffscreenResponse) => void;
 
-  const { url, maxPages = 200, maxChars = 120000 } = message;
+  if (!message || typeof message !== "object") return false;
+  if ((message as { type?: unknown }).type !== "extract-pdf") return false;
+
+  const { url, maxPages = 200, maxChars = 120000 } = message as PdfOffscreenRequest;
 
   extractPdf(url, maxPages, maxChars)
     .then((result) => {
-      sendResponse({ success: true, result });
+      respond({ success: true, ...result });
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       console.error("[PDF Offscreen] Error:", error);
-      sendResponse({ success: false, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      respond({ success: false, error: errorMessage });
     });
 
   return true; // Keep channel open for async response
