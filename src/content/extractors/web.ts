@@ -1,6 +1,7 @@
 import { Readability } from "@mozilla/readability";
 
 import { turndownService } from "../web/turndown";
+import { extractWebMetadata } from "../web/metadata";
 import {
   extractVisibleContent,
   isPaywalled,
@@ -8,9 +9,19 @@ import {
 } from "../web/paywall";
 
 import type { ClipResult } from "../../shared/types";
+import type { Settings } from "../../shared/settings";
+
+export interface ExtractWebPageArgs {
+  result: ClipResult;
+  settings: Settings;
+  pageUrl?: string; // optional override
+}
 
 // Extract web page content using Readability
-export function extractWebPageContent(result: ClipResult): ClipResult {
+export function extractWebPageContent(args: ExtractWebPageArgs): ClipResult {
+  const { result, settings } = args;
+  const pageUrl = args.pageUrl || result.url || window.location.href;
+
   const documentClone = document.cloneNode(true) as Document;
 
   const article = new Readability(documentClone, {
@@ -37,10 +48,19 @@ export function extractWebPageContent(result: ClipResult): ClipResult {
     throw new Error("Could not extract article content");
   }
 
-  // Add metadata
+  // Add core metadata from Readability
   result.metadata.author = (article.byline || "").trim();
   result.metadata.publishedDate = article.publishedTime || "";
   result.metadata.description = (article.excerpt || "").trim();
+
+  // Extract rich metadata (OG, Twitter, JSON-LD, keywords, reading stats)
+  const metadataPatch = extractWebMetadata({
+    doc: documentClone,
+    pageUrl,
+    settings,
+    articleText: article.textContent
+  });
+  Object.assign(result.metadata, metadataPatch);
 
   // Convert HTML to markdown
   const markdown = turndownService.turndown(article.content);

@@ -95,7 +95,8 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
     action: "clip",
     pageType,
     isSPA: isLikelySPA(tab.url),
-    includeTimestamps: settings.includeTimestamps
+    includeTimestamps: settings.includeTimestamps,
+    settings
   };
 
   console.log("[Popup] Sending clip request:", request);

@@ -14,6 +14,7 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
   const url = window.location.href;
   const detectedType = detectPageType(url, document.contentType);
   const pageType: PageType = request.pageType ?? detectedType;
+  const settings = request.settings;
 
   console.log("[Clip] handleClip called");
   console.log("[Clip] URL:", url);
@@ -50,7 +51,7 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
         break;
       case "web":
       default:
-        result = extractWebPageContent(baseResult);
+        result = extractWebPageContent({ result: baseResult, settings });
         break;
     }
 

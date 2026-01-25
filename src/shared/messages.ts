@@ -1,4 +1,5 @@
 import type { ClipResult, PageType } from "./types";
+import type { Settings } from "./settings";
 
 /**
  * Messages sent to the background service worker via chrome.runtime.sendMessage().
@@ -23,6 +24,7 @@ export type TabRequest =
       isSPA?: boolean;
       selectionOnly?: boolean;
       includeTimestamps?: boolean;
+      settings: Settings; // Pass settings to content script for extraction
     }
   | { action: "getPageInfo" };
 
