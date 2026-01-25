@@ -9,6 +9,60 @@ export type YouTubeVideoType =
   | "age-restricted"
   | "unavailable";
 
+// Table conversion modes for markdown output
+export type TableHandlingMode = "gfm" | "html" | "remove";
+
+// Code block language detection modes
+export type CodeBlockLanguageMode = "off" | "class-only" | "class-heuristic";
+
+// Image handling modes
+export type ImageHandlingMode = "keep" | "remove" | "data-uri" | "download-api";
+
+// Open Graph metadata
+export interface OGMetadata {
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogImages?: string[];
+  ogUrl?: string;
+  ogType?: string;
+  ogSiteName?: string;
+  ogLocale?: string;
+}
+
+// Twitter Card metadata
+export interface TwitterMetadata {
+  twitterCard?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
+  twitterImage?: string;
+  twitterSite?: string;
+  twitterCreator?: string;
+}
+
+// JSON-LD structured data (simplified)
+export interface JsonLdMetadata {
+  schemaType?: string;
+  name?: string;
+  headline?: string;
+  description?: string;
+  author?: string | string[];
+  datePublished?: string;
+  dateModified?: string;
+  publisher?: string;
+  keywords?: string[];
+  articleSection?: string;
+  wordCount?: number;
+  image?: string | string[];
+}
+
+// Reading statistics
+export interface ReadingStats {
+  wordCount?: number;
+  charCount?: number;
+  estimatedReadingTimeMinutes?: number;
+}
+
 export interface ClipMetadata {
   url: string;
   title: string;
@@ -30,6 +84,30 @@ export interface ClipMetadata {
   passwordProtected?: boolean;
   scannedPDF?: boolean;
   truncated?: boolean;
+
+  // --- New fields for Better Markdown Indexing ---
+
+  // Canonical URL (prefer over page URL)
+  canonicalUrl?: string;
+
+  // Open Graph metadata
+  og?: OGMetadata;
+
+  // Twitter Card metadata
+  twitter?: TwitterMetadata;
+
+  // JSON-LD structured data
+  jsonLd?: JsonLdMetadata;
+
+  // Keywords/article tags from meta tags
+  keywords?: string[];
+
+  // Reading statistics
+  readingStats?: ReadingStats;
+
+  // Site-specific metadata
+  siteName?: string;
+  language?: string;
 }
 
 export interface ClipResult {

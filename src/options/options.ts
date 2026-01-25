@@ -52,7 +52,9 @@ async function saveCurrentSettings(): Promise<void> {
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
 
+  // Preserve existing settings and update only the core fields from the form
   settings = {
+    ...settings,
     vaultName: (vaultName?.value || "").trim() || DEFAULT_SETTINGS.vaultName,
     defaultFolder: (defaultFolder?.value || "").trim() || DEFAULT_SETTINGS.defaultFolder,
     defaultTags: (defaultTags?.value || "").trim() || DEFAULT_SETTINGS.defaultTags,
