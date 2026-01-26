@@ -4,6 +4,7 @@ import type { Settings } from "../shared/settings";
 import { DEFAULT_SETTINGS } from "../shared/settings";
 import { runtimeSendMessage } from "../shared/chromeAsync";
 import { buildClipMarkdown, type FrontmatterInput } from "../shared/markdown";
+import { injectWikiLinks } from "../content/web/wikiLinks";
 import { sanitizeFilename } from "../shared/sanitize";
 import { parseTags, addAutoTags } from "../shared/tags";
 import { showStatus } from "./ui";
@@ -141,7 +142,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
     extra
   };
 
-  const markdown = buildClipMarkdown(frontmatter, result.markdown || "");
+  // Build markdown and apply wiki-link injection if enabled
+  const rawMarkdown = buildClipMarkdown(frontmatter, result.markdown || "");
+  const markdown = injectWikiLinks(rawMarkdown, settings);
   const encodedContent = encodeURIComponent(markdown);
 
   const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName).trim() || "Main Vault";
