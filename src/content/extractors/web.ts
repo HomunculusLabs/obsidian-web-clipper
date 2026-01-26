@@ -1,6 +1,6 @@
 import { Readability } from "@mozilla/readability";
 
-import { turndownService } from "../web/turndown";
+import { createTurndownService } from "../web/turndown";
 import { extractWebMetadata } from "../web/metadata";
 import {
   extractVisibleContent,
@@ -62,7 +62,8 @@ export function extractWebPageContent(args: ExtractWebPageArgs): ClipResult {
   });
   Object.assign(result.metadata, metadataPatch);
 
-  // Convert HTML to markdown
+  // Convert HTML to markdown with settings-based configuration
+  const turndownService = createTurndownService(settings);
   const markdown = turndownService.turndown(article.content);
 
   // Build final markdown with title and content
