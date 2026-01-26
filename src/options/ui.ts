@@ -34,6 +34,7 @@ export function escapeHtml(text: string): string {
 }
 
 export function populateForm(settings: Settings): void {
+  // Core settings
   const vaultName = getEl<HTMLInputElement>("vaultName");
   const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
@@ -42,8 +43,53 @@ export function populateForm(settings: Settings): void {
   if (vaultName) vaultName.value = settings.vaultName || "";
   if (defaultFolder) defaultFolder.value = settings.defaultFolder || "";
   if (defaultTags) defaultTags.value = settings.defaultTags || "";
+  if (includeTimestamps) includeTimestamps.checked = settings.includeTimestamps !== false;
 
-  if (includeTimestamps) {
-    includeTimestamps.checked = settings.includeTimestamps !== false;
+  // Metadata settings
+  const includeOGFields = getEl<HTMLInputElement>("includeOGFields");
+  const includeTwitterFields = getEl<HTMLInputElement>("includeTwitterFields");
+  const parseJsonLd = getEl<HTMLInputElement>("parseJsonLd");
+  const includeKeywords = getEl<HTMLInputElement>("includeKeywords");
+  const computeReadingStats = getEl<HTMLInputElement>("computeReadingStats");
+  const preferCanonicalUrl = getEl<HTMLInputElement>("preferCanonicalUrl");
+
+  if (includeOGFields) includeOGFields.checked = !!settings.includeOGFields;
+  if (includeTwitterFields) includeTwitterFields.checked = !!settings.includeTwitterFields;
+  if (parseJsonLd) parseJsonLd.checked = !!settings.parseJsonLd;
+  if (includeKeywords) includeKeywords.checked = !!settings.includeKeywords;
+  if (computeReadingStats) computeReadingStats.checked = !!settings.computeReadingStats;
+  if (preferCanonicalUrl) preferCanonicalUrl.checked = !!settings.preferCanonicalUrl;
+
+  // Wiki-link settings
+  const enableWikiLinks = getEl<HTMLInputElement>("enableWikiLinks");
+  const wikiLinkRules = getEl<HTMLTextAreaElement>("wikiLinkRules");
+  const wikiLinkExistingNotesOnly = getEl<HTMLInputElement>("wikiLinkExistingNotesOnly");
+  const wikiLinkNoteIndex = getEl<HTMLTextAreaElement>("wikiLinkNoteIndex");
+  const wikiLinkCaseSensitive = getEl<HTMLInputElement>("wikiLinkCaseSensitive");
+  const wikiLinkWholeWord = getEl<HTMLInputElement>("wikiLinkWholeWord");
+  const wikiLinkMaxPerTerm = getEl<HTMLInputElement>("wikiLinkMaxPerTerm");
+
+  if (enableWikiLinks) enableWikiLinks.checked = !!settings.enableWikiLinks;
+  if (wikiLinkRules) {
+    wikiLinkRules.value = (settings.wikiLinkRules ?? [])
+      .map((r) => `${r.term} -> ${r.note}`)
+      .join("\n");
   }
+  if (wikiLinkExistingNotesOnly) {
+    wikiLinkExistingNotesOnly.checked = !!settings.wikiLinkExistingNotesOnly;
+  }
+  if (wikiLinkNoteIndex) {
+    wikiLinkNoteIndex.value = (settings.wikiLinkNoteIndex ?? []).join("\n");
+  }
+  if (wikiLinkCaseSensitive) wikiLinkCaseSensitive.checked = !!settings.wikiLinkCaseSensitive;
+  if (wikiLinkWholeWord) wikiLinkWholeWord.checked = !!settings.wikiLinkWholeWord;
+  if (wikiLinkMaxPerTerm) wikiLinkMaxPerTerm.value = String(settings.wikiLinkMaxPerTerm ?? 1);
+
+  // Code block settings
+  const codeBlockLanguageMode = getEl<HTMLSelectElement>("codeBlockLanguageMode");
+  if (codeBlockLanguageMode) codeBlockLanguageMode.value = settings.codeBlockLanguageMode;
+
+  // Table settings
+  const tableHandling = getEl<HTMLSelectElement>("tableHandling");
+  if (tableHandling) tableHandling.value = settings.tableHandling;
 }

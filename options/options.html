@@ -45,6 +45,110 @@
       </section>
 
       <section class="section">
+        <h2>Metadata</h2>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="includeOGFields">
+          <label for="includeOGFields">Include Open Graph (og:*) fields</label>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="includeTwitterFields">
+          <label for="includeTwitterFields">Include Twitter Card (twitter:*) fields</label>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="parseJsonLd">
+          <label for="parseJsonLd">Parse JSON-LD metadata</label>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="includeKeywords">
+          <label for="includeKeywords">Include page keywords</label>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="computeReadingStats">
+          <label for="computeReadingStats">Compute reading stats (word count, reading time)</label>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="preferCanonicalUrl">
+          <label for="preferCanonicalUrl">Prefer canonical URL when available</label>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Wiki-links</h2>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="enableWikiLinks">
+          <label for="enableWikiLinks">Enable wiki-link injection</label>
+        </div>
+
+        <div class="field">
+          <label for="wikiLinkRules">Rules (one per line)</label>
+          <textarea id="wikiLinkRules" rows="6" placeholder="term -> Note Name&#10;python -> Python Notes"></textarea>
+          <small>Format: <code>Term -&gt; Note</code>. Example: <code>ai -&gt; Artificial Intelligence</code></small>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="wikiLinkExistingNotesOnly">
+          <label for="wikiLinkExistingNotesOnly">Link only to existing notes</label>
+        </div>
+
+        <div class="field">
+          <label for="wikiLinkNoteIndex">Known note names (one per line)</label>
+          <textarea id="wikiLinkNoteIndex" rows="6" placeholder="Note A&#10;Note B&#10;Project/Note C"></textarea>
+          <small>Used when "existing notes only" is enabled.</small>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="wikiLinkCaseSensitive">
+          <label for="wikiLinkCaseSensitive">Case sensitive matching</label>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="wikiLinkWholeWord">
+          <label for="wikiLinkWholeWord">Match whole words only</label>
+        </div>
+
+        <div class="field">
+          <label for="wikiLinkMaxPerTerm">Max links per term</label>
+          <input type="number" id="wikiLinkMaxPerTerm" min="1" step="1" value="1">
+          <small>Limits how many times each term is linked in a single clip.</small>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Code Blocks</h2>
+
+        <div class="field">
+          <label for="codeBlockLanguageMode">Language detection</label>
+          <select id="codeBlockLanguageMode">
+            <option value="off">Off</option>
+            <option value="class-only">Class only</option>
+            <option value="class-heuristic">Class + heuristic</option>
+          </select>
+          <small>Controls how code block languages are inferred.</small>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Tables</h2>
+
+        <div class="field">
+          <label for="tableHandling">Table handling</label>
+          <select id="tableHandling">
+            <option value="gfm">GitHub Flavored Markdown (GFM)</option>
+            <option value="html">Keep as HTML</option>
+            <option value="remove">Remove tables</option>
+          </select>
+          <small>Complex tables (with colspan/rowspan) always fall back to HTML.</small>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Keyboard Shortcuts</h2>
         <p><strong>Clip to Obsidian:</strong> <kbd>Ctrl+Shift+O</kbd> (Mac: <kbd>Cmd+Shift+O</kbd>)</p>
         <p>To customize, go to <code>chrome://extensions/shortcuts</code></p>
