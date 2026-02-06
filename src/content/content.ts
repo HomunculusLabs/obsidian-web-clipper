@@ -1,6 +1,7 @@
 /* eslint-disable */
 import { isTabRequest } from "../shared/guards";
 import { clipPage, getPageInfo } from "./clipper";
+import { initChatGPTInjector } from "./chatgpt/injector";
 
 import type { PageInfo, TabResponse } from "../shared/messages";
 
@@ -23,3 +24,6 @@ chrome.runtime.onMessage.addListener(
     return false;
   }
 );
+
+// Initialize ChatGPT clip button injector
+initChatGPTInjector();
