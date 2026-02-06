@@ -1,66 +1,94 @@
-import { DEFAULT_SETTINGS, SETTINGS_KEYS, type Settings } from "../shared/settings";
-import { storageGet, storageSet } from "../shared/chromeAsync";
-
-type StatusType = "success" | "error";
+import {
+  DEFAULT_SETTINGS,
+  VALID_CODE_BLOCK_LANGUAGE,
+  VALID_TABLE_HANDLING,
+  type Settings,
+  type WikiLinkRule
+} from "../shared/settings";
+import type { CodeBlockLanguageMode, TableHandlingMode } from "../shared/types";
+import {
+  loadSettings as loadSettingsFromStorage,
+  saveSettings as saveSettingsToStorage
+} from "../shared/settingsService";
+import { getEl, showStatus, populateForm } from "./ui";
+import { addFolder, renderSavedFolders } from "./folderList";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
-let statusTimer: number | null = null;
 
-function getEl<T extends HTMLElement>(id: string): T | null {
-  return document.getElementById(id) as T | null;
-}
+// --- Parsing helpers ---
 
-function showStatus(type: StatusType, message: string): void {
-  const status = getEl<HTMLDivElement>("status");
-  if (!status) return;
+function parseWikiLinkRules(raw: string): { rules: WikiLinkRule[]; errors: string[] } {
+  const rules: WikiLinkRule[] = [];
+  const errors: string[] = [];
 
-  status.className = `status ${type}`;
-  status.textContent = message;
+  const lines = raw.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const original = lines[i] ?? "";
+    const line = original.trim();
+    if (!line) continue;
 
-  if (statusTimer !== null) {
-    window.clearTimeout(statusTimer);
-    statusTimer = null;
+    const arrowIndex = line.indexOf("->");
+    if (arrowIndex === -1) {
+      errors.push(`Wiki-link rule line ${i + 1}: missing "->"`);
+      continue;
+    }
+
+    const term = line.slice(0, arrowIndex).trim();
+    const note = line.slice(arrowIndex + 2).trim();
+
+    if (!term || !note) {
+      errors.push(`Wiki-link rule line ${i + 1}: expected "Term -> Note"`);
+      continue;
+    }
+
+    rules.push({ term, note });
   }
 
-  statusTimer = window.setTimeout(() => {
-    status.className = "status";
-    status.textContent = "";
-    statusTimer = null;
-  }, 3000);
+  return { rules, errors };
 }
 
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+function parseNoteIndex(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const original of raw.split(/\r?\n/)) {
+    const name = (original ?? "").trim();
+    if (!name) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+  }
+
+  return out;
 }
+
+function parseMinInt(raw: string | undefined, fallback: number, min: number): number {
+  const n = Number.parseInt((raw ?? "").trim(), 10);
+  if (!Number.isFinite(n) || Number.isNaN(n)) return fallback;
+  return Math.max(min, n);
+}
+
+function coerceEnum<T extends string>(
+  value: string | undefined,
+  allowed: readonly T[],
+  fallback: T
+): T {
+  if (!value) return fallback;
+  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+// --- Lifecycle ---
 
 async function loadSettings(): Promise<void> {
-  const stored = await storageGet<Settings>(SETTINGS_KEYS);
-  settings = { ...DEFAULT_SETTINGS, ...(stored as Partial<Settings>) };
-  populateForm();
-}
-
-function populateForm(): void {
-  const vaultName = getEl<HTMLInputElement>("vaultName");
-  const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
-  const defaultTags = getEl<HTMLInputElement>("defaultTags");
-  const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
-
-  if (vaultName) vaultName.value = settings.vaultName || "";
-  if (defaultFolder) defaultFolder.value = settings.defaultFolder || "";
-  if (defaultTags) defaultTags.value = settings.defaultTags || "";
-
-  if (includeTimestamps) {
-    includeTimestamps.checked = settings.includeTimestamps !== false;
-  }
+  settings = await loadSettingsFromStorage();
+  populateForm(settings);
 }
 
 function setupEventListeners(): void {
   const saveBtn = getEl<HTMLButtonElement>("saveBtn");
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
-      void saveSettings();
+      void saveCurrentSettings();
     });
   }
 
@@ -74,7 +102,7 @@ function setupEventListeners(): void {
   const addFolderBtn = getEl<HTMLButtonElement>("addFolder");
   if (addFolderBtn) {
     addFolderBtn.addEventListener("click", () => {
-      void addFolder();
+      void addFolder(settings);
     });
   }
 
@@ -83,30 +111,104 @@ function setupEventListeners(): void {
     newFolder.addEventListener("keypress", (e: KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        void addFolder();
+        void addFolder(settings);
       }
     });
   }
 }
 
-async function saveSettings(): Promise<void> {
+async function saveCurrentSettings(): Promise<void> {
+  // Core settings
   const vaultName = getEl<HTMLInputElement>("vaultName");
   const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
 
+  // Metadata settings
+  const includeOGFields = getEl<HTMLInputElement>("includeOGFields");
+  const includeTwitterFields = getEl<HTMLInputElement>("includeTwitterFields");
+  const parseJsonLd = getEl<HTMLInputElement>("parseJsonLd");
+  const includeKeywords = getEl<HTMLInputElement>("includeKeywords");
+  const computeReadingStats = getEl<HTMLInputElement>("computeReadingStats");
+  const preferCanonicalUrl = getEl<HTMLInputElement>("preferCanonicalUrl");
+
+  // Wiki-link settings
+  const enableWikiLinks = getEl<HTMLInputElement>("enableWikiLinks");
+  const wikiLinkRulesEl = getEl<HTMLTextAreaElement>("wikiLinkRules");
+  const wikiLinkExistingNotesOnly = getEl<HTMLInputElement>("wikiLinkExistingNotesOnly");
+  const wikiLinkNoteIndexEl = getEl<HTMLTextAreaElement>("wikiLinkNoteIndex");
+  const wikiLinkCaseSensitive = getEl<HTMLInputElement>("wikiLinkCaseSensitive");
+  const wikiLinkWholeWord = getEl<HTMLInputElement>("wikiLinkWholeWord");
+  const wikiLinkMaxPerTerm = getEl<HTMLInputElement>("wikiLinkMaxPerTerm");
+
+  // Code blocks / Tables
+  const codeBlockLanguageMode = getEl<HTMLSelectElement>("codeBlockLanguageMode");
+  const tableHandling = getEl<HTMLSelectElement>("tableHandling");
+
+  // Parse wiki-link rules
+  const { rules: wikiLinkRules, errors: wikiRuleErrors } = parseWikiLinkRules(
+    wikiLinkRulesEl?.value ?? ""
+  );
+  if (wikiRuleErrors.length > 0) {
+    showStatus("error", wikiRuleErrors[0] ?? "Invalid wiki-link rules");
+    return;
+  }
+
+  // Parse note index
+  const wikiLinkNoteIndex = parseNoteIndex(wikiLinkNoteIndexEl?.value ?? "");
+
+  // Build updated settings
   settings = {
+    ...settings,
+
+    // Core
     vaultName: (vaultName?.value || "").trim() || DEFAULT_SETTINGS.vaultName,
-    defaultFolder:
-      (defaultFolder?.value || "").trim() || DEFAULT_SETTINGS.defaultFolder,
+    defaultFolder: (defaultFolder?.value || "").trim() || DEFAULT_SETTINGS.defaultFolder,
     defaultTags: (defaultTags?.value || "").trim() || DEFAULT_SETTINGS.defaultTags,
     includeTimestamps: includeTimestamps?.checked ?? DEFAULT_SETTINGS.includeTimestamps,
     savedFolders: Array.isArray(settings.savedFolders)
       ? settings.savedFolders
-      : [...DEFAULT_SETTINGS.savedFolders]
+      : [...DEFAULT_SETTINGS.savedFolders],
+
+    // Metadata
+    includeOGFields: includeOGFields?.checked ?? DEFAULT_SETTINGS.includeOGFields,
+    includeTwitterFields: includeTwitterFields?.checked ?? DEFAULT_SETTINGS.includeTwitterFields,
+    parseJsonLd: parseJsonLd?.checked ?? DEFAULT_SETTINGS.parseJsonLd,
+    includeKeywords: includeKeywords?.checked ?? DEFAULT_SETTINGS.includeKeywords,
+    computeReadingStats: computeReadingStats?.checked ?? DEFAULT_SETTINGS.computeReadingStats,
+    preferCanonicalUrl: preferCanonicalUrl?.checked ?? DEFAULT_SETTINGS.preferCanonicalUrl,
+
+    // Wiki-links
+    enableWikiLinks: enableWikiLinks?.checked ?? DEFAULT_SETTINGS.enableWikiLinks,
+    wikiLinkRules,
+    wikiLinkExistingNotesOnly:
+      wikiLinkExistingNotesOnly?.checked ?? DEFAULT_SETTINGS.wikiLinkExistingNotesOnly,
+    wikiLinkNoteIndex,
+    wikiLinkCaseSensitive:
+      wikiLinkCaseSensitive?.checked ?? DEFAULT_SETTINGS.wikiLinkCaseSensitive,
+    wikiLinkWholeWord: wikiLinkWholeWord?.checked ?? DEFAULT_SETTINGS.wikiLinkWholeWord,
+    wikiLinkMaxPerTerm: parseMinInt(
+      wikiLinkMaxPerTerm?.value,
+      DEFAULT_SETTINGS.wikiLinkMaxPerTerm,
+      1
+    ),
+
+    // Code blocks
+    codeBlockLanguageMode: coerceEnum<CodeBlockLanguageMode>(
+      codeBlockLanguageMode?.value,
+      VALID_CODE_BLOCK_LANGUAGE,
+      DEFAULT_SETTINGS.codeBlockLanguageMode
+    ),
+
+    // Tables
+    tableHandling: coerceEnum<TableHandlingMode>(
+      tableHandling?.value,
+      VALID_TABLE_HANDLING,
+      DEFAULT_SETTINGS.tableHandling
+    )
   };
 
-  await storageSet<Settings>(settings);
+  await saveSettingsToStorage(settings);
   showStatus("success", "Settings saved successfully!");
 }
 
@@ -117,76 +219,17 @@ async function resetSettings(): Promise<void> {
   if (!ok) return;
 
   settings = { ...DEFAULT_SETTINGS };
-  populateForm();
-  renderSavedFolders();
+  populateForm(settings);
+  renderSavedFolders(settings);
 
-  await storageSet<Settings>(settings);
+  await saveSettingsToStorage(settings);
   showStatus("success", "Settings reset to defaults!");
-}
-
-async function addFolder(): Promise<void> {
-  const input = getEl<HTMLInputElement>("newFolder");
-  if (!input) return;
-
-  const folder = input.value.trim();
-
-  if (!folder) {
-    showStatus("error", "Please enter a folder path");
-    return;
-  }
-
-  if (settings.savedFolders.includes(folder)) {
-    showStatus("error", "Folder already exists");
-    return;
-  }
-
-  settings.savedFolders.push(folder);
-  input.value = "";
-  renderSavedFolders();
-
-  await storageSet<Pick<Settings, "savedFolders">>({
-    savedFolders: settings.savedFolders
-  });
-}
-
-async function removeFolder(folder: string): Promise<void> {
-  settings.savedFolders = settings.savedFolders.filter((f) => f !== folder);
-  renderSavedFolders();
-
-  await storageSet<Pick<Settings, "savedFolders">>({
-    savedFolders: settings.savedFolders
-  });
-}
-
-function renderSavedFolders(): void {
-  const container = getEl<HTMLDivElement>("savedFolders");
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  for (const folder of settings.savedFolders) {
-    const div = document.createElement("div");
-    div.className = "folder-tag";
-    div.innerHTML = `
-      <span>${escapeHtml(folder)}</span>
-      <button class="remove-btn" data-folder="${escapeHtml(folder)}">&times;</button>
-    `;
-    container.appendChild(div);
-  }
-
-  container.querySelectorAll<HTMLButtonElement>(".remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const folder = btn.dataset.folder;
-      if (!folder) return;
-      void removeFolder(folder);
-    });
-  });
 }
 
 async function init(): Promise<void> {
   await loadSettings();
   setupEventListeners();
-  renderSavedFolders();
+  renderSavedFolders(settings);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

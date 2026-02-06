@@ -1,4 +1,5 @@
 import type { ClipResult, PageType } from "./types";
+import type { Settings } from "./settings";
 
 /**
  * Messages sent to the background service worker via chrome.runtime.sendMessage().
@@ -6,7 +7,12 @@ import type { ClipResult, PageType } from "./types";
 export type RuntimeRequest =
   | { action: "getSettings" }
   | { action: "copyToClipboard"; data: string }
-  | { action: "openObsidianUri"; uri: string };
+  | { action: "openObsidianUri"; uri: string }
+  | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number };
+
+export type ExtractPdfResponse =
+  | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }
+  | { success: false; error: string };
 
 /**
  * Messages sent to a tab's content script via chrome.tabs.sendMessage().
@@ -18,6 +24,7 @@ export type TabRequest =
       isSPA?: boolean;
       selectionOnly?: boolean;
       includeTimestamps?: boolean;
+      settings: Settings; // Pass settings to content script for extraction
     }
   | { action: "getPageInfo" };
 
@@ -29,4 +36,5 @@ export type PageInfo = {
   url: string;
   title: string;
   type: PageType;
+  contentType?: string;
 };

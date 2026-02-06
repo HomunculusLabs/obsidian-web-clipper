@@ -50,7 +50,11 @@ async function bundleEntrypoint(inputFile: string, outSubdir: string, watchMode:
     format: "iife",
     splitting: false,
     minify: !watchMode,
-    sourcemap: watchMode ? "external" : "none"
+    sourcemap: watchMode ? "external" : "none",
+    define: {
+      // Polyfill import.meta.url for PDF.js (not needed since we use disableWorker)
+      "import.meta.url": JSON.stringify("https://localhost/")
+    }
   });
 
   if (!result.success) {
@@ -84,6 +88,13 @@ async function manifestReferencesLib(manifestPath: string | null) {
   }
 }
 
+async function copyPdfWorker() {
+  const workerSrc = resolvePath("node_modules/pdfjs-dist/build/pdf.worker.min.js");
+  const workerDest = join(DIST_DIR, "pdfjs/pdf.worker.js");
+  await ensureDir(dirname(workerDest));
+  await cp(workerSrc, workerDest, { force: true });
+}
+
 async function copyStaticAssets() {
   const manifestPath = pickFirstExisting(["src/manifest.json", "manifest.json"]);
   await copyFileIfExists(manifestPath, "manifest.json");
@@ -97,6 +108,9 @@ async function copyStaticAssets() {
   const optionsCss = pickFirstExisting(["src/options/options.css", "options/options.css"]);
   await copyFileIfExists(optionsHtml, "options/options.html");
   await copyFileIfExists(optionsCss, "options/options.css");
+
+  const offscreenHtml = pickFirstExisting(["src/offscreen/offscreen.html"]);
+  await copyFileIfExists(offscreenHtml, "offscreen/offscreen.html");
 
   const iconsDir = pickFirstExisting(["src/icons", "icons"]);
   await copyDirIfExists(iconsDir, "icons");
@@ -113,6 +127,7 @@ async function buildAll(watchMode: boolean) {
   const contentEntrypoint = pickFirstExisting(["src/content/content.ts", "content.js"]);
   const popupEntrypoint = pickFirstExisting(["src/popup/popup.ts", "popup/popup.js"]);
   const optionsEntrypoint = pickFirstExisting(["src/options/options.ts", "options/options.js"]);
+  const offscreenEntrypoint = pickFirstExisting(["src/offscreen/offscreen.ts"]);
 
   const missing: string[] = [];
   if (!backgroundEntrypoint) missing.push("src/background/background.ts (or background.js)");
@@ -130,8 +145,12 @@ async function buildAll(watchMode: boolean) {
   await bundleEntrypoint(contentEntrypoint!, "content", watchMode);
   await bundleEntrypoint(popupEntrypoint!, "popup", watchMode);
   await bundleEntrypoint(optionsEntrypoint!, "options", watchMode);
+  if (offscreenEntrypoint) {
+    await bundleEntrypoint(offscreenEntrypoint, "offscreen", watchMode);
+  }
 
   await copyStaticAssets();
+  await copyPdfWorker();
 }
 
 function startWatch(onChange: () => void) {
