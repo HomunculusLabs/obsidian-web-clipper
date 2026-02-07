@@ -345,6 +345,111 @@ function injectButtons(): void {
 }
 
 /**
+ * Clip ALL assistant responses on the current page to Obsidian.
+ * Each response becomes its own note, with a short delay between clips
+ * so Obsidian can handle the rapid-fire URIs.
+ */
+async function clipAllMessages(): Promise<void> {
+  const copyButtons = document.querySelectorAll(
+    'button[data-testid="copy-turn-action-button"]'
+  );
+
+  // Collect all message elements we can find
+  const messageEls: HTMLElement[] = [];
+  copyButtons.forEach((copyBtn) => {
+    const actionBar = copyBtn.parentElement;
+    if (!actionBar) return;
+    const msgEl = findMessageContent(actionBar);
+    if (msgEl) messageEls.push(msgEl);
+  });
+
+  if (messageEls.length === 0) {
+    showToast("No assistant responses found on this page.");
+    return;
+  }
+
+  showToast(`Clipping ${messageEls.length} response(s)...`);
+
+  let clipped = 0;
+  let failed = 0;
+
+  for (const msgEl of messageEls) {
+    try {
+      await clipMessage(msgEl);
+      clipped++;
+      // Stagger clips so Obsidian doesn't choke on rapid URIs
+      if (clipped < messageEls.length) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    } catch (err) {
+      console.error("[Obsidian Clipper] Failed to clip message:", err);
+      failed++;
+    }
+  }
+
+  const msg = failed > 0
+    ? `Clipped ${clipped}/${messageEls.length} responses (${failed} failed)`
+    : `Clipped all ${clipped} responses ✓`;
+  showToast(msg);
+}
+
+const CLIP_ALL_BUTTON_ID = "obsidian-clip-all-btn";
+
+const CLIP_ALL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path><line x1="12" y1="8" x2="12" y2="14"></line><line x1="9" y1="11" x2="15" y2="11"></line></svg>`;
+
+/**
+ * Inject a floating "Clip All" button on ChatGPT pages.
+ */
+function injectClipAllButton(): void {
+  if (document.getElementById(CLIP_ALL_BUTTON_ID)) return;
+
+  const btn = document.createElement("button");
+  btn.id = CLIP_ALL_BUTTON_ID;
+  btn.title = "Clip All Responses to Obsidian";
+  btn.innerHTML = `${CLIP_ALL_ICON_SVG} <span style="margin-left:6px;">Clip All</span>`;
+  Object.assign(btn.style, {
+    position: "fixed",
+    bottom: "24px",
+    left: "24px",
+    zIndex: "999998",
+    display: "flex",
+    alignItems: "center",
+    padding: "10px 16px",
+    background: "#7c3aed",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontFamily: "system-ui, sans-serif",
+    fontSize: "13px",
+    fontWeight: "600",
+    boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+    transition: "opacity 0.2s, transform 0.2s",
+  });
+
+  btn.addEventListener("mouseenter", () => {
+    btn.style.transform = "scale(1.05)";
+  });
+  btn.addEventListener("mouseleave", () => {
+    btn.style.transform = "scale(1)";
+  });
+
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    btn.style.opacity = "0.5";
+    btn.style.pointerEvents = "none";
+    try {
+      await clipAllMessages();
+    } finally {
+      btn.style.opacity = "1";
+      btn.style.pointerEvents = "auto";
+    }
+  });
+
+  document.body.appendChild(btn);
+}
+
+/**
  * Initialize the ChatGPT injector with a MutationObserver.
  */
 export function initChatGPTInjector(): void {
@@ -360,10 +465,12 @@ export function initChatGPTInjector(): void {
 
   // Initial scan
   injectButtons();
+  injectClipAllButton();
 
   // Watch for new messages (streaming, navigation, etc.)
   const observer = new MutationObserver(() => {
     injectButtons();
+    injectClipAllButton();
   });
 
   observer.observe(document.body, {
