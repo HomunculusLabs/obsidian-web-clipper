@@ -112,7 +112,7 @@ Auto-suggest tags and note titles based on page content.
 
 Headless Puppeteer tools for research pipeline automation.
 
-- [ ] **Task 69**: Core clipper library — Extract shared clipping logic from `tools/chatgpt-clipper.ts` into `tools/lib/clipper-core.ts`. Shared browser launch, page extraction, markdown generation.
+- [x] **Task 69**: Core clipper library — Extract shared clipping logic from `tools/chatgpt-clipper.ts` into `tools/lib/clipper-core.ts`. Shared browser launch, page extraction, markdown generation.
 - [ ] **Task 70**: Universal URL clipper — `tools/clip-url.ts`: Clip any URL headlessly. `bun run tools/clip-url.ts --json <url>` → structured JSON with markdown, metadata, tags. Already planned in Task 9, ensure full implementation.
 - [ ] **Task 71**: Batch URL clipper — `tools/batch-clip.ts`: Clip multiple URLs from stdin, file, or args. Support concurrency (`--parallel 4`), progress reporting, JSON array output.
 - [ ] **Task 72**: YouTube transcript CLI — `tools/youtube-transcript.ts`: Extract YouTube transcript headlessly. `bun run tools/youtube-transcript.ts --json <url>` → JSON with transcript, metadata.
