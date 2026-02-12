@@ -11,6 +11,7 @@ import "./reddit";
 import "./hackernews";
 import "./stackoverflow";
 import "./github";
+import "./wikipedia";
 
 export {
   // Template registration
@@ -97,3 +98,20 @@ export {
   extractCodeLanguages,
   formatGitHubContent
 } from "./github";
+
+export {
+  wikipediaTemplate,
+  englishWikipediaTemplate,
+  extractArticleTitle,
+  extractLanguage,
+  extractShortDescription,
+  extractInfobox,
+  extractCategories,
+  extractLeadSection,
+  extractLastModified,
+  isDisambiguationPage,
+  extractDisambiguationEntries,
+  cleanWikipediaContent,
+  formatWikipediaContent,
+  formatDisambiguationPage
+} from "./wikipedia";
