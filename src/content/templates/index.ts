@@ -24,6 +24,7 @@ import "./arxiv";
 import "./docs";
 import "./amazon";
 import "./recipe";
+import "./twitter"; // Twitter/X - uses dedicated extractor
 
 import {
   getBuiltInTemplates as getRawBuiltInTemplates,
@@ -405,3 +406,11 @@ export {
   type Recipe,
   type RecipeNutrition
 } from "./recipe";
+
+export {
+  twitterTemplate,
+  xTemplate,
+  mobileTwitterTemplate,
+  isDedicatedExtractorTemplate,
+  isTwitterTemplate
+} from "./twitter";

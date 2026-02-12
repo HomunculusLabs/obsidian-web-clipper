@@ -1,6 +1,6 @@
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage } from "../shared/errors";
-import { getTemplateForUrl } from "./templates";
+import { getTemplateForUrl, isTwitterTemplate } from "./templates";
 
 import { extractWebPageContent } from "./extractors/web";
 import { extractPDFContent } from "./extractors/pdf";
@@ -11,6 +11,37 @@ import type { ClipResult, PageType } from "../shared/types";
 import type { PageInfo, TabRequest, TabResponse, TemplateInfo } from "../shared/messages";
 
 type ClipRequest = Extract<TabRequest, { action: "clip" }>;
+
+/**
+ * Check if a Twitter template is enabled for the given URL.
+ * Returns false if the template is disabled or if no template matches.
+ */
+function isTwitterTemplateEnabled(url: string, settings: ClipRequest["settings"]): boolean {
+  // If templates are disabled globally, use the dedicated extractor
+  if (settings.templatesEnabled === false) {
+    return true;
+  }
+
+  const template = getTemplateForUrl(url, {
+    customTemplates: settings.customTemplates,
+    disabledBuiltIns: settings.disabledBuiltIns,
+    includeBuiltIns: true
+  });
+
+  // If no template matches, default to using the dedicated extractor
+  if (!template) {
+    return true;
+  }
+
+  // Check if this is a Twitter template
+  if (isTwitterTemplate(template)) {
+    // Template is matched and enabled, use dedicated extractor
+    return true;
+  }
+
+  // Non-Twitter template matched (shouldn't happen on Twitter URLs, but handle it)
+  return false;
+}
 
 export async function clipPage(request: ClipRequest): Promise<TabResponse> {
   const url = window.location.href;
@@ -49,7 +80,19 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
         );
         break;
       case "twitter":
-        result = await extractTwitterContent(baseResult);
+        // Check if Twitter template is enabled
+        // If disabled via template settings, fall back to web extractor
+        if (isTwitterTemplateEnabled(url, settings)) {
+          result = await extractTwitterContent(baseResult);
+        } else {
+          console.log("[Clip] Twitter template disabled, falling back to web extractor");
+          result = extractWebPageContent({
+            result: baseResult,
+            settings,
+            selectionOnly: request.selectionOnly,
+            disableTemplate: true
+          });
+        }
         break;
       case "pdf":
         result = await extractPDFContent(baseResult);

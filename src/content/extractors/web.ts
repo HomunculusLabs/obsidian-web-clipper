@@ -8,7 +8,7 @@ import {
   type ReadabilityArticleLike
 } from "../web/paywall";
 import { getSelection, type SelectionResult } from "../selection";
-import { getTemplateForUrl } from "../templates/registry";
+import { getTemplateForUrl, isDedicatedExtractorTemplate } from "../templates";
 
 import type { ClipResult } from "../../shared/types";
 import type { Settings } from "../../shared/settings";
@@ -165,7 +165,11 @@ function extractFullPageContent(
       includeBuiltIns: true
     });
 
-    if (template?.selectors.content) {
+    // Skip templates that use dedicated extractors (e.g., Twitter)
+    // These are handled by their own extractors, not the web extractor
+    if (template && isDedicatedExtractorTemplate(template)) {
+      console.log("[Web Extractor] Template uses dedicated extractor, skipping:", template.name);
+    } else if (template?.selectors.content) {
       console.log("[Web Extractor] Using template:", template.name, "for", pageUrl);
       try {
         const templateResult = extractWithTemplate(documentClone, template, settings, pageUrl);
