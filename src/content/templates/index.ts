@@ -15,6 +15,7 @@ import "./wikipedia";
 import "./medium";
 import "./substack";
 import "./arxiv";
+import "./docs";
 
 export {
   // Template registration
@@ -175,3 +176,23 @@ export {
   formatArxivContent,
   type ArxivPaper
 } from "./arxiv";
+
+export {
+  mdnTemplate,
+  reactDocsTemplate,
+  typeScriptDocsTemplate,
+  vueDocsTemplate,
+  angularDocsTemplate,
+  nodejsDocsTemplate,
+  nextjsDocsTemplate,
+  tailwindDocsTemplate,
+  svelteDocsTemplate,
+  nuxtDocsTemplate,
+  extractBreadcrumbs,
+  extractDocsNavigationContext,
+  countCodeExamples,
+  extractCodeLanguages as extractDocsCodeLanguages,
+  hasInteractiveExamples,
+  formatDocsContent,
+  generateDocsFilename
+} from "./docs";
