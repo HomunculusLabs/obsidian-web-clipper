@@ -5,6 +5,7 @@ import { getTemplateForUrl } from "./templates";
 import { extractWebPageContent } from "./extractors/web";
 import { extractPDFContent } from "./extractors/pdf";
 import { extractYouTubeContent } from "./extractors/youtube";
+import { extractTwitterContent } from "./extractors/twitter";
 
 import type { ClipResult, PageType } from "../shared/types";
 import type { PageInfo, TabRequest, TabResponse, TemplateInfo } from "../shared/messages";
@@ -46,6 +47,9 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
           baseResult,
           request.includeTimestamps !== false
         );
+        break;
+      case "twitter":
+        result = await extractTwitterContent(baseResult);
         break;
       case "pdf":
         result = await extractPDFContent(baseResult);
