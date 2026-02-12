@@ -1248,20 +1248,34 @@ export async function extractTwitterContent(
 
   // Set metadata
   result.metadata.author = tweetInfo.authorName || tweetInfo.authorHandle;
+  // Task 50: Use "Thread by @handle" for threads, "Tweet by @handle" for single tweets
   result.title = tweetInfo.authorHandle
-    ? `Tweet by @${tweetInfo.authorHandle}`
+    ? tweetInfo.isThread
+      ? `Thread by @${tweetInfo.authorHandle}`
+      : `Tweet by @${tweetInfo.authorHandle}`
     : result.title;
   result.metadata.publishedDate = tweetInfo.timestamp;
 
-  // Build markdown
-  let markdown = `# ${tweetInfo.authorName || "Unknown Author"}`;
-  if (tweetInfo.authorHandle) {
-    markdown += ` (@${tweetInfo.authorHandle})`;
+  // Build markdown - Task 50: Clean thread formatting with "# Thread by @handle"
+  if (tweetInfo.isThread) {
+    let markdown = `# Thread by @${tweetInfo.authorHandle || "Unknown"}`;
+    if (tweetInfo.authorName) {
+      markdown += ` (${tweetInfo.authorName})`;
+    }
+    markdown += "\n\n";
+    result.markdown = markdown;
+  } else {
+    let markdown = `# ${tweetInfo.authorName || "Unknown Author"}`;
+    if (tweetInfo.authorHandle) {
+      markdown += ` (@${tweetInfo.authorHandle})`;
+    }
+    if (tweetInfo.isVerified) {
+      markdown += ` ✓`;
+    }
+    markdown += "\n\n";
+    result.markdown = markdown;
   }
-  if (tweetInfo.isVerified) {
-    markdown += ` ✓`;
-  }
-  markdown += "\n\n";
+  let markdown = result.markdown;
 
   // Author bio (Task 49)
   if (tweetInfo.authorInfo?.bio) {
@@ -1332,42 +1346,42 @@ export async function extractTwitterContent(
 
   markdown += `---\n\n`;
 
-  // If we have thread tweets, output each one
+  // Task 50: Format thread tweets as clean paragraphs with timestamps, separated by ---
   if (tweetInfo.isThread && tweetInfo.threadTweets && tweetInfo.threadTweets.length > 0) {
     for (let i = 0; i < tweetInfo.threadTweets.length; i++) {
       const tweet = tweetInfo.threadTweets[i];
 
-      // Tweet header with position
-      if (tweet.isRetweet) {
-        markdown += `### Tweet ${tweet.position} 🔄 *Repost*\n\n`;
-        if (tweet.retweetAuthorName && tweet.retweetAuthorHandle) {
-          markdown += `> **Originally by:** ${tweet.retweetAuthorName} (@${tweet.retweetAuthorHandle})\n\n`;
-        }
-      } else {
-        markdown += `### Tweet ${tweet.position}\n\n`;
-      }
-
-      // Timestamp for this tweet
+      // Task 50: Each tweet as a clean paragraph with timestamp
+      // Timestamp first (compact inline format)
       if (tweet.timestamp) {
         const date = new Date(tweet.timestamp);
         const dateStr = date.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
+          month: "short",
           day: "numeric",
+          year: "numeric",
           hour: "2-digit",
           minute: "2-digit"
         });
-        markdown += `> 📅 ${dateStr}\n\n`;
+        markdown += `*${dateStr}`;
+        if (tweet.isRetweet) {
+          markdown += ` — 🔄 Repost`;
+        }
+        markdown += `*\n\n`;
       }
 
-      // Tweet text
+      // Retweet attribution if applicable
+      if (tweet.isRetweet && tweet.retweetAuthorName && tweet.retweetAuthorHandle) {
+        markdown += `**Originally by ${tweet.retweetAuthorName} (@${tweet.retweetAuthorHandle}):**\n\n`;
+      }
+
+      // Tweet text as paragraph
       if (tweet.text) {
         markdown += `${tweet.text}\n`;
       }
 
-      // Media attachments for this tweet
+      // Media attachments inline
       if (tweet.media.length > 0) {
-        markdown += `\n\n**Media:**\n`;
+        markdown += `\n`;
         for (const media of tweet.media) {
           if (media.type === "image") {
             const alt = media.altText ? ` "${media.altText}"` : "";
@@ -1379,37 +1393,33 @@ export async function extractTwitterContent(
         }
       }
 
-      // Poll for this tweet (Task 48)
+      // Poll (Task 48) - simplified format
       if (tweet.poll) {
-        markdown += formatPollAsMarkdown(tweet.poll);
+        markdown += `\n\n📊 **Poll:**`;
+        for (const option of tweet.poll.options) {
+          let optText = ` ${option.label}`;
+          if (option.percentage !== undefined) {
+            optText += ` (${option.percentage}%)`;
+          }
+          markdown += optText;
+        }
+        if (tweet.poll.totalVotes) {
+          markdown += ` — ${formatNumber(tweet.poll.totalVotes)} votes`;
+        }
       }
 
-      // Link card for this tweet (Task 48)
+      // Link card (Task 48) - simplified format
       if (tweet.linkCard) {
-        markdown += formatLinkCardAsMarkdown(tweet.linkCard);
+        markdown += `\n\n🔗 [${tweet.linkCard.title || tweet.linkCard.domain || "Link"}](${tweet.linkCard.url})`;
       }
 
-      // Quoted tweet for this thread tweet
+      // Quoted tweet
       if (tweet.quotedTweet) {
-        markdown += `\n\n> **Quoted:** @${tweet.quotedTweet.authorHandle}: ${tweet.quotedTweet.text}\n`;
+        markdown += `\n\n> **Quoted @${tweet.quotedTweet.authorHandle}:** ${tweet.quotedTweet.text}`;
       }
 
-      // Engagement for this tweet
-      const tweetStats: string[] = [];
-      if (tweet.engagement.replies > 0) tweetStats.push(`💬 ${formatNumber(tweet.engagement.replies)}`);
-      if (tweet.engagement.retweets > 0) tweetStats.push(`🔄 ${formatNumber(tweet.engagement.retweets)}`);
-      if (tweet.engagement.likes > 0) tweetStats.push(`❤️ ${formatNumber(tweet.engagement.likes)}`);
-      if (tweet.engagement.views && tweet.engagement.views > 0) {
-        tweetStats.push(`👁️ ${formatNumber(tweet.engagement.views)}`);
-      }
-      if (tweetStats.length > 0) {
-        markdown += `\n\n<small>${tweetStats.join(" • ")}</small>`;
-      }
-
-      // Separator between tweets (except after last one)
-      if (i < tweetInfo.threadTweets!.length - 1) {
-        markdown += `\n\n---\n\n`;
-      }
+      // Task 50: --- separator between tweets
+      markdown += `\n\n---\n\n`;
     }
 
     // Note if there's more content
