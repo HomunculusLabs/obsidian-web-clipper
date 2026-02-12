@@ -63,7 +63,7 @@ Custom extraction rules per domain for optimal clipping.
 - [x] **Task 38**: Template matching in popup — Show which template matched in the popup (if any). Allow user to override or disable template for current clip.
 - [x] **Task 39**: Template priority system — Allow user to set priority order when multiple templates could match. Add `priority: number` to SiteTemplate.
 - [x] **Task 40**: Template test harness — Create `tests/templates/` with test HTML fixtures for each site template. Verify extraction produces expected markdown.
-- [ ] **Task 41**: Template contribution guide — Write `docs/custom-templates.md` explaining how to create and share site templates.
+- [x] **Task 41**: Template contribution guide — Write `docs/custom-templates.md` explaining how to create and share site templates.
 - [ ] **Task 42**: Built-in template bundle — Create `src/content/templates/index.ts` that exports all built-in templates. Load from settings which ones are enabled.
 
 ---
