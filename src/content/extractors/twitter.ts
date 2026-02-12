@@ -39,6 +39,12 @@ interface TwitterThreadTweet {
     authorHandle: string;
     text: string;
   };
+  /** Whether this is a retweet by the thread author (Task 47) */
+  isRetweet?: boolean;
+  /** Original tweet author if this is a retweet */
+  retweetAuthorHandle?: string;
+  /** Original tweet author name if this is a retweet */
+  retweetAuthorName?: string;
 }
 
 /**
@@ -260,6 +266,87 @@ function getQuotedTweetFromArticle(article: Element): TwitterThreadTweet["quoted
 }
 
 /**
+ * Detect if a tweet article is a retweet by checking for "Reposted" indicator.
+ * Returns the retweeter's handle if this is a retweet, or null if not.
+ *
+ * Twitter DOM structure for retweets:
+ * - Has a "Reposted" text or social context indicator at the top
+ * - The main author shown is the original tweeter, not the retweeter
+ */
+function getRetweetInfo(article: Element): { retweeterHandle: string; retweeterName: string } | null {
+  // Look for "Reposted" indicator - Twitter shows this above the tweet
+  // Format: "Username Reposted" in a div with smaller text
+  const socialContext = article.querySelector('[data-testid="socialContext"]');
+  if (socialContext) {
+    const text = socialContext.textContent?.toLowerCase() || "";
+    if (text.includes("reposted") || text.includes("retweeted")) {
+      // Extract retweeter name/handle from the social context
+      // Format: "Display Name Reposted" or "@handle Reposted"
+      const match = socialContext.textContent?.match(/^(.+?)\s+Reposted/i);
+      if (match) {
+        let retweeterName = match[1].trim();
+        // Clean up handle format if present
+        if (retweeterName.startsWith("@")) {
+          return { retweeterHandle: retweeterName.slice(1), retweeterName: retweeterName.slice(1) };
+        }
+        return { retweeterHandle: "", retweeterName };
+      }
+    }
+  }
+
+  // Alternative: Check for "Reposted" text anywhere in the article header
+  const headerText = article.querySelector('div[data-testid="tweet"] > div:first-child')?.textContent?.toLowerCase() || "";
+  if (headerText.includes("reposted") || headerText.includes("retweeted")) {
+    // Try to extract the retweeter info
+    const allLinks = article.querySelectorAll('a[role="link"]');
+    for (const link of allLinks) {
+      const href = link.getAttribute("href") || "";
+      // Look for links in the header area (before the main tweet content)
+      const parent = link.closest('div[data-testid="tweet"] > div');
+      if (parent && href.startsWith("/") && !href.includes("/status/")) {
+        // This might be the retweeter's profile link in the social context
+        const handle = href.slice(1);
+        const nameEl = link.querySelector('span');
+        const name = nameEl?.textContent?.trim() || handle;
+        return { retweeterHandle: handle, retweeterName: name };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get the original tweet author's name from a retweet article.
+ * Used when extracting retweet content within a thread.
+ */
+function getOriginalAuthorFromArticle(article: Element): { handle: string; name: string } {
+  let handle = "";
+  let name = "";
+
+  // In a retweet, the main author links point to the original tweeter
+  const authorLinks = article.querySelectorAll('a[role="link"]');
+  for (const link of authorLinks) {
+    const href = link.getAttribute("href") || "";
+    // Skip social context links, look for main tweet author
+    if (href.startsWith("/") && !href.includes("/status/") && !href.includes("/photo/") && !href.includes("/video/")) {
+      // Check if this is in the main tweet body (not the social context)
+      const inMainTweet = link.closest('div[data-testid="tweetText"]') === null &&
+                          link.closest('[data-testid="socialContext"]') === null;
+      if (inMainTweet || !handle) {
+        handle = href.slice(1);
+        const nameEl = link.querySelector('span[lang]') || link.querySelector('span');
+        if (nameEl) {
+          name = nameEl.textContent?.trim() || handle;
+        }
+      }
+    }
+  }
+
+  return { handle, name: name || handle };
+}
+
+/**
  * Detect and extract a thread of tweets from the page.
  *
  * Thread detection rules (Task 46):
@@ -267,6 +354,8 @@ function getQuotedTweetFromArticle(article: Element): TwitterThreadTweet["quoted
  * 2. Look for subsequent tweets by the SAME author
  * 3. Stop when we hit a tweet by a different author (that's a reply)
  * 4. Thread tweets are connected by vertical lines in Twitter's UI
+ *
+ * Task 47: Retweets by the thread author are included in the thread.
  *
  * @param mainTweetHandle - The handle of the main tweet author
  * @returns Array of thread tweets (empty if not a thread)
@@ -321,8 +410,30 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
         quotedTweet: getQuotedTweetFromArticle(article)
       });
     } else {
-      // Different author - this is a reply, thread has ended
-      threadEnded = true;
+      // Different author - check if this is a retweet by the main author (Task 47)
+      const retweetInfo = getRetweetInfo(article);
+      if (retweetInfo && (
+        retweetInfo.retweeterHandle.toLowerCase() === mainTweetHandle.toLowerCase() ||
+        retweetInfo.retweeterName.toLowerCase() === mainTweetHandle.toLowerCase()
+      )) {
+        // This is a retweet by the thread author - include it in the thread
+        const originalAuthor = getOriginalAuthorFromArticle(article);
+        position++;
+        threadTweets.push({
+          text: getTextFromArticle(article),
+          timestamp: getTimestampFromArticle(article),
+          position,
+          media: getMediaFromArticle(article),
+          engagement: getEngagementStatsFromArticle(article),
+          quotedTweet: getQuotedTweetFromArticle(article),
+          isRetweet: true,
+          retweetAuthorHandle: originalAuthor.handle || handle,
+          retweetAuthorName: originalAuthor.name
+        });
+      } else {
+        // Different author and not a retweet by main author - this is a reply, thread has ended
+        threadEnded = true;
+      }
     }
   }
 
@@ -613,7 +724,14 @@ export async function extractTwitterContent(
       const tweet = tweetInfo.threadTweets[i];
 
       // Tweet header with position
-      markdown += `### Tweet ${tweet.position}\n\n`;
+      if (tweet.isRetweet) {
+        markdown += `### Tweet ${tweet.position} 🔄 *Repost*\n\n`;
+        if (tweet.retweetAuthorName && tweet.retweetAuthorHandle) {
+          markdown += `> **Originally by:** ${tweet.retweetAuthorName} (@${tweet.retweetAuthorHandle})\n\n`;
+        }
+      } else {
+        markdown += `### Tweet ${tweet.position}\n\n`;
+      }
 
       // Timestamp for this tweet
       if (tweet.timestamp) {
