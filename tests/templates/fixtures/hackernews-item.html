@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Story | Hacker News</title>
+</head>
+<body>
+  <table class="fatitem">
+    <tr class="athing" id="12345">
+      <td class="title">
+        <a class="storylink" href="https://example.com/article">Show HN: A Great New Tool for Developers</a>
+      </td>
+    </tr>
+    <tr>
+      <td class="subtext">
+        <span class="score">567 points</span> by 
+        <a href="user?id=pg" class="hnuser">pg</a> 
+        <a href="item?id=12345">3 hours ago</a> | 
+        <a href="hide?id=12345">hide</a> | 
+        <a href="item?id=12345">89 comments</a>
+      </td>
+    </tr>
+  </table>
+  <table class="comment-tree">
+    <tr class="athing">
+      <td class="default">
+        <div class="comment">
+          <span class="comhead">
+            <a href="user?id=dang" class="hnuser">dang</a> 
+            <span class="score">42 points</span>
+            <span class="age">2 hours ago</span>
+          </span>
+          <div class="comment-body">
+            <span class="commtext">
+              This is a top-level comment with some interesting thoughts.
+              <p>It has multiple paragraphs.</p>
+            </span>
+          </div>
+        </div>
+        <table class="comment-tree">
+          <tr class="athing">
+            <td class="default">
+              <div class="comment">
+                <span class="comhead">
+                  <a href="user?id=pg" class="hnuser">pg</a>
+                  <span class="score">15 points</span>
+                </span>
+                <div class="comment-body">
+                  <span class="commtext">Thanks for the feedback!</span>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

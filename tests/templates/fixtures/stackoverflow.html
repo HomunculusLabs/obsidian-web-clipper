@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>javascript - How to sort an array in JavaScript? - Stack Overflow</title>
+</head>
+<body>
+  <div class="question" data-questionid="12345">
+    <div class="post-layout">
+      <div class="votecell">
+        <div class="vote">
+          <span class="vote-count-post">42</span>
+        </div>
+        <div class="accepted-answer-indicator" title="The question owner accepted this as the best answer"></div>
+      </div>
+      <div class="postcell">
+        <div class="post-text">
+          <p>I have an array of numbers:</p>
+          <pre><code class="lang-javascript">const arr = [3, 1, 4, 1, 5, 9];
+</code></pre>
+          <p>How can I sort this array in ascending order?</p>
+        </div>
+        <div class="post-taglist">
+          <a class="post-tag" href="/questions/tagged/javascript">javascript</a>
+          <a class="post-tag" href="/questions/tagged/arrays">arrays</a>
+          <a class="post-tag" href="/questions/tagged/sorting">sorting</a>
+        </div>
+        <div class="user-info">
+          <div class="user-details">
+            <a href="/users/1/testuser">testuser</a>
+            <div class="user-action-time">asked <time datetime="2023-01-15T10:00:00">Jan 15, 2023</time></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="answer accepted-answer" data-answerid="54321">
+    <div class="post-layout">
+      <div class="votecell">
+        <div class="vote">
+          <span class="vote-count-post">100</span>
+        </div>
+        <div class="accepted-answer-indicator" title="loading when this answer was accepted..."></div>
+      </div>
+      <div class="answercell">
+        <div class="post-text">
+          <p>Use the built-in <code>sort()</code> method:</p>
+          <pre><code class="lang-javascript">const arr = [3, 1, 4, 1, 5, 9];
+arr.sort((a, b) => a - b);
+console.log(arr); // [1, 1, 3, 4, 5, 9]
+</code></pre>
+          <p>Note: The callback <code>(a, b) => a - b</code> is needed for numeric sorting.</p>
+        </div>
+        <div class="user-info">
+          <div class="user-details">
+            <a href="/users/2/expert">expert</a>
+            <div class="user-action-time">answered <time datetime="2023-01-15T10:30:00">Jan 15, 2023</time></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="answer" data-answerid="54322">
+    <div class="post-layout">
+      <div class="votecell">
+        <div class="vote">
+          <span class="vote-count-post">25</span>
+        </div>
+      </div>
+      <div class="answercell">
+        <div class="post-text">
+          <p>You can also use <code>toSorted()</code> (ES2023) for an immutable sort:</p>
+          <pre><code class="lang-javascript">const sorted = arr.toSorted((a, b) => a - b);
+</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -163,15 +163,19 @@ export function matchUrlPattern(urlPattern: string | undefined, url: string): bo
   }
   
   try {
+    // Extract path for path-based patterns
+    const urlObj = new URL(url);
+    const pathWithQuery = urlObj.pathname + urlObj.search;
+    
     // Try as regex first
     if (urlPattern.startsWith("^") || urlPattern.endsWith("$")) {
+      // Regex patterns are tested against the PATH, not the full URL
+      // This allows patterns like "^/r/[^/]+/comments/" to work correctly
       const regex = new RegExp(urlPattern, "i");
-      return regex.test(url);
+      return regex.test(pathWithQuery);
     }
     
     // Treat as glob pattern for the path
-    const urlObj = new URL(url);
-    const pathWithQuery = urlObj.pathname + urlObj.search;
     const regex = globToRegex(urlPattern);
     return regex.test(pathWithQuery);
   } catch {

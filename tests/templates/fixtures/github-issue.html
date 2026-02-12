@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bug: Cannot sort array · Issue #42 · facebook/react · GitHub</title>
+</head>
+<body>
+  <div class="application-main">
+    <main>
+      <div class="repository-content">
+        <div class="gh-header">
+          <h1 class="gh-header-title">
+            <span class="js-issue-title">Bug: Cannot sort array when using certain props</span>
+            <span class="gh-header-number">#42</span>
+          </h1>
+          <div class="gh-header-meta">
+            <span class="State State--open">Open</span>
+            <a class="author" href="/testuser">testuser</a> opened this issue 
+            <relative-time datetime="2023-01-15T10:00:00">on Jan 15, 2023</relative-time>
+            · 5 comments
+          </div>
+        </div>
+        
+        <div class="Labels">
+          <span class="Label Label--primary">bug</span>
+          <span class="Label Label--secondary">needs investigation</span>
+        </div>
+        
+        <div class="comment">
+          <div class="comment-body">
+            <p>When I try to sort an array with certain props, the component crashes:</p>
+            <pre><code class="lang-javascript">const items = props.items;
+items.sort((a, b) => a - b);
+</code></pre>
+            <p>Error: <code>Cannot read property 'sort' of undefined</code></p>
+            <h2>Expected Behavior</h2>
+            <p>The array should sort correctly.</p>
+            <h2>Environment</h2>
+            <ul>
+              <li>React: 18.2.0</li>
+              <li>Browser: Chrome 120</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="comment">
+          <div class="comment-header">
+            <a class="author" href="/expert">expert</a> commented 
+            <relative-time datetime="2023-01-15T11:00:00">on Jan 15, 2023</relative-time>
+          </div>
+          <div class="comment-body">
+            <p>Thanks for the report! This looks like a props validation issue.</p>
+            <p>Can you share a minimal reproduction?</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
