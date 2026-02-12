@@ -10,7 +10,22 @@ export type RuntimeRequest =
   | { action: "openObsidianUri"; uri: string }
   | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number }
   | { action: "testCliConnection"; cliPath: string; vault: string }
-  | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string };
+  | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string }
+  | {
+      action: "saveContent";
+      /** Full markdown content with frontmatter */
+      markdown: string;
+      /** Target file path (without .md extension) */
+      filePath: string;
+      /** Vault name */
+      vault: string;
+      /** Whether to fall back to clipboard if URI fails (default: true) */
+      fallbackToClipboard?: boolean;
+    };
+
+export type SaveContentResponse =
+  | { success: true; usedMethod: "uri" | "clipboard" }
+  | { success: false; error: string };
 
 export type SaveToCliResponse =
   | { success: true }

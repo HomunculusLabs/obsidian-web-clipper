@@ -7,6 +7,7 @@ import { handleOpenObsidianUri } from "./handlers/openObsidianUri";
 import { handleExtractPdf } from "./handlers/extractPdf";
 import { handleTestCliConnection } from "./handlers/testCliConnection";
 import { handleSaveToCli } from "./handlers/saveToCli";
+import { handleSaveContent } from "./handlers/saveContent";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -22,6 +23,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleTestCliConnection(request);
     case "saveToCli":
       return handleSaveToCli(request);
+    case "saveContent":
+      return handleSaveContent(request);
     default:
       throw new Error(`Unknown action: ${(request as any).action}`);
   }

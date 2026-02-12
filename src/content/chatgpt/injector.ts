@@ -11,10 +11,9 @@ import { buildClipMarkdown, type FrontmatterInput } from "../../shared/markdown"
 import { DEFAULT_SETTINGS, type Settings } from "../../shared/settings";
 import { sanitizeFilename } from "../../shared/sanitize";
 import { parseTags, addAutoTags } from "../../shared/tags";
-import type { RuntimeRequest } from "../../shared/messages";
+import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
 
 const CLIP_BUTTON_ATTR = "data-obsidian-clip-injected";
-const MAX_URI_CONTENT_CHARS = 180_000;
 
 // SVG icon for the clip button (a small bookmark/clip icon)
 const CLIP_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>`;
@@ -168,7 +167,7 @@ function htmlToMarkdown(html: string): string {
 }
 
 /**
- * Clip a single ChatGPT message to Obsidian.
+ * Clip a single ChatGPT message to Obsidian using the save pipeline.
  */
 async function clipMessage(messageEl: HTMLElement): Promise<void> {
   const html = messageEl.innerHTML;
@@ -211,37 +210,33 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
 
   const body = `# ${shortTitle}\n\n${markdown}`;
   const fullMarkdown = buildClipMarkdown(frontmatter, body);
-  const encodedContent = encodeURIComponent(fullMarkdown);
 
   const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName).trim() || "Main Vault";
-  const baseUri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(filePath)}`;
 
-  if (encodedContent.length > MAX_URI_CONTENT_CHARS) {
-    // Fallback: copy to clipboard
-    await runtimeSendMessage<RuntimeRequest, unknown>({
-      action: "copyToClipboard",
-      data: fullMarkdown,
-    });
-    showToast("Copied to clipboard (too large for URI). Paste into Obsidian.");
-    return;
-  }
-
-  const uri = `${baseUri}&content=${encodedContent}`;
-
+  // Use the save pipeline (URI → clipboard fallback)
   try {
-    await runtimeSendMessage<RuntimeRequest, unknown>({
-      action: "openObsidianUri",
-      uri,
+    const response = await runtimeSendMessage<RuntimeRequest, SaveContentResponse>({
+      action: "saveContent",
+      markdown: fullMarkdown,
+      filePath,
+      vault,
+      fallbackToClipboard: true,
     });
-    showToast("Clipped to Obsidian ✓");
+
+    if (response?.success) {
+      if (response.usedMethod === "clipboard") {
+        showToast("Copied to clipboard (too large for URI). Paste into Obsidian.");
+      } else {
+        showToast("Clipped to Obsidian ✓");
+      }
+    } else {
+      // Save failed, show error
+      console.error("[Obsidian Clipper] Save failed:", response?.error);
+      showToast(`Failed to clip: ${response?.error || "Unknown error"}`);
+    }
   } catch (err) {
     console.error("[Obsidian Clipper] Failed to clip:", err);
-    // Fallback to clipboard
-    await runtimeSendMessage<RuntimeRequest, unknown>({
-      action: "copyToClipboard",
-      data: fullMarkdown,
-    });
-    showToast("Copied to clipboard (Obsidian URI failed).");
+    showToast("Failed to clip message.");
   }
 }
 
