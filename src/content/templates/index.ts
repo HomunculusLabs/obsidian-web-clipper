@@ -12,6 +12,7 @@ import "./hackernews";
 import "./stackoverflow";
 import "./github";
 import "./wikipedia";
+import "./medium";
 
 export {
   // Template registration
@@ -115,3 +116,18 @@ export {
   formatWikipediaContent,
   formatDisambiguationPage
 } from "./wikipedia";
+
+export {
+  mediumTemplate,
+  mediumMainTemplate,
+  extractAuthorHandle,
+  extractPublicationName,
+  extractReadingTime,
+  extractClapCount,
+  isMemberOnly,
+  extractPaywallPreview,
+  extractMediumTags,
+  extractCanonicalUrl,
+  extractMediumArticle,
+  formatMediumContent
+} from "./medium";
