@@ -51,7 +51,11 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
         break;
       case "web":
       default:
-        result = extractWebPageContent({ result: baseResult, settings });
+        result = extractWebPageContent({
+          result: baseResult,
+          settings,
+          selectionOnly: request.selectionOnly
+        });
         break;
     }
 

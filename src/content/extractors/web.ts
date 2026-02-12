@@ -7,6 +7,7 @@ import {
   isPaywalled,
   type ReadabilityArticleLike
 } from "../web/paywall";
+import { getSelection, type SelectionResult } from "../selection";
 
 import type { ClipResult } from "../../shared/types";
 import type { Settings } from "../../shared/settings";
@@ -15,13 +16,73 @@ export interface ExtractWebPageArgs {
   result: ClipResult;
   settings: Settings;
   pageUrl?: string; // optional override
+  selectionOnly?: boolean; // extract only user-selected content
 }
 
 // Extract web page content using Readability
 export function extractWebPageContent(args: ExtractWebPageArgs): ClipResult {
-  const { result, settings } = args;
+  const { result, settings, selectionOnly } = args;
   const pageUrl = args.pageUrl || result.url || window.location.href;
 
+  // Handle selection-only mode
+  if (selectionOnly) {
+    return extractSelectionContent(result, settings, pageUrl);
+  }
+
+  // Standard full-page extraction
+  return extractFullPageContent(result, settings, pageUrl);
+}
+
+/**
+ * Extract only the user-selected content.
+ * Falls back to full-page extraction if no selection exists.
+ */
+function extractSelectionContent(
+  result: ClipResult,
+  settings: Settings,
+  pageUrl: string
+): ClipResult {
+  const selection = getSelection();
+
+  // No selection - fall back to full page extraction
+  if (!selection.hasSelection) {
+    console.log("[Web Extractor] No selection found, falling back to full page");
+    return extractFullPageContent(result, settings, pageUrl);
+  }
+
+  console.log("[Web Extractor] Extracting selection:", {
+    rangeCount: selection.rangeCount,
+    textLength: selection.text.length
+  });
+
+  // Extract metadata from the page (but not full content)
+  const documentClone = document.cloneNode(true) as Document;
+  const metadataPatch = extractWebMetadata({
+    doc: documentClone,
+    pageUrl,
+    settings,
+    articleText: selection.text
+  });
+  Object.assign(result.metadata, metadataPatch);
+
+  // Convert selection HTML to markdown
+  const turndownService = createTurndownService(settings);
+  const markdown = turndownService.turndown(selection.html);
+
+  // Build final markdown with title and selection
+  result.markdown = `# ${result.title}\n\n${markdown}`;
+
+  return result;
+}
+
+/**
+ * Extract full page content using Readability.
+ */
+function extractFullPageContent(
+  result: ClipResult,
+  settings: Settings,
+  pageUrl: string
+): ClipResult {
   const documentClone = document.cloneNode(true) as Document;
 
   const article = new Readability(documentClone, {
