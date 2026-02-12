@@ -50,7 +50,7 @@ Custom extraction rules per domain for optimal clipping.
 - [x] **Task 25**: Template-aware web extraction — Modify `extractWebPageContent()` to check for matching template first. If found, use template selectors instead of Readability for extraction.
 - [x] **Task 26**: Reddit template — `src/content/templates/reddit.ts`: Extract post title, body, author, subreddit, score, comments. Handle old.reddit.com and new reddit. Add subreddit as tag.
 - [x] **Task 27**: Hacker News template — `src/content/templates/hackernews.ts`: Extract story title, URL, points, author, top comments. Handle comment pages vs story pages.
-- [ ] **Task 28**: Stack Overflow template — `src/content/templates/stackoverflow.ts`: Extract question, accepted answer, top answers with votes. Preserve code blocks with language hints.
+- [x] **Task 28**: Stack Overflow template — `src/content/templates/stackoverflow.ts`: Extract question, accepted answer, top answers with votes. Preserve code blocks with language hints.
 - [ ] **Task 29**: GitHub template — `src/content/templates/github.ts`: Handle README pages, issue pages, PR pages, code file pages. Extract repo metadata.
 - [ ] **Task 30**: Wikipedia template — `src/content/templates/wikipedia.ts`: Clean extraction removing edit links, references section cleanup, infobox extraction as frontmatter.
 - [ ] **Task 31**: Medium template — `src/content/templates/medium.ts`: Handle paywall detection (already exists), clean extraction of member-only content preview, author/publication metadata.
