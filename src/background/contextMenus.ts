@@ -1,3 +1,10 @@
+import { loadSettings } from "../shared/settingsService";
+import { ensureContentScriptLoaded } from "../popup/clipFlow";
+import { tabsSendMessage } from "../shared/chromeAsync";
+import { isLikelySPA } from "../popup/clipFlow";
+import { sleep } from "../popup/ui";
+import type { TabRequest } from "../shared/messages";
+
 export async function createContextMenu(): Promise<void> {
   if (!chrome.contextMenus) return;
 
@@ -29,12 +36,26 @@ export function handleContextMenuClick(
 
   const selectionOnly = typeof info.selectionText === "string" && info.selectionText.length > 0;
 
-  try {
-    chrome.tabs.sendMessage(tab.id, {
-      action: "clip",
-      selectionOnly
-    });
-  } catch (err) {
-    console.error("Failed to send clip message to tab:", err);
-  }
+  // Fire and forget - handle the async work internally
+  void (async () => {
+    try {
+      // Load settings from storage
+      const settings = await loadSettings();
+
+      // Ensure content script is loaded (same as popup does)
+      await ensureContentScriptLoaded(tab.id!);
+      await sleep(isLikelySPA(tab?.url) ? 1000 : 300);
+
+      // Send clip request with settings
+      const request: TabRequest = {
+        action: "clip",
+        selectionOnly,
+        settings
+      };
+
+      await tabsSendMessage(tab.id!, request);
+    } catch (err) {
+      console.error("Failed to send clip message to tab:", err);
+    }
+  })();
 }
