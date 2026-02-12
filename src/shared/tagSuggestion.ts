@@ -1,6 +1,12 @@
 import type { ClipMetadata } from "./types";
 import type { DomainTagRule } from "./domainTags";
 import { DEFAULT_DOMAIN_TAG_RULES, extractDomainTagsFromRules } from "./domainTags";
+import {
+  shouldExcludeWord,
+  MIN_KEYWORD_FREQUENCY,
+  MAX_KEYWORDS,
+  isGenericTechTerm,
+} from "./stoplist";
 
 /**
  * Tag suggestion result with confidence score
@@ -171,60 +177,210 @@ function extractDomainTags(
 }
 
 /**
- * Extracts keywords from content using simple frequency analysis.
- * Placeholder for Task 58 - Content keyword extraction.
+ * Extracts keywords from content using TF-IDF-like scoring.
+ *
+ * Implements Task 58 - Content keyword extraction:
+ * - Word frequency analysis with comprehensive English stoplist
+ * - Term length bonus (longer words often more specific/meaningful)
+ * - Capitalization bonus (proper nouns often important)
+ * - Technical term detection and appropriate scoring
+ * - Phrase detection for common two-word combinations
+ *
+ * @param content - The markdown content to analyze
+ * @returns Array of tag suggestions with confidence scores
  */
 function extractContentKeywords(content: string): TagSuggestion[] {
   const tags: TagSuggestion[] = [];
 
-  // Simple implementation: extract frequent words
-  // This will be enhanced in Task 58 with TF-IDF and stoplist
+  // Pre-process content: remove markdown syntax and extract clean text
+  const text = preprocessContent(content);
 
-  // Common English stoplist (basic version)
-  const stoplist = new Set([
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
-    "be", "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "must", "shall", "can", "this", "that", "these",
-    "those", "i", "you", "he", "she", "it", "we", "they", "what", "which",
-    "who", "when", "where", "why", "how", "all", "each", "every", "both",
-    "few", "more", "most", "other", "some", "such", "no", "not", "only",
-    "own", "same", "so", "than", "too", "very", "just", "also", "now"
-  ]);
+  // Extract individual words with their original casing info
+  const { words, wordPositions } = extractWords(text);
 
-  // Extract words from content (remove markdown syntax)
-  const text = content
-    .replace(/```[\s\S]*?```/g, " ") // Remove code blocks
-    .replace(/`[^`]+`/g, " ") // Remove inline code
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Extract link text
-    .replace(/[#*_~>|]/g, " ") // Remove markdown symbols
-    .toLowerCase();
-
-  // Split into words and count frequency
-  const words = text.match(/\b[a-z]{3,}\b/g) || [];
+  // Count word frequencies
   const wordFreq: Map<string, number> = new Map();
+  const capitalizedWords: Set<string> = new Set();
 
   for (const word of words) {
-    if (!stoplist.has(word)) {
-      wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
+    const lower = word.toLowerCase();
+    if (!shouldExcludeWord(lower)) {
+      wordFreq.set(lower, (wordFreq.get(lower) || 0) + 1);
+      // Track if word appears capitalized (potential proper noun)
+      if (word[0] && word[0] === word[0].toUpperCase() && word.length > 1) {
+        capitalizedWords.add(lower);
+      }
     }
   }
 
-  // Get top frequent words (appearing at least 3 times)
-  const sorted = Array.from(wordFreq.entries())
-    .filter(([_, count]) => count >= 3)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5); // Top 5 keywords
+  // Extract common bigrams (two-word phrases)
+  const bigramFreq: Map<string, number> = new Map();
+  for (let i = 0; i < words.length - 1; i++) {
+    const w1 = words[i].toLowerCase();
+    const w2 = words[i + 1].toLowerCase();
 
-  for (const [word, count] of sorted) {
+    // Only consider bigrams where both words are meaningful
+    if (!shouldExcludeWord(w1) && !shouldExcludeWord(w2)) {
+      const bigram = `${w1}-${w2}`;
+      bigramFreq.set(bigram, (bigramFreq.get(bigram) || 0) + 1);
+    }
+  }
+
+  // Calculate TF-IDF-like scores for each word
+  const totalWords = words.length;
+  const scoredWords: Array<{ word: string; score: number; freq: number }> = [];
+
+  for (const [word, freq] of wordFreq) {
+    if (freq >= MIN_KEYWORD_FREQUENCY) {
+      const score = calculateKeywordScore(word, freq, totalWords, capitalizedWords.has(word));
+      scoredWords.push({ word, score, freq });
+    }
+  }
+
+  // Sort by score and take top keywords
+  scoredWords.sort((a, b) => b.score - a.score);
+  const topKeywords = scoredWords.slice(0, MAX_KEYWORDS);
+
+  // Add bigrams that are more frequent than their individual parts
+  const topBigrams: Array<{ bigram: string; score: number }> = [];
+  for (const [bigram, freq] of bigramFreq) {
+    if (freq >= MIN_KEYWORD_FREQUENCY + 1) {
+      const [w1, w2] = bigram.split("-");
+      const w1Freq = wordFreq.get(w1) || 0;
+      const w2Freq = wordFreq.get(w2) || 0;
+
+      // Bigram is interesting if it's relatively frequent compared to components
+      if (freq * 2 >= Math.min(w1Freq, w2Freq)) {
+        const score = calculateKeywordScore(bigram, freq, totalWords, false) * 0.9;
+        topBigrams.push({ bigram, score });
+      }
+    }
+  }
+  topBigrams.sort((a, b) => b.score - a.score);
+
+  // Combine results: prefer bigrams if they're strong, otherwise use single words
+  const usedWords = new Set<string>();
+
+  // First, add top bigrams (up to 2)
+  for (const { bigram, score } of topBigrams.slice(0, 2)) {
+    const [w1, w2] = bigram.split("-");
+    usedWords.add(w1);
+    usedWords.add(w2);
     tags.push({
-      tag: word,
-      confidence: Math.min(0.5, count / 20), // Scale confidence by frequency
-      source: "content"
+      tag: bigram,
+      confidence: Math.min(0.6, score),
+      source: "content",
     });
   }
 
+  // Then add top single words that aren't part of bigrams
+  for (const { word, score, freq } of topKeywords) {
+    if (!usedWords.has(word)) {
+      tags.push({
+        tag: word,
+        confidence: Math.min(0.55, score),
+        source: "content",
+      });
+    }
+  }
+
   return tags;
+}
+
+/**
+ * Pre-processes content to remove markdown syntax and extract clean text.
+ */
+function preprocessContent(content: string): string {
+  return content
+    // Remove code blocks (fenced)
+    .replace(/```[\s\S]*?```/g, " ")
+    // Remove inline code
+    .replace(/`[^`]+`/g, " ")
+    // Extract link text (keep the text, discard URL)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // Remove image references
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, " ")
+    // Remove HTML tags
+    .replace(/<[^>]+>/g, " ")
+    // Remove markdown heading/hash symbols
+    .replace(/^#{1,6}\s+/gm, " ")
+    // Remove emphasis markers
+    .replace(/[*_~>|]/g, " ")
+    // Remove horizontal rules
+    .replace(/^[-*_]{3,}$/gm, " ")
+    // Normalize whitespace
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Extracts words from preprocessed text, preserving position info.
+ */
+function extractWords(text: string): { words: string[]; wordPositions: Map<string, number[]> } {
+  const words: string[] = [];
+  const wordPositions: Map<string, number[]> = new Map();
+
+  // Match word-like patterns (letters, may include hyphens/numbers)
+  const wordPattern = /\b[A-Za-z][A-Za-z0-9-]*\b/g;
+  let match;
+
+  while ((match = wordPattern.exec(text)) !== null) {
+    const word = match[0];
+    words.push(word);
+
+    const lower = word.toLowerCase();
+    const positions = wordPositions.get(lower) || [];
+    positions.push(match.index);
+    wordPositions.set(lower, positions);
+  }
+
+  return { words, wordPositions };
+}
+
+/**
+ * Calculates a TF-IDF-like score for a keyword.
+ *
+ * Factors considered:
+ * - Term frequency (TF): More frequent = higher score (logarithmic scaling)
+ * - Word length: Longer words often more specific/meaningful
+ * - Capitalization: Proper nouns (capitalized) often important
+ * - Generic tech term penalty: Common programming terms get lower scores
+ *
+ * @param word - The word to score
+ * @param freq - How many times the word appears
+ * @param totalWords - Total word count in document
+ * @param isCapitalized - Whether the word appears capitalized (proper noun)
+ * @returns Score between 0 and 1
+ */
+function calculateKeywordScore(
+  word: string,
+  freq: number,
+  totalWords: number,
+  isCapitalized: boolean
+): number {
+  // Base score from term frequency (logarithmic scaling)
+  // This prevents very frequent words from dominating
+  const tfScore = Math.log(freq + 1) / Math.log(10); // log10(freq+1)
+
+  // Length bonus: longer words often more specific
+  // Capped at 12 characters (diminishing returns)
+  const lengthBonus = Math.min(word.length / 12, 1) * 0.15;
+
+  // Proper noun bonus (capitalized words often names/important terms)
+  const capitalBonus = isCapitalized ? 0.1 : 0;
+
+  // Penalize generic tech terms slightly
+  const genericPenalty = isGenericTechTerm(word) ? -0.1 : 0;
+
+  // Document length normalization
+  // Longer documents naturally have higher frequencies
+  const lengthNorm = Math.min(1, 500 / totalWords);
+
+  // Combine scores
+  const rawScore = (tfScore * 0.5 + lengthBonus + capitalBonus + genericPenalty) * lengthNorm;
+
+  // Normalize to 0-1 range
+  return Math.max(0, Math.min(1, rawScore + 0.2)); // +0.2 to boost base score slightly
 }
 
 /**
