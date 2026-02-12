@@ -69,12 +69,15 @@ export function renderCustomTemplates(templates: SiteTemplate[]): void {
 
   for (let i = 0; i < templates.length; i++) {
     const template = templates[i] as SiteTemplate;
+    const priorityValue = template.priority ?? 0;
+    const priorityLabel = priorityValue > 0 ? `Priority: ${priorityValue}` : "";
     const div = document.createElement("div");
     div.className = "template-item";
     div.innerHTML = `
       <div class="template-info">
         <span class="template-name ${!template.enabled ? "disabled" : ""}">${escapeHtml(template.name || "Unnamed")}</span>
         <span class="template-domain">${escapeHtml(template.domain)}</span>
+        ${priorityLabel ? `<span class="template-priority">${escapeHtml(priorityLabel)}</span>` : ""}
         ${!template.enabled ? '<span class="template-status">Disabled</span>' : ""}
       </div>
       <div class="template-actions">
