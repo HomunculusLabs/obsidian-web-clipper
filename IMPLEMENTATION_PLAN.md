@@ -57,7 +57,7 @@ Custom extraction rules per domain for optimal clipping.
 - [x] **Task 32**: Substack template — `src/content/templates/substack.ts`: Extract newsletter content, author, publication name, date. Handle free vs paid content indicators.
 - [x] **Task 33**: ArXiv template — `src/content/templates/arxiv.ts`: Extract paper title, authors, abstract, PDF link. Format citation in frontmatter.
 - [x] **Task 34**: Documentation site template — `src/content/templates/docs.ts`: Generic template for docs sites (MDN, React docs, etc.). Extract breadcrumb path, code examples, navigation context.
-- [ ] **Task 35**: Amazon product template — `src/content/templates/amazon.ts`: Extract product name, price, rating, features list, description. Useful for purchase research.
+- [x] **Task 35**: Amazon product template — `src/content/templates/amazon.ts`: Extract product name, price, rating, features list, description. Useful for purchase research.
 - [ ] **Task 36**: Recipe template — `src/content/templates/recipe.ts`: Extract recipe name, ingredients list, instructions, prep/cook time. Use schema.org Recipe JSON-LD when available.
 - [ ] **Task 37**: Custom template editor — Add UI in options page to create/edit/delete custom templates. JSON editor with preview. Import/export templates as JSON.
 - [ ] **Task 38**: Template matching in popup — Show which template matched in the popup (if any). Allow user to override or disable template for current clip.
