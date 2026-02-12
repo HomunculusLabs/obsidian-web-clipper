@@ -6,6 +6,7 @@
     "build": "bun run build/build.ts",
     "dev": "bun run build/build.ts --watch",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "clip:chatgpt": "bun run tools/chatgpt-clipper.ts",
     "clip:stdin": "bun run tools/clip-stdin.ts",
     "clip:url": "bun run tools/clip-url.ts"
