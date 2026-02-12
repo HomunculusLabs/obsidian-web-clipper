@@ -16,7 +16,7 @@ The new Obsidian CLI (`obsidian-cli`) enables direct file creation, replacing th
 - [x] **Task 5**: Update save pipeline — Modify `src/popup/save.ts` to check `settings.saveMethod` and route to CLI save, URI save, or clipboard. Add automatic fallback chain: CLI → URI → clipboard.
 - [x] **Task 6**: Background handler for CLI save — Add `saveToCli` action to `RuntimeRequest` union in `messages.ts`. Add handler in `src/background/handlers/saveToCli.ts` since content scripts can't spawn processes.
 - [x] **Task 7**: CLI save for ChatGPT injector — Update `src/content/chatgpt/injector.ts` to use the new save pipeline via background messages instead of directly building URIs.
-- [ ] **Task 8**: CLI tool integration — Update `tools/chatgpt-clipper.ts` to support `--cli` flag that uses obsidian CLI directly instead of URI scheme or file writes.
+- [x] **Task 8**: CLI tool integration — Update `tools/chatgpt-clipper.ts` to support `--cli` flag that uses obsidian CLI directly instead of URI scheme or file writes.
 - [ ] **Task 9**: Create `tools/clip-url.ts` — New headless CLI tool: `bun run tools/clip-url.ts <url>` that clips any URL to Obsidian via CLI. Supports `--json`, `--stdout`, `--cli`, `--vault`, `--folder` flags.
 - [ ] **Task 10**: Create `tools/clip-stdin.ts` — CLI tool that reads markdown from stdin and saves to Obsidian: `echo "# Note" | bun run tools/clip-stdin.ts --title "My Note"`. For piping from other tools.
 - [ ] **Task 11**: CLI auto-detection — On extension install/settings load, try to detect obsidian CLI in PATH (`which obsidian` / common install locations). Auto-populate cliPath if found.
