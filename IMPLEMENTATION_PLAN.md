@@ -52,7 +52,7 @@ Custom extraction rules per domain for optimal clipping.
 - [x] **Task 27**: Hacker News template — `src/content/templates/hackernews.ts`: Extract story title, URL, points, author, top comments. Handle comment pages vs story pages.
 - [x] **Task 28**: Stack Overflow template — `src/content/templates/stackoverflow.ts`: Extract question, accepted answer, top answers with votes. Preserve code blocks with language hints.
 - [x] **Task 29**: GitHub template — `src/content/templates/github.ts`: Handle README pages, issue pages, PR pages, code file pages. Extract repo metadata.
-- [ ] **Task 30**: Wikipedia template — `src/content/templates/wikipedia.ts`: Clean extraction removing edit links, references section cleanup, infobox extraction as frontmatter.
+- [x] **Task 30**: Wikipedia template — `src/content/templates/wikipedia.ts`: Clean extraction removing edit links, references section cleanup, infobox extraction as frontmatter.
 - [ ] **Task 31**: Medium template — `src/content/templates/medium.ts`: Handle paywall detection (already exists), clean extraction of member-only content preview, author/publication metadata.
 - [ ] **Task 32**: Substack template — `src/content/templates/substack.ts`: Extract newsletter content, author, publication name, date. Handle free vs paid content indicators.
 - [ ] **Task 33**: ArXiv template — `src/content/templates/arxiv.ts`: Extract paper title, authors, abstract, PDF link. Format citation in frontmatter.
