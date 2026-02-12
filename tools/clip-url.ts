@@ -44,6 +44,7 @@ import {
   extractWebContentInPage,
   type CommonCLIOptions,
   type Logger,
+  type ToolOutput,
 } from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -51,16 +52,6 @@ import {
 interface CLIOptions extends CommonCLIOptions {
   url: string;
   timestamps: boolean;
-}
-
-interface ClipOutput {
-  success: boolean;
-  url: string;
-  title: string;
-  pageType: PageType;
-  markdown: string;
-  metadata: ClipMetadata;
-  error?: string;
 }
 
 interface ClipMetadata {
@@ -73,6 +64,15 @@ interface ClipMetadata {
   description?: string;
   publishedDate?: string;
 }
+
+interface ClipOutputData {
+  pageType: PageType;
+  metadata: ClipMetadata;
+}
+
+type ClipOutput = ToolOutput<ClipOutputData> & {
+  pageType: PageType;
+};
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
@@ -233,6 +233,7 @@ async function clipUrl(
     title: "",
     pageType,
     markdown: "",
+    content: "",
     metadata: {
       url,
       title: "",
@@ -273,6 +274,7 @@ async function extractWebPage(
     title: "",
     pageType: "web",
     markdown: "",
+    content: "",
     metadata: {
       url,
       title: "",
@@ -451,6 +453,7 @@ async function extractYouTube(
     title: "",
     pageType: "youtube",
     markdown: "",
+    content: "",
     metadata: {
       url,
       title: "",
@@ -562,6 +565,7 @@ async function extractPdfFromViewer(
     title: "",
     pageType: "pdf",
     markdown: "",
+    content: "",
     metadata: {
       url,
       title: "",
@@ -699,13 +703,16 @@ async function main(): Promise<void> {
     const page = await createPage(browser);
     const result = await clipUrl(page, opts.url, opts, log);
 
-    // --json mode: output structured JSON to stdout
+    // --json mode: output structured JSON to stdout using ToolOutput format
     if (opts.json) {
-      const output: ClipOutput & { markdown: string; content: string; tags: string[] } = {
+      const output: ClipOutput = {
         ...result,
         markdown: result.success ? buildFullMarkdown(result, opts) : "",
         content: result.markdown,
-        tags: opts.tags,
+        data: {
+          pageType: result.pageType,
+          metadata: result.metadata,
+        },
       };
       console.log(JSON.stringify(output, null, 2));
     } else {

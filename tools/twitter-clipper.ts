@@ -51,9 +51,29 @@ import {
   parseEngagementCount,
   type CommonCLIOptions,
   type Logger,
+  type ToolOutput,
 } from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+/**
+ * Twitter-specific data included in ToolOutput.data
+ */
+interface TwitterOutputData {
+  tweet_id: string;
+  author_handle: string;
+  author_name: string;
+  is_thread: boolean;
+  thread_length?: number;
+  text: string;
+  engagement: TwitterEngagement;
+  media: TwitterMedia[];
+  thread_tweets: TwitterThreadTweet[];
+  quoted_tweet?: {
+    authorHandle: string;
+    text: string;
+  };
+}
 
 interface CLIOptions extends CommonCLIOptions {
   urls: string[];
@@ -239,6 +259,39 @@ EXAMPLES:
 
   # Pipe markdown to another tool
   bun run tools/twitter-clipper.ts --stdout https://x.com/user/status/123456 | head -100
+
+OUTPUT FORMAT (--json):
+  Single URL:
+    {
+      "success": true,
+      "url": "https://x.com/user/status/...",
+      "title": "Tweet by @user",
+      "markdown": "...",
+      "content": "Tweet text...",
+      "metadata": {
+        "tweet_id": "123456",
+        "author_handle": "user",
+        "author_name": "Display Name",
+        "is_thread": false,
+        "engagement": { "replies": 10, "retweets": 5, "likes": 50 },
+        ...
+      },
+      "data": {
+        "tweet_id": "...",
+        "text": "...",
+        "thread_tweets": [...],
+        ...
+      }
+    }
+
+  Multiple URLs (batch):
+    {
+      "success": true,
+      "total": 2,
+      "succeeded": 2,
+      "failed": 0,
+      "results": [ ToolOutput, ToolOutput, ... ]
+    }
 `);
 }
 
@@ -995,6 +1048,11 @@ async function main(): Promise<void> {
   const log = createLogger();
   const opts = parseArgs(process.argv.slice(2), log);
 
+  // Enable quiet mode for JSON/stdout output
+  if (opts.json || opts.stdout) {
+    log.setQuiet(true);
+  }
+
   const urls = await resolveUrls(opts.urls);
 
   // Validate URLs
@@ -1050,18 +1108,37 @@ async function main(): Promise<void> {
       }
     }
 
-    // --json mode: output structured JSON to stdout
+    // --json mode: output structured JSON to stdout using ToolOutput format
     if (opts.json) {
-      const output = {
-        success: failCount === 0,
-        total: urls.length,
-        succeeded: successCount,
-        failed: failCount,
-        threads: allResults.map((r) => ({
-          url: r.url,
+      // For single URL, output single ToolOutput object
+      // For multiple URLs, output array with batch wrapper
+      if (allResults.length === 1) {
+        const r = allResults[0];
+        const output: ToolOutput<TwitterOutputData> = {
           success: r.success,
-          error: r.error || null,
-          tweet: r.tweet
+          url: r.url,
+          title: r.tweet
+            ? (r.tweet.isThread
+                ? `Thread by @${r.tweet.authorHandle}`
+                : `Tweet by @${r.tweet.authorHandle}`)
+            : "",
+          markdown: r.markdown || "",
+          content: r.tweet?.text || "",
+          metadata: r.tweet
+            ? {
+                tweet_id: r.tweet.tweetId,
+                author_handle: r.tweet.authorHandle,
+                author_name: r.tweet.authorName,
+                is_thread: r.tweet.isThread,
+                thread_length: r.tweet.threadLength,
+                verified: r.tweet.isVerified,
+                engagement: r.tweet.engagement,
+                media_count: r.tweet.media.length,
+                timestamp: r.tweet.timestamp,
+              }
+            : {},
+          error: r.error,
+          data: r.tweet
             ? {
                 tweet_id: r.tweet.tweetId,
                 author_handle: r.tweet.authorHandle,
@@ -1070,13 +1147,62 @@ async function main(): Promise<void> {
                 thread_length: r.tweet.threadLength,
                 text: r.tweet.text,
                 engagement: r.tweet.engagement,
-                media_count: r.tweet.media.length,
+                media: r.tweet.media,
+                thread_tweets: r.tweet.threadTweets,
+                quoted_tweet: r.tweet.quotedTweet,
               }
-            : null,
-          markdown: r.markdown,
-        })),
-      };
-      console.log(JSON.stringify(output, null, 2));
+            : undefined,
+        };
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        // Batch output: wrap in batch structure with individual ToolOutput results
+        const output = {
+          success: failCount === 0,
+          total: urls.length,
+          succeeded: successCount,
+          failed: failCount,
+          results: allResults.map((r): ToolOutput<TwitterOutputData> => ({
+            success: r.success,
+            url: r.url,
+            title: r.tweet
+              ? (r.tweet.isThread
+                  ? `Thread by @${r.tweet.authorHandle}`
+                  : `Tweet by @${r.tweet.authorHandle}`)
+              : "",
+            markdown: r.markdown || "",
+            content: r.tweet?.text || "",
+            metadata: r.tweet
+              ? {
+                  tweet_id: r.tweet.tweetId,
+                  author_handle: r.tweet.authorHandle,
+                  author_name: r.tweet.authorName,
+                  is_thread: r.tweet.isThread,
+                  thread_length: r.tweet.threadLength,
+                  verified: r.tweet.isVerified,
+                  engagement: r.tweet.engagement,
+                  media_count: r.tweet.media.length,
+                  timestamp: r.tweet.timestamp,
+                }
+              : {},
+            error: r.error,
+            data: r.tweet
+              ? {
+                  tweet_id: r.tweet.tweetId,
+                  author_handle: r.tweet.authorHandle,
+                  author_name: r.tweet.authorName,
+                  is_thread: r.tweet.isThread,
+                  thread_length: r.tweet.threadLength,
+                  text: r.tweet.text,
+                  engagement: r.tweet.engagement,
+                  media: r.tweet.media,
+                  thread_tweets: r.tweet.threadTweets,
+                  quoted_tweet: r.tweet.quotedTweet,
+                }
+              : undefined,
+          })),
+        };
+        console.log(JSON.stringify(output, null, 2));
+      }
     }
 
     log(`\n────────────────────────────────────`);
