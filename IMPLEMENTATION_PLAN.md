@@ -121,7 +121,7 @@ Headless Puppeteer tools for research pipeline automation.
 - [x] **Task 75**: PDF extraction CLI — `tools/pdf-clip.ts`: Extract text from PDF URLs or local files. Support `--json`, `--stdout`, `--pages 1-5`.
 - [x] **Task 76**: Site scraper tool — `tools/scrape-site.ts`: Crawl a site starting from URL, clip all pages up to depth N. `--depth 2 --max-pages 50 --json`. Output manifest of all clipped pages.
 - [x] **Task 77**: CLI output format standardization — Define `ToolOutput { success: boolean; url: string; title: string; markdown: string; content: string; tags: string[]; error?: string; data?: T }` shared across all tools.
-- [ ] **Task 78**: MCP server scaffolding — Create `tools/mcp-server.ts` implementing Model Context Protocol for AI agent integration. Expose clip operations as MCP tools.
+- [x] **Task 78**: MCP server scaffolding — Create `tools/mcp-server.ts` implementing Model Context Protocol for AI agent integration. Expose clip operations as MCP tools.
 - [ ] **Task 79**: MCP tool: clip_url — Register `clip_url(url, options)` tool in MCP server. Returns clipped markdown + metadata.
 - [ ] **Task 80**: MCP tool: clip_search — Register `clip_search(query, topN)` tool. Searches and clips results.
 - [ ] **Task 81**: MCP tool: save_to_obsidian — Register `save_to_obsidian(title, content, folder, tags)` tool. Saves content via Obsidian CLI.
