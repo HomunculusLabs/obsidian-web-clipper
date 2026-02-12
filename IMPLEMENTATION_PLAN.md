@@ -79,7 +79,7 @@ Full thread extraction from Twitter/X.
 - [x] **Task 47**: Thread extraction — Extract full thread in order: each tweet as a section with timestamp. Handle quoted tweets, retweets within thread.
 - [x] **Task 48**: Twitter media handling — Extract images (as markdown image links), video thumbnails, poll data, link cards from tweets.
 - [x] **Task 49**: Twitter metadata — Extract author info (name, handle, verified status, bio), thread stats (likes, retweets, replies total).
-- [ ] **Task 50**: Twitter markdown formatting — Format thread as clean markdown: `# Thread by @handle`, then each tweet as a paragraph with timestamp. Include `---` between tweets.
+- [x] **Task 50**: Twitter markdown formatting — Format thread as clean markdown: `# Thread by @handle`, then each tweet as a paragraph with timestamp. Include `---` between tweets.
 - [ ] **Task 51**: Twitter frontmatter — Custom frontmatter for Twitter: `type: tweet`, `author_handle`, `thread_length`, `engagement` fields.
 - [ ] **Task 52**: Twitter popup UI — Update popup to show Twitter icon and "Tweet/Thread" label. Show thread count if detected.
 - [ ] **Task 53**: Headless Twitter clipper — Create `tools/twitter-clipper.ts` for headless thread extraction via Puppeteer. Support `--profile` for auth, `--json`, `--stdout`.
