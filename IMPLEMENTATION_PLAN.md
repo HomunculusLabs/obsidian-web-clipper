@@ -34,7 +34,7 @@ Clip only the user's text selection instead of the full page.
 - [x] **Task 16**: Popup selection indicator — When popup opens, detect if user has text selected on the page. Show a "Selection detected" badge and toggle: "Clip Selection" vs "Clip Full Page".
 - [x] **Task 17**: Selection context in frontmatter — When clipping selection, add `clip_mode: selection` and `selection_context: "[surrounding paragraph]"` to frontmatter for context.
 - [x] **Task 18**: Context menu selection clip — Update `src/background/contextMenus.ts` to properly pass selection text through to the content script. Currently sends `selectionOnly` but doesn't carry the settings.
-- [ ] **Task 19**: Keyboard shortcut for selection clip — Add second command `clip-selection` with shortcut `Ctrl+Shift+S` / `Cmd+Shift+S` that clips selection directly without opening popup.
+- [x] **Task 19**: Keyboard shortcut for selection clip — Add second command `clip-selection` with shortcut `Ctrl+Shift+S` / `Cmd+Shift+S` that clips selection directly without opening popup.
 - [ ] **Task 20**: Selection clipping for ChatGPT — Update ChatGPT injector to allow selecting specific text within a response and clipping just that portion.
 - [ ] **Task 21**: Multi-selection support — Handle cases where user has multiple ranges selected (e.g., Ctrl+click). Combine them with `---` separators.
 - [ ] **Task 22**: Selection clip tests — Test selection extraction with various HTML structures: tables, code blocks, nested lists, across paragraph boundaries.
