@@ -98,7 +98,7 @@ Auto-suggest tags and note titles based on page content.
 - [x] **Task 59**: JSON-LD/meta tag mining — Extract tags from existing page metadata: `<meta name="keywords">`, JSON-LD keywords, Open Graph tags, article:tag meta.
 - [x] **Task 60**: Category detection — Simple content classifier: detect if content is code/tutorial, news, research, opinion, product, recipe. Suggest category tag.
 - [x] **Task 61**: Tag suggestion UI in popup — Show suggested tags as clickable chips below the tags input. Click to add, X to dismiss. Remember dismissed suggestions.
-- [ ] **Task 62**: Smart title generation — Create `src/shared/titleSuggestion.ts` with `suggestTitle(metadata, content): string[]` that generates 2-3 title options.
+- [x] **Task 62**: Smart title generation — Create `src/shared/titleSuggestion.ts` with `suggestTitle(metadata, content): string[]` that generates 2-3 title options.
 - [ ] **Task 63**: Title cleanup — Clean extracted titles: remove site names (` - Medium`, ` | HN`), decode entities, normalize whitespace, title case option.
 - [ ] **Task 64**: Title template system — Allow users to define title templates: `{date} - {title}`, `{domain}/{title}`, `{type} - {title}`. Apply in settings.
 - [ ] **Task 65**: Tag history/frequency — Track previously used tags in chrome.storage. Suggest frequent tags and show autocomplete from history.
