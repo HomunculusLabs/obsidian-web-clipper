@@ -17,6 +17,7 @@ import "./substack";
 import "./arxiv";
 import "./docs";
 import "./amazon";
+import "./recipe";
 
 export {
   // Template registration
@@ -222,3 +223,26 @@ export {
   generateAmazonFilename,
   type AmazonProduct
 } from "./amazon";
+
+export {
+  genericRecipeTemplate,
+  allRecipesTemplate,
+  foodNetworkTemplate,
+  seriousEatsTemplate,
+  bonAppetitTemplate,
+  epicuriousTemplate,
+  tastyTemplate,
+  bbcGoodFoodTemplate,
+  nytCookingTemplate,
+  simplyRecipesTemplate,
+  kingArthurTemplate,
+  RECIPE_SITES,
+  parseDuration,
+  extractSchemaRecipe,
+  extractRecipe,
+  formatRecipeContent,
+  generateRecipeFilename,
+  isRecipeUrl,
+  type Recipe,
+  type RecipeNutrition
+} from "./recipe";
