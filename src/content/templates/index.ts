@@ -14,6 +14,7 @@ import "./github";
 import "./wikipedia";
 import "./medium";
 import "./substack";
+import "./arxiv";
 
 export {
   // Template registration
@@ -150,3 +151,27 @@ export {
   extractSubstackNewsletter,
   formatSubstackContent
 } from "./substack";
+
+export {
+  arxivTemplate,
+  ar5ivTemplate,
+  extractArxivId,
+  extractVersion,
+  buildArxivUrl,
+  buildPdfUrl,
+  buildAr5ivUrl,
+  extractTitle as extractArxivTitle,
+  extractAuthors as extractArxivAuthors,
+  extractAbstract,
+  extractSubmissionDate,
+  extractSubjects,
+  extractAcmCategories,
+  extractComments,
+  extractJournalRef,
+  extractDoi,
+  extractArxivPaper,
+  generateBibtex,
+  generateCitation,
+  formatArxivContent,
+  type ArxivPaper
+} from "./arxiv";
