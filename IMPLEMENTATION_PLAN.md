@@ -54,7 +54,7 @@ Custom extraction rules per domain for optimal clipping.
 - [x] **Task 29**: GitHub template — `src/content/templates/github.ts`: Handle README pages, issue pages, PR pages, code file pages. Extract repo metadata.
 - [x] **Task 30**: Wikipedia template — `src/content/templates/wikipedia.ts`: Clean extraction removing edit links, references section cleanup, infobox extraction as frontmatter.
 - [x] **Task 31**: Medium template — `src/content/templates/medium.ts`: Handle paywall detection (already exists), clean extraction of member-only content preview, author/publication metadata.
-- [ ] **Task 32**: Substack template — `src/content/templates/substack.ts`: Extract newsletter content, author, publication name, date. Handle free vs paid content indicators.
+- [x] **Task 32**: Substack template — `src/content/templates/substack.ts`: Extract newsletter content, author, publication name, date. Handle free vs paid content indicators.
 - [ ] **Task 33**: ArXiv template — `src/content/templates/arxiv.ts`: Extract paper title, authors, abstract, PDF link. Format citation in frontmatter.
 - [ ] **Task 34**: Documentation site template — `src/content/templates/docs.ts`: Generic template for docs sites (MDN, React docs, etc.). Extract breadcrumb path, code examples, navigation context.
 - [ ] **Task 35**: Amazon product template — `src/content/templates/amazon.ts`: Extract product name, price, rating, features list, description. Useful for purchase research.
