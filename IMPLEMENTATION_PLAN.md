@@ -202,4 +202,7 @@ User-facing improvements and additional features.
 
 Tasks added during implementation that don't fit an existing phase.
 
+- [ ] **Task E1**: Validate which CLI is the Phase 1 target (`obsidian` app binary vs `obsidian-cli` package), and document whether it performs direct filesystem writes or wraps `obsidian://` URIs.
+- [ ] **Task E2**: Define an extension-compatible local execution bridge for CLI saves (Native Messaging host or local companion service), since MV3 service workers cannot spawn local processes.
+
 <!-- New tasks will be added here by the Ralph loop as they are discovered -->
