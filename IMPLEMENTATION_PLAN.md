@@ -29,7 +29,7 @@ The new Obsidian CLI (`obsidian-cli`) enables direct file creation, replacing th
 Clip only the user's text selection instead of the full page.
 
 - [x] **Task 13**: Selection detection utility — Create `src/content/selection.ts` with `getSelection(): { html: string; text: string; hasSelection: boolean }` that captures the current DOM selection as both HTML and plain text.
-- [ ] **Task 14**: Selection-aware web extractor — Modify `src/content/extractors/web.ts` to accept `selectionOnly?: boolean` option. When true, extract only the selection HTML and convert to markdown instead of using Readability.
+- [x] **Task 14**: Selection-aware web extractor — Modify `src/content/extractors/web.ts` to accept `selectionOnly?: boolean` option. When true, extract only the selection HTML and convert to markdown instead of using Readability.
 - [ ] **Task 15**: Wire selection through message pipeline — Update `TabRequest` clip action to pass `selectionOnly` flag. Update `clipper.ts` to forward to extractor. Already partially done in context menu.
 - [ ] **Task 16**: Popup selection indicator — When popup opens, detect if user has text selected on the page. Show a "Selection detected" badge and toggle: "Clip Selection" vs "Clip Full Page".
 - [ ] **Task 17**: Selection context in frontmatter — When clipping selection, add `clip_mode: selection` and `selection_context: "[surrounding paragraph]"` to frontmatter for context.
