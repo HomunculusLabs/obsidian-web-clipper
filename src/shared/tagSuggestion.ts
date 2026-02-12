@@ -1,4 +1,6 @@
 import type { ClipMetadata } from "./types";
+import type { DomainTagRule } from "./domainTags";
+import { DEFAULT_DOMAIN_TAG_RULES, extractDomainTagsFromRules } from "./domainTags";
 
 /**
  * Tag suggestion result with confidence score
@@ -10,6 +12,16 @@ export interface TagSuggestion {
 }
 
 /**
+ * Options for tag suggestion.
+ */
+export interface TagSuggestionOptions {
+  /** Custom domain tag rules (combined with defaults if useDefaultDomainTags is true) */
+  domainTagRules?: DomainTagRule[];
+  /** Whether to include default domain tag rules */
+  useDefaultDomainTags?: boolean;
+}
+
+/**
  * Suggests tags based on page metadata and content.
  *
  * This is the main entry point for tag suggestion. It combines multiple
@@ -18,13 +30,18 @@ export interface TagSuggestion {
  *
  * @param metadata - Clip metadata containing URL, title, keywords, etc.
  * @param content - The markdown content of the clipped page
+ * @param options - Optional configuration for tag suggestion
  * @returns Array of suggested tags (deduplicated, sorted by confidence)
  */
 export function suggestTags(
   metadata: ClipMetadata,
-  content: string
+  content: string,
+  options?: TagSuggestionOptions
 ): string[] {
   const suggestions: Map<string, TagSuggestion> = new Map();
+
+  // Build the combined domain tag rules
+  const domainRules = buildDomainRules(options);
 
   // Strategy 1: Extract from metadata (keywords, JSON-LD, etc.)
   const metadataTags = extractMetadataTags(metadata);
@@ -35,8 +52,8 @@ export function suggestTags(
     }
   }
 
-  // Strategy 2: Domain-based tags (placeholder for Task 57)
-  const domainTags = extractDomainTags(metadata.url);
+  // Strategy 2: Domain-based tags (configurable via options)
+  const domainTags = extractDomainTags(metadata.url, domainRules);
   for (const suggestion of domainTags) {
     const key = suggestion.tag.toLowerCase();
     if (!suggestions.has(key)) {
@@ -68,6 +85,23 @@ export function suggestTags(
     .map(s => s.tag);
 
   return sorted;
+}
+
+/**
+ * Builds the combined domain tag rules from options.
+ */
+function buildDomainRules(options?: TagSuggestionOptions): DomainTagRule[] {
+  const customRules = options?.domainTagRules ?? [];
+  const useDefaults = options?.useDefaultDomainTags ?? true;
+
+  if (useDefaults) {
+    // Combine defaults with custom rules (custom rules can override defaults)
+    const customDomains = new Set(customRules.map(r => r.domain));
+    const filteredDefaults = DEFAULT_DOMAIN_TAG_RULES.filter(r => !customDomains.has(r.domain));
+    return [...filteredDefaults, ...customRules];
+  }
+
+  return customRules;
 }
 
 /**
@@ -123,58 +157,17 @@ function extractMetadataTags(metadata: ClipMetadata): TagSuggestion[] {
 
 /**
  * Extracts tags based on domain patterns.
- * Placeholder for Task 57 - Domain-based tags.
+ * Uses configurable domain tag rules (Task 57 - Domain-based tags).
  */
-function extractDomainTags(url: string): TagSuggestion[] {
-  const tags: TagSuggestion[] = [];
-
-  try {
-    const urlObj = new URL(url);
-    const domain = urlObj.hostname.replace(/^www\./, "");
-
-    // Domain-based tag mapping (will be configurable in settings per Task 57)
-    const domainTagMap: Record<string, string> = {
-      "github.com": "github",
-      "youtube.com": "youtube",
-      "youtu.be": "youtube",
-      "twitter.com": "twitter",
-      "x.com": "twitter",
-      "reddit.com": "reddit",
-      "stackoverflow.com": "stackoverflow",
-      "stackexchange.com": "stackoverflow",
-      "medium.com": "medium",
-      "substack.com": "newsletter",
-      "arxiv.org": "research",
-      "wikipedia.org": "wikipedia",
-      "news.ycombinator.com": "hacker-news",
-      "amazon.com": "amazon"
-    };
-
-    // Check for exact domain match
-    if (domainTagMap[domain]) {
-      tags.push({
-        tag: domainTagMap[domain],
-        confidence: 0.8,
-        source: "domain"
-      });
-    }
-
-    // Check for partial domain match (e.g., en.wikipedia.org)
-    for (const [key, value] of Object.entries(domainTagMap)) {
-      if (domain.endsWith(`.${key}`)) {
-        tags.push({
-          tag: value,
-          confidence: 0.75,
-          source: "domain"
-        });
-        break;
-      }
-    }
-  } catch {
-    // Invalid URL, skip domain extraction
-  }
-
-  return tags;
+function extractDomainTags(
+  url: string,
+  rules: DomainTagRule[]
+): TagSuggestion[] {
+  return extractDomainTagsFromRules(url, rules).map(({ tag, confidence }) => ({
+    tag,
+    confidence,
+    source: "domain" as const
+  }));
 }
 
 /**

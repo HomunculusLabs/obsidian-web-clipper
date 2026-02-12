@@ -5,6 +5,7 @@ import type {
 } from "./types";
 import type { ObsidianCliConfig, SaveMethod } from "./obsidianCli";
 import type { SiteTemplate, TemplateSettings } from "./templates";
+import type { DomainTagRule } from "./domainTags";
 
 // Wiki-link injection rule: maps a term to a note name
 export interface WikiLinkRule {
@@ -57,6 +58,10 @@ export interface Settings {
   customTemplates: SiteTemplate[];
   disabledBuiltIns: string[];
 
+  // --- Tag suggestion settings ---
+  domainTagRules: DomainTagRule[];
+  useDefaultDomainTags: boolean;
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -66,6 +71,7 @@ export interface Settings {
     | WikiLinkRule[]
     | ObsidianCliConfig
     | SiteTemplate[]
+    | DomainTagRule[]
     | undefined;
 }
 
@@ -116,7 +122,11 @@ export const DEFAULT_SETTINGS: Settings = {
   // --- Template settings ---
   templatesEnabled: true,
   customTemplates: [],
-  disabledBuiltIns: []
+  disabledBuiltIns: [],
+
+  // --- Tag suggestion settings ---
+  domainTagRules: [], // Custom rules; combined with defaults if useDefaultDomainTags is true
+  useDefaultDomainTags: true
 };
 
 export const SETTINGS_KEYS = [
@@ -155,7 +165,10 @@ export const SETTINGS_KEYS = [
   // Templates
   "templatesEnabled",
   "customTemplates",
-  "disabledBuiltIns"
+  "disabledBuiltIns",
+  // Tag suggestions
+  "domainTagRules",
+  "useDefaultDomainTags"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];
