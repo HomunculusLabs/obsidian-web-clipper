@@ -72,7 +72,7 @@ Custom extraction rules per domain for optimal clipping.
 
 Full thread extraction from Twitter/X.
 
-- [ ] **Task 43**: Add Twitter/X page type — Add `"twitter"` to PageType union in `types.ts`. Update `pageType.ts` detection for twitter.com and x.com domains.
+- [x] **Task 43**: Add Twitter/X page type — Add `"twitter"` to PageType union in `types.ts`. Update `pageType.ts` detection for twitter.com and x.com domains.
 - [ ] **Task 44**: Twitter extractor scaffolding — Create `src/content/extractors/twitter.ts` with `extractTwitterContent(result: ClipResult): Promise<ClipResult>`. Register in `clipper.ts` switch.
 - [ ] **Task 45**: Single tweet extraction — Extract tweet text, author, handle, timestamp, media links, engagement stats from a single tweet page.
 - [ ] **Task 46**: Thread detection — Detect if current page is a thread (multiple tweets by same author in sequence). Walk the DOM to find all thread tweets.
