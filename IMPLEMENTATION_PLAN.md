@@ -195,3 +195,11 @@ User-facing improvements and additional features.
 | 8. UX Polish | 103-120 | New features, UI improvements |
 
 **Total: 120 tasks**
+
+---
+
+## Emergent — Discovered Work
+
+Tasks added during implementation that don't fit an existing phase.
+
+<!-- New tasks will be added here by the Ralph loop as they are discovered -->

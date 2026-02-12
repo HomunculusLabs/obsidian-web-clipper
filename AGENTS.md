@@ -1,4 +1,30 @@
-# Obsidian Web Clipper - Agent Configuration
+# AGENTS.md — Obsidian Web Clipper (Ralph Loop Driver)
+
+This file defines the **execution commands** and **loop contract** for the Pi coding agent (Ralph-style iterations).
+
+## Loop Contract (one task per iteration)
+Each iteration must:
+1. Read `IMPLEMENTATION_PLAN.md` and pick the **first unchecked** `- [ ]` task.
+2. If the task maps to a phase execution plan, open the corresponding file in `Tasks/`.
+3. Implement **only that one task**.
+4. **Create new tasks** if you discover bugs, missing prerequisites, test gaps, refactor needs, or follow-up work. Add them as `- [ ]` entries in the appropriate section of `IMPLEMENTATION_PLAN.md` (or the `Emergent — Discovered Work` section). Do NOT work on newly created tasks in the same iteration.
+5. Run the relevant checks (below).
+6. Commit changes (including any new tasks).
+7. Mark the task complete (`[x]`) in `IMPLEMENTATION_PLAN.md`.
+8. Output:
+
+```
+RALPH_COMPLETE: <task description>
+RALPH_TASKS_ADDED: <N> new tasks created  (only if N > 0)
+```
+
+Then stop so the next iteration can start clean.
+
+## Canonical Artifacts
+- Plan: `IMPLEMENTATION_PLAN.md`
+- Expanded execution plans: `Tasks/*.md`
+- Test gates: `TEST_REQUIREMENTS.md`
+- Specs: `specs/`
 
 ## Project Overview
 Chrome extension (Manifest V3) that clips web pages, PDFs, YouTube videos, and ChatGPT conversations to clean markdown for Obsidian.
@@ -32,30 +58,41 @@ build/
 ├── build.ts             # Bun build script
 specs/
 ├── chrome-extension.md  # Original spec
+Tasks/
+├── 00_INDEX.md          # Phase ordering
+├── NN_*.md              # Phase execution plans
 ```
 
 ## Commands
+
+### Build
 ```bash
-# Build
 bun run build          # Production build → dist/
 bun run dev            # Watch mode build
-
-# Type check
-bun run typecheck      # tsc --noEmit
-
-# Tools
-bun run clip:chatgpt   # ChatGPT headless clipper
-
-# Test (when tests exist)
-bun test               # Bun test runner
 ```
 
-## Key Architecture Notes
-- Content script handles page extraction, sends results via chrome.runtime messages
-- Popup orchestrates clip flow: detect page type → clip → save to Obsidian
-- Save uses `obsidian://new` URI scheme, with clipboard fallback for large content
-- Settings stored in chrome.storage.sync
-- ChatGPT injector uses MutationObserver to inject "Clip to Obsidian" buttons
+### Typecheck
+```bash
+bun run typecheck      # tsc --noEmit
+```
+
+### Test
+```bash
+bun test               # Bun test runner (once test infra exists)
+```
+
+### Tools
+```bash
+bun run clip:chatgpt   # ChatGPT headless clipper
+```
+
+## Git
+Commit after every completed task:
+```bash
+git status
+git add -A
+git commit -m "feat: <short description>"
+```
 
 ## Adding New Extractors
 1. Create `src/content/extractors/{name}.ts`
@@ -71,6 +108,9 @@ bun test               # Bun test runner
 3. Use Puppeteer for headless browser automation
 4. Support `--json` and `--stdout` flags for agentic use
 
-## Git Remotes
-- `gitea`: `ssh://git@localhost:4582/homunculus-labs/obsidian-web-clipper.git`
-- `origin`: GitHub
+## Guardrails (stop and ask)
+Stop and report blockers if:
+- Specs are ambiguous enough to change architecture.
+- A required script (typecheck/build/test) is missing and you can't create it.
+- Tests fail and you cannot resolve quickly.
+- Changes would break existing extension functionality.
