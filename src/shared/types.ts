@@ -116,6 +116,9 @@ export interface ClipMetadata {
 
   /** Surrounding context for selection (e.g., parent paragraph or heading) */
   selectionContext?: string;
+
+  /** Number of selection ranges (for multi-selection, >1 means Ctrl+click) */
+  selectionCount?: number;
 }
 
 export interface ClipResult {

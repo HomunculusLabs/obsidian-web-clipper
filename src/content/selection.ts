@@ -12,6 +12,8 @@ export interface SelectionResult {
   text: string;
   /** Number of selection ranges (for multi-selection support) */
   rangeCount: number;
+  /** Whether this is a multi-selection (Ctrl+click multiple ranges) */
+  isMultiSelection: boolean;
 }
 
 /**
@@ -28,7 +30,8 @@ export function getSelection(): SelectionResult {
       hasSelection: false,
       html: "",
       text: "",
-      rangeCount: 0
+      rangeCount: 0,
+      isMultiSelection: false
     };
   }
 
@@ -40,25 +43,14 @@ export function getSelection(): SelectionResult {
       hasSelection: false,
       html: "",
       text: "",
-      rangeCount: 0
+      rangeCount: 0,
+      isMultiSelection: false
     };
   }
 
-  // Get plain text directly from selection
-  const text = domSelection.toString().trim();
-
-  // Empty selection after trim
-  if (!text) {
-    return {
-      hasSelection: false,
-      html: "",
-      text: "",
-      rangeCount: 0
-    };
-  }
-
-  // Extract HTML from all ranges
+  // Extract HTML and text from all ranges
   const htmlParts: string[] = [];
+  const textParts: string[] = [];
 
   for (let i = 0; i < rangeCount; i++) {
     const range = domSelection.getRangeAt(i);
@@ -66,6 +58,12 @@ export function getSelection(): SelectionResult {
     // Skip collapsed ranges
     if (range.collapsed) {
       continue;
+    }
+
+    // Get text for this range
+    const rangeText = range.toString().trim();
+    if (rangeText) {
+      textParts.push(rangeText);
     }
 
     // Clone range contents to a DocumentFragment
@@ -81,14 +79,29 @@ export function getSelection(): SelectionResult {
     }
   }
 
+  // No valid content after processing
+  if (htmlParts.length === 0) {
+    return {
+      hasSelection: false,
+      html: "",
+      text: "",
+      rangeCount: 0,
+      isMultiSelection: false
+    };
+  }
+
+  const isMultiSelection = htmlParts.length > 1;
+
   // Join multiple ranges with separator (for multi-selection)
   const html = htmlParts.join("\n\n---\n\n");
+  const text = textParts.join("\n\n---\n\n");
 
   return {
     hasSelection: true,
     html,
     text,
-    rangeCount: htmlParts.length
+    rangeCount: htmlParts.length,
+    isMultiSelection
   };
 }
 

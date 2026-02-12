@@ -122,6 +122,9 @@ function buildMarkdown(
   if (result.metadata?.language) extra.language = result.metadata.language;
   if (result.metadata?.clipMode) extra.clip_mode = result.metadata.clipMode;
   if (result.metadata?.selectionContext) extra.selection_context = result.metadata.selectionContext;
+  if (result.metadata?.selectionCount && result.metadata.selectionCount > 1) {
+    extra.selection_count = result.metadata.selectionCount;
+  }
 
   const frontmatter: FrontmatterInput = {
     source,

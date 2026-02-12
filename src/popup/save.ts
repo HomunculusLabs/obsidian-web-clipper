@@ -153,6 +153,9 @@ function prepareSave(options: SaveOptions): PreparedSave {
   if (result.metadata?.selectionContext) {
     extra.selection_context = result.metadata.selectionContext;
   }
+  if (result.metadata?.selectionCount && result.metadata.selectionCount > 1) {
+    extra.selection_count = result.metadata.selectionCount;
+  }
 
   const frontmatter: FrontmatterInput = {
     source,

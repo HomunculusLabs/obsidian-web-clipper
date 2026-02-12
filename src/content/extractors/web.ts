@@ -52,11 +52,17 @@ function extractSelectionContent(
 
   console.log("[Web Extractor] Extracting selection:", {
     rangeCount: selection.rangeCount,
+    isMultiSelection: selection.isMultiSelection,
     textLength: selection.text.length
   });
 
   // Set clip mode metadata
   result.metadata.clipMode = "selection";
+
+  // Track selection count (for multi-selection)
+  if (selection.isMultiSelection) {
+    result.metadata.selectionCount = selection.rangeCount;
+  }
 
   // Extract surrounding context for the selection
   const selectionContext = getSelectionContext();
@@ -88,6 +94,7 @@ function extractSelectionContent(
  * Get surrounding context for the current selection.
  * Returns the text content of the nearest ancestor element that provides
  * meaningful context (e.g., a paragraph, heading, or list item).
+ * For multi-selection, returns context for the first range only.
  */
 function getSelectionContext(): string | null {
   const domSelection = window.getSelection();
@@ -95,6 +102,8 @@ function getSelectionContext(): string | null {
     return null;
   }
 
+  // For multi-selection, we get context from the first range only
+  // (Getting context for all ranges would be too verbose)
   const range = domSelection.getRangeAt(0);
   let container: Node | null = range.commonAncestorContainer;
 
@@ -121,7 +130,7 @@ function getSelectionContext(): string | null {
         const text = element.textContent?.trim() || "";
         if (text.length > 0 && text.length <= maxContextLength * 2) {
           // Truncate if too long, preserving the beginning
-          contextText = text.length > maxContextLength 
+          contextText = text.length > maxContextLength
             ? text.substring(0, maxContextLength) + "…"
             : text;
           break;
