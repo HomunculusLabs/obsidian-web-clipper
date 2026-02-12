@@ -6,6 +6,7 @@ import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
+import { suggestTitles } from "../shared/titleSuggestion";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
@@ -20,6 +21,7 @@ let hasTemplate = false;
 let useTemplate = true; // Default to using template when available
 let dismissedTagSuggestions: string[] = []; // Dismissed tag suggestions (lowercase)
 let currentTagSuggestions: TagSuggestion[] = []; // Current tag suggestions with source info
+let currentTitleSuggestions: string[] = []; // Current title suggestions
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
@@ -157,6 +159,77 @@ function dismissTagSuggestion(tag: string): void {
     // Save asynchronously
     void saveDismissedTagSuggestions();
   }
+}
+
+/** Display title suggestions as radio options */
+function displayTitleSuggestions(suggestions: string[], currentTitle: string): void {
+  const container = getEl<HTMLDivElement>("titleSuggestions");
+  const optionsContainer = getEl<HTMLDivElement>("titleOptions");
+  
+  if (!container || !optionsContainer) return;
+  
+  // Filter to unique suggestions (excluding the current title)
+  const uniqueSuggestions = suggestions.filter(s => 
+    s.toLowerCase() !== currentTitle.toLowerCase()
+  );
+  
+  if (uniqueSuggestions.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+  
+  // Store suggestions for reference
+  currentTitleSuggestions = uniqueSuggestions;
+  
+  // Clear existing options
+  optionsContainer.innerHTML = "";
+  
+  // Create radio options
+  uniqueSuggestions.slice(0, 3).forEach((suggestion, index) => {
+    const option = document.createElement("label");
+    option.className = "title-option";
+    
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "titleSuggestion";
+    radio.value = suggestion;
+    
+    const textSpan = document.createElement("span");
+    textSpan.className = "title-option-text";
+    textSpan.textContent = suggestion;
+    
+    // Selecting a suggestion updates the title input
+    radio.addEventListener("change", () => {
+      const titleInput = getEl<HTMLInputElement>("titleInput");
+      if (titleInput) {
+        titleInput.value = suggestion;
+        if (clipperContent) {
+          clipperContent = { ...clipperContent, title: suggestion };
+        }
+      }
+      
+      // Update selected state visually
+      optionsContainer.querySelectorAll(".title-option").forEach(opt => {
+        opt.classList.remove("selected");
+      });
+      option.classList.add("selected");
+    });
+    
+    option.appendChild(radio);
+    option.appendChild(textSpan);
+    optionsContainer.appendChild(option);
+  });
+  
+  container.style.display = "flex";
+}
+
+/** Hide title suggestions */
+function hideTitleSuggestions(): void {
+  const container = getEl<HTMLDivElement>("titleSuggestions");
+  if (container) {
+    container.style.display = "none";
+  }
+  currentTitleSuggestions = [];
 }
 
 async function getCurrentTab(): Promise<chrome.tabs.Tab> {
@@ -318,7 +391,19 @@ async function handleClip(): Promise<void> {
     
     displayTagSuggestions(tagSuggestions);
 
+    // Generate and display title suggestions (Task 67)
+    const titleSuggestions = suggestTitles(
+      result.metadata,
+      result.markdown,
+      {
+        preferTitleCase: settings.preferTitleCase,
+        maxLength: 100
+      }
+    );
+    
     const titleInput = getEl<HTMLInputElement>("titleInput");
+    displayTitleSuggestions(titleSuggestions, titleInput?.value || result.title);
+
     const folderInput = getEl<HTMLSelectElement>("folderInput");
     const tagsInput = getEl<HTMLInputElement>("tagsInput");
 
