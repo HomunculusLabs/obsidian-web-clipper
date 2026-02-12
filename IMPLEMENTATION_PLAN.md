@@ -10,7 +10,7 @@
 The new Obsidian CLI (`obsidian-cli`) enables direct file creation, replacing the URI scheme hack.
 
 - [x] **Task 1**: Research Obsidian CLI — Read `obsidian --help`, document available commands for creating/writing files, determine if it supports vault selection, file creation with content from stdin/args. Write findings to `specs/obsidian-cli-research.md`.
-- [ ] **Task 2**: Create `src/shared/obsidianCli.ts` — Define types for CLI integration: `ObsidianCliConfig { cliPath: string; vault: string; enabled: boolean }`, `SaveMethod = "cli" | "uri" | "clipboard"`. Add to Settings interface.
+- [x] **Task 2**: Create `src/shared/obsidianCli.ts` — Define types for CLI integration: `ObsidianCliConfig { cliPath: string; vault: string; enabled: boolean }`, `SaveMethod = "cli" | "uri" | "clipboard"`. Add to Settings interface.
 - [ ] **Task 3**: Implement CLI save backend — Create `src/shared/obsidianCliSave.ts` with `saveViaCli(config, filePath, content): Promise<SaveResult>` that spawns the obsidian CLI process to create a note. Handle errors gracefully.
 - [ ] **Task 4**: Add CLI settings to options page — Add "Obsidian CLI" section to options: enable/disable toggle, CLI path input (with browse), test connection button. Store in settings.
 - [ ] **Task 5**: Update save pipeline — Modify `src/popup/save.ts` to check `settings.saveMethod` and route to CLI save, URI save, or clipboard. Add automatic fallback chain: CLI → URI → clipboard.
