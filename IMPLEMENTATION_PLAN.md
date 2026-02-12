@@ -76,7 +76,7 @@ Full thread extraction from Twitter/X.
 - [x] **Task 44**: Twitter extractor scaffolding — Create `src/content/extractors/twitter.ts` with `extractTwitterContent(result: ClipResult): Promise<ClipResult>`. Register in `clipper.ts` switch.
 - [x] **Task 45**: Single tweet extraction — Extract tweet text, author, handle, timestamp, media links, engagement stats from a single tweet page.
 - [x] **Task 46**: Thread detection — Detect if current page is a thread (multiple tweets by same author in sequence). Walk the DOM to find all thread tweets.
-- [ ] **Task 47**: Thread extraction — Extract full thread in order: each tweet as a section with timestamp. Handle quoted tweets, retweets within thread.
+- [x] **Task 47**: Thread extraction — Extract full thread in order: each tweet as a section with timestamp. Handle quoted tweets, retweets within thread.
 - [ ] **Task 48**: Twitter media handling — Extract images (as markdown image links), video thumbnails, poll data, link cards from tweets.
 - [ ] **Task 49**: Twitter metadata — Extract author info (name, handle, verified status, bio), thread stats (likes, retweets, replies total).
 - [ ] **Task 50**: Twitter markdown formatting — Format thread as clean markdown: `# Thread by @handle`, then each tweet as a paragraph with timestamp. Include `---` between tweets.
