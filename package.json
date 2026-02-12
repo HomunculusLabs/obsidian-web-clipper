@@ -10,7 +10,8 @@
     "clip:chatgpt": "bun run tools/chatgpt-clipper.ts",
     "clip:stdin": "bun run tools/clip-stdin.ts",
     "clip:url": "bun run tools/clip-url.ts",
-    "clip:twitter": "bun run tools/twitter-clipper.ts"
+    "clip:twitter": "bun run tools/twitter-clipper.ts",
+    "clip:search": "bun run tools/search-clip.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
