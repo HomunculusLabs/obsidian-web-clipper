@@ -122,12 +122,12 @@ Headless Puppeteer tools for research pipeline automation.
 - [x] **Task 76**: Site scraper tool — `tools/scrape-site.ts`: Crawl a site starting from URL, clip all pages up to depth N. `--depth 2 --max-pages 50 --json`. Output manifest of all clipped pages.
 - [x] **Task 77**: CLI output format standardization — Define `ToolOutput { success: boolean; url: string; title: string; markdown: string; content: string; tags: string[]; error?: string; data?: T }` shared across all tools.
 - [x] **Task 78**: MCP server scaffolding — Create `tools/mcp-server.ts` implementing Model Context Protocol for AI agent integration. Expose clip operations as MCP tools.
-- [ ] **Task 79**: MCP tool: clip_url — Register `clip_url(url, options)` tool in MCP server. Returns clipped markdown + metadata.
-- [ ] **Task 80**: MCP tool: clip_search — Register `clip_search(query, topN)` tool. Searches and clips results.
-- [ ] **Task 81**: MCP tool: save_to_obsidian — Register `save_to_obsidian(title, content, folder, tags)` tool. Saves content via Obsidian CLI.
-- [ ] **Task 82**: MCP tool: clip_youtube — Register `clip_youtube(url, includeTimestamps)` tool. Returns transcript + metadata.
-- [ ] **Task 83**: MCP tool: clip_twitter — Register `clip_twitter(url)` tool. Returns thread content.
-- [ ] **Task 84**: Tool authentication — Create shared auth config for headless tools: Chrome profile path, cookies file. `tools/lib/auth.ts`.
+- [x] **Task 79**: MCP tool: clip_url — Register `clip_url(url, options)` tool in MCP server. Returns clipped markdown + metadata.
+- [x] **Task 80**: MCP tool: clip_search — Register `clip_search(query, topN)` tool. Searches and clips results.
+- [x] **Task 81**: MCP tool: save_to_obsidian — Register `save_to_obsidian(title, content, folder, tags)` tool. Saves content via Obsidian CLI.
+- [x] **Task 82**: MCP tool: clip_youtube — Register `clip_youtube(url, includeTimestamps)` tool. Returns transcript + metadata.
+- [x] **Task 83**: MCP tool: clip_twitter — Register `clip_twitter(url)` tool. Returns thread content.
+- [x] **Task 84**: Tool authentication — Create shared auth config for headless tools: Chrome profile path, cookies file. `tools/lib/auth.ts`.
 - [ ] **Task 85**: Tool config file — Support `.webclipper.json` config file for tool defaults: vault, folder, tags, chrome profile, concurrency. `tools/lib/config.ts`.
 - [ ] **Task 86**: Pipeline composition — `tools/pipeline.ts`: Chain tools together. `bun run tools/pipeline.ts --steps "search:obsidian plugins -> clip:top5 -> save:obsidian"`. Configurable via JSON.
 - [ ] **Task 87**: Tool documentation — Write `docs/cli-tools.md` with usage examples for all CLI tools. Include examples for LLM agent integration.
