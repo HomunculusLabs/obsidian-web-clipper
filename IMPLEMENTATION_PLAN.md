@@ -130,7 +130,7 @@ Headless Puppeteer tools for research pipeline automation.
 - [x] **Task 84**: Tool authentication — Create shared auth config for headless tools: Chrome profile path, cookies file. `tools/lib/auth.ts`.
 - [x] **Task 85**: Tool config file — Support `.webclipper.json` config file for tool defaults: vault, folder, tags, chrome profile, concurrency. `tools/lib/config.ts`.
 - [x] **Task 86**: Pipeline composition — `tools/pipeline.ts`: Chain tools together. `bun run tools/pipeline.ts --steps "search:obsidian plugins -> clip:top5 -> save:obsidian"`. Configurable via JSON.
-- [ ] **Task 87**: Tool documentation — Write `docs/cli-tools.md` with usage examples for all CLI tools. Include examples for LLM agent integration.
+- [x] **Task 87**: Tool documentation — Write `docs/cli-tools.md` with usage examples for all CLI tools. Include examples for LLM agent integration.
 - [ ] **Task 88**: Tool integration tests — Create `tests/tools/` with tests for each CLI tool using mock pages.
 
 ---
