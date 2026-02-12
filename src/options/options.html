@@ -45,6 +45,47 @@
       </section>
 
       <section class="section">
+        <h2>Obsidian CLI Integration</h2>
+        <p class="section-desc">Use the Obsidian CLI for direct file creation instead of URI schemes.</p>
+
+        <div class="field">
+          <label for="saveMethod">Save Method</label>
+          <select id="saveMethod">
+            <option value="uri">URI Scheme (obsidian://)</option>
+            <option value="cli">Obsidian CLI</option>
+            <option value="clipboard">Copy to Clipboard</option>
+          </select>
+          <small>How clips are saved to Obsidian</small>
+        </div>
+
+        <div id="cliSettings" class="cli-settings">
+          <div class="field checkbox">
+            <input type="checkbox" id="cliEnabled">
+            <label for="cliEnabled">Enable CLI Integration</label>
+          </div>
+
+          <div class="field">
+            <label for="cliPath">CLI Path</label>
+            <div class="input-with-button">
+              <input type="text" id="cliPath" placeholder="/usr/local/bin/obsidian">
+            </div>
+            <small>Full path to the obsidian CLI binary (e.g., /usr/local/bin/obsidian)</small>
+          </div>
+
+          <div class="field">
+            <label for="cliVault">CLI Vault Override</label>
+            <input type="text" id="cliVault" placeholder="Leave empty to use Vault Name above">
+            <small>Optional: Different vault name for CLI operations</small>
+          </div>
+
+          <div class="field">
+            <button id="testCliBtn" class="test-btn">Test CLI Connection</button>
+            <span id="cliTestResult" class="test-result"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Keyboard Shortcuts</h2>
         <p><strong>Clip to Obsidian:</strong> <kbd>Ctrl+Shift+O</kbd> (Mac: <kbd>Cmd+Shift+O</kbd>)</p>
         <p>To customize, go to <code>chrome://extensions/shortcuts</code></p>

@@ -92,4 +92,21 @@ export function populateForm(settings: Settings): void {
   // Table settings
   const tableHandling = getEl<HTMLSelectElement>("tableHandling");
   if (tableHandling) tableHandling.value = settings.tableHandling;
+
+  // CLI settings
+  const saveMethod = getEl<HTMLSelectElement>("saveMethod");
+  const cliEnabled = getEl<HTMLInputElement>("cliEnabled");
+  const cliPath = getEl<HTMLInputElement>("cliPath");
+  const cliVault = getEl<HTMLInputElement>("cliVault");
+  const cliSettings = getEl<HTMLDivElement>("cliSettings");
+
+  if (saveMethod) saveMethod.value = settings.saveMethod || "uri";
+  if (cliEnabled) cliEnabled.checked = settings.obsidianCli?.enabled ?? false;
+  if (cliPath) cliPath.value = settings.obsidianCli?.cliPath || "";
+  if (cliVault) cliVault.value = settings.obsidianCli?.vault || "";
+
+  // Show/hide CLI settings based on save method
+  if (cliSettings) {
+    cliSettings.style.display = saveMethod?.value === "cli" ? "block" : "none";
+  }
 }

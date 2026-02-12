@@ -6,6 +6,7 @@ import {
   type WikiLinkRule
 } from "../shared/settings";
 import type { CodeBlockLanguageMode, TableHandlingMode } from "../shared/types";
+import type { SaveMethod } from "../shared/obsidianCli";
 import {
   loadSettings as loadSettingsFromStorage,
   saveSettings as saveSettingsToStorage
@@ -115,6 +116,25 @@ function setupEventListeners(): void {
       }
     });
   }
+
+  // Save method dropdown - show/hide CLI settings
+  const saveMethod = getEl<HTMLSelectElement>("saveMethod");
+  if (saveMethod) {
+    saveMethod.addEventListener("change", () => {
+      const cliSettings = getEl<HTMLDivElement>("cliSettings");
+      if (cliSettings) {
+        cliSettings.style.display = saveMethod.value === "cli" ? "block" : "none";
+      }
+    });
+  }
+
+  // Test CLI connection button
+  const testCliBtn = getEl<HTMLButtonElement>("testCliBtn");
+  if (testCliBtn) {
+    testCliBtn.addEventListener("click", () => {
+      void testCliConnection();
+    });
+  }
 }
 
 async function saveCurrentSettings(): Promise<void> {
@@ -144,6 +164,12 @@ async function saveCurrentSettings(): Promise<void> {
   // Code blocks / Tables
   const codeBlockLanguageMode = getEl<HTMLSelectElement>("codeBlockLanguageMode");
   const tableHandling = getEl<HTMLSelectElement>("tableHandling");
+
+  // CLI settings
+  const saveMethodEl = getEl<HTMLSelectElement>("saveMethod");
+  const cliEnabled = getEl<HTMLInputElement>("cliEnabled");
+  const cliPath = getEl<HTMLInputElement>("cliPath");
+  const cliVault = getEl<HTMLInputElement>("cliVault");
 
   // Parse wiki-link rules
   const { rules: wikiLinkRules, errors: wikiRuleErrors } = parseWikiLinkRules(
@@ -205,7 +231,19 @@ async function saveCurrentSettings(): Promise<void> {
       tableHandling?.value,
       VALID_TABLE_HANDLING,
       DEFAULT_SETTINGS.tableHandling
-    )
+    ),
+
+    // CLI / Save method
+    saveMethod: coerceEnum<SaveMethod>(
+      saveMethodEl?.value,
+      ["cli", "uri", "clipboard"] as const,
+      DEFAULT_SETTINGS.saveMethod
+    ),
+    obsidianCli: {
+      enabled: cliEnabled?.checked ?? false,
+      cliPath: (cliPath?.value || "").trim(),
+      vault: (cliVault?.value || "").trim()
+    }
   };
 
   await saveSettingsToStorage(settings);
@@ -224,6 +262,51 @@ async function resetSettings(): Promise<void> {
 
   await saveSettingsToStorage(settings);
   showStatus("success", "Settings reset to defaults!");
+}
+
+async function testCliConnection(): Promise<void> {
+  const testBtn = getEl<HTMLButtonElement>("testCliBtn");
+  const testResult = getEl<HTMLSpanElement>("cliTestResult");
+  const cliPath = getEl<HTMLInputElement>("cliPath");
+  const cliVault = getEl<HTMLInputElement>("cliVault");
+  const vaultName = getEl<HTMLInputElement>("vaultName");
+
+  if (!testBtn || !testResult) return;
+
+  const cliPathValue = (cliPath?.value || "").trim();
+  if (!cliPathValue) {
+    testResult.textContent = "Please enter a CLI path first";
+    testResult.className = "test-result error";
+    return;
+  }
+
+  // Disable button and show testing state
+  testBtn.disabled = true;
+  testResult.textContent = "Testing...";
+  testResult.className = "test-result";
+
+  try {
+    // Send test request to background script
+    const response = await chrome.runtime.sendMessage({
+      action: "testCliConnection",
+      cliPath: cliPathValue,
+      vault: (cliVault?.value || "").trim() || (vaultName?.value || "").trim()
+    });
+
+    if (response?.success) {
+      testResult.textContent = "✓ Connection successful!";
+      testResult.className = "test-result success";
+    } else {
+      testResult.textContent = `✗ ${response?.error || "Connection failed"}`;
+      testResult.className = "test-result error";
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    testResult.textContent = `✗ ${message}`;
+    testResult.className = "test-result error";
+  } finally {
+    testBtn.disabled = false;
+  }
 }
 
 async function init(): Promise<void> {

@@ -8,7 +8,12 @@ export type RuntimeRequest =
   | { action: "getSettings" }
   | { action: "copyToClipboard"; data: string }
   | { action: "openObsidianUri"; uri: string }
-  | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number };
+  | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number }
+  | { action: "testCliConnection"; cliPath: string; vault: string };
+
+export type TestCliConnectionResponse =
+  | { success: true; version?: string }
+  | { success: false; error: string };
 
 export type ExtractPdfResponse =
   | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }
