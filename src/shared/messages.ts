@@ -87,6 +87,8 @@ export type PageInfo = {
   title: string;
   type: PageType;
   contentType?: string;
+  /** Twitter/X thread length (if this is a thread) */
+  twitterThreadLength?: number;
 };
 
 /** Template info returned from content script */

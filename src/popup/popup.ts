@@ -208,6 +208,7 @@ async function init(): Promise<void> {
 
   // Fallback for restricted pages where content scripts cannot be injected/messaged.
   pageType = currentTab.url ? detectPageType(currentTab.url) : "web";
+  let twitterThreadLength: number | undefined;
 
   const tabId = currentTab.id;
   if (tabId) {
@@ -215,6 +216,7 @@ async function init(): Promise<void> {
       await ensureContentScriptLoaded(tabId);
       const pageInfo = await tabsSendMessage<TabRequest, PageInfo>(tabId, { action: "getPageInfo" });
       pageType = pageInfo.type || pageType;
+      twitterThreadLength = pageInfo.twitterThreadLength;
 
       // Query selection state
       const selectionInfo = await tabsSendMessage<TabRequest, SelectionInfo>(tabId, { action: "getSelectionInfo" });
@@ -242,7 +244,7 @@ async function init(): Promise<void> {
     }
   }
 
-  setPageTypeDisplay(pageType);
+  setPageTypeDisplay(pageType, twitterThreadLength);
   updateUI(currentTab, pageType);
   setupEventListeners();
 }

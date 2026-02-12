@@ -20,6 +20,12 @@ const PAGE_TYPES: readonly PageTypeConfig[] = [
     label: "YouTube Video"
   },
   {
+    type: "twitter",
+    pattern: /^https?:\/\/(www\.|mobile\.)?(twitter|x)\.com\//,
+    icon: "🐦",
+    label: "Tweet"
+  },
+  {
     type: "pdf",
     pattern: /^https?:\/\/.*\.pdf(\?|$)/i,
     icon: "📄",
@@ -52,13 +58,21 @@ function getPageTypeConfig(type: PageType): PageTypeConfig {
   return PAGE_TYPES.find((c) => c.type === type) || PAGE_TYPES[PAGE_TYPES.length - 1];
 }
 
-export function setPageTypeDisplay(type: PageType): void {
+export function setPageTypeDisplay(type: PageType, threadLength?: number): void {
   const config = getPageTypeConfig(type);
   const iconEl = getEl<HTMLSpanElement>("pageIcon");
   const labelEl = getEl<HTMLSpanElement>("pageLabel");
 
   if (iconEl) iconEl.textContent = config.icon;
-  if (labelEl) labelEl.textContent = config.label;
+  
+  // For Twitter, show "Thread" label if thread is detected
+  if (labelEl) {
+    if (type === "twitter" && threadLength && threadLength > 1) {
+      labelEl.textContent = `Thread (${threadLength} tweets)`;
+    } else {
+      labelEl.textContent = config.label;
+    }
+  }
 }
 
 export function populateFolderSelect(select: HTMLSelectElement, settings: Settings): void {

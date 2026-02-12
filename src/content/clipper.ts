@@ -72,13 +72,104 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
   }
 }
 
+/**
+ * Quick Twitter thread detection for popup UI.
+ * Returns the number of tweets in the thread (1 if not a thread).
+ * This is a lightweight check - full extraction happens in extractTwitterContent.
+ */
+function detectTwitterThreadLength(): number | undefined {
+  // Only run on Twitter/X pages
+  const url = window.location.href;
+  if (!url.match(/^https?:\/\/(www\.|mobile\.)?(twitter|x)\.com\//)) {
+    return undefined;
+  }
+
+  // Must be a tweet page (has /status/ in URL)
+  if (!url.includes("/status/")) {
+    return undefined;
+  }
+
+  // Find all tweet articles on the page
+  const allArticles = document.querySelectorAll('article[data-testid="tweet"]');
+  if (allArticles.length <= 1) {
+    return 1; // Single tweet
+  }
+
+  // Get the author handle from the first tweet
+  const firstArticle = allArticles[0];
+  let mainHandle = "";
+  const authorLinks = firstArticle?.querySelectorAll('a[role="link"]');
+  if (authorLinks) {
+    for (const link of authorLinks) {
+      const href = link.getAttribute("href") || "";
+      if (href.startsWith("/") && !href.includes("/status/") && !href.includes("/photo/") && !href.includes("/video/")) {
+        mainHandle = href.slice(1);
+        break;
+      }
+    }
+  }
+
+  if (!mainHandle) {
+    return 1;
+  }
+
+  // Count consecutive tweets by the same author
+  let count = 0;
+  let foundMainTweet = false;
+  let threadEnded = false;
+
+  for (const article of allArticles) {
+    let handle = "";
+    const links = article.querySelectorAll('a[role="link"]');
+    for (const link of links) {
+      const href = link.getAttribute("href") || "";
+      if (href.startsWith("/") && !href.includes("/status/") && !href.includes("/photo/") && !href.includes("/video/")) {
+        handle = href.slice(1);
+        break;
+      }
+    }
+
+    if (!foundMainTweet) {
+      if (handle === mainHandle) {
+        foundMainTweet = true;
+        count = 1;
+      }
+      continue;
+    }
+
+    if (threadEnded) break;
+
+    if (handle === mainHandle) {
+      count++;
+    } else {
+      // Different author - check if this is a retweet by the main author
+      const socialContext = article.querySelector('[data-testid="socialContext"]');
+      if (socialContext) {
+        const text = socialContext.textContent?.toLowerCase() || "";
+        if ((text.includes("reposted") || text.includes("retweeted")) &&
+            (text.toLowerCase().includes(mainHandle.toLowerCase()) || text.includes("@" + mainHandle))) {
+          count++;
+          continue;
+        }
+      }
+      threadEnded = true;
+    }
+  }
+
+  return count > 1 ? count : 1;
+}
+
 export function getPageInfo(): PageInfo {
   const url = window.location.href;
+  const pageType = detectPageType(url, document.contentType);
+  
   return {
     url,
     title: document.title || "Untitled",
-    type: detectPageType(url, document.contentType),
-    contentType: document.contentType || ""
+    type: pageType,
+    contentType: document.contentType || "",
+    // Add Twitter thread length if this is a Twitter page
+    twitterThreadLength: pageType === "twitter" ? detectTwitterThreadLength() : undefined
   };
 }
 
