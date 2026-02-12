@@ -84,7 +84,7 @@ Full thread extraction from Twitter/X.
 - [x] **Task 52**: Twitter popup UI — Update popup to show Twitter icon and "Tweet/Thread" label. Show thread count if detected.
 - [x] **Task 53**: Headless Twitter clipper — Create `tools/twitter-clipper.ts` for headless thread extraction via Puppeteer. Support `--profile` for auth, `--json`, `--stdout`.
 - [x] **Task 54**: Twitter API fallback — If DOM extraction fails (auth wall), try Twitter's public embed API or nitter instances as fallback.
-- [ ] **Task 55**: Twitter template integration — Register Twitter as a site template so the template system is used. Ensure template and extractor don't conflict.
+- [x] **Task 55**: Twitter template integration — Register Twitter as a site template so the template system is used. Ensure template and extractor don't conflict.
 
 ---
 
