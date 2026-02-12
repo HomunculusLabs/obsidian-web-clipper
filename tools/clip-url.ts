@@ -46,13 +46,21 @@ import {
   type Logger,
   type ToolOutput,
   type ToolMetadata,
+  DEFAULT_CLI_OPTIONS,
 } from "./lib/clipper-core";
+import {
+  loadConfig,
+  mergeWithDefaults,
+  getConfigHelpText,
+  type WebClipperConfig,
+} from "./lib/config";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface CLIOptions extends CommonCLIOptions {
   url: string;
   timestamps: boolean;
+  configPath?: string;
 }
 
 interface ClipOutputData {
@@ -67,17 +75,9 @@ type ClipOutput = ToolOutput<ClipOutputData>;
 function parseArgs(argv: string[], log: Logger): CLIOptions {
   const opts: CLIOptions = {
     url: "",
-    cli: false,
-    cliPath: "obsidian-cli",
-    vault: "Main Vault",
-    folder: "Clips",
-    profile: null,
-    headless: true,
-    wait: 5000,
-    tags: ["web-clip"],
-    json: false,
-    stdout: false,
+    ...DEFAULT_CLI_OPTIONS,
     timestamps: true,
+    configPath: undefined,
   };
 
   let i = 0;
@@ -115,6 +115,9 @@ function parseArgs(argv: string[], log: Logger): CLIOptions {
       opts.stdout = true;
     } else if (arg === "--no-timestamps") {
       opts.timestamps = false;
+    } else if (arg === "--config") {
+      i++;
+      opts.configPath = argv[i];
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -151,6 +154,7 @@ OPTIONS:
   --json                Output structured JSON to stdout (for LLM tool calls)
   --stdout              Dump raw markdown to stdout (for piping)
   --no-timestamps       Don't include timestamps in YouTube transcripts
+  --config <path>       Path to config file (default: .webclipper.json or ~/.webclipper.json)
   --help, -h            Show this help message
 
 EXAMPLES:
@@ -168,6 +172,7 @@ EXAMPLES:
 
   # Use Chrome profile for authenticated pages
   bun run tools/clip-url.ts --profile ~/.config/google-chrome/Default https://example.com/member-only
+${getConfigHelpText()}
 `);
 }
 
@@ -682,12 +687,24 @@ async function saveResult(result: ClipOutput, opts: CLIOptions, log: Logger): Pr
 
 async function main(): Promise<void> {
   const log = createLogger();
-  const opts = parseArgs(process.argv.slice(2), log);
+  const cliOpts = parseArgs(process.argv.slice(2), log);
 
-  if (!opts.url) {
+  if (!cliOpts.url) {
     log.error("No URL provided. Use --help for usage info.");
     process.exit(1);
   }
+
+  // Load config file and merge with CLI options
+  const { config, warnings } = await loadConfig({
+    configPath: cliOpts.configPath,
+    log,
+  });
+
+  for (const warning of warnings) {
+    log.warn(warning);
+  }
+
+  const opts = mergeWithDefaults(cliOpts, config);
 
   log(`\n🔖 Universal URL Clipper`);
   log(`   URL: ${opts.url}`);

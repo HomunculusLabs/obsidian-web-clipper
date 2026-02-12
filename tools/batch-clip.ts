@@ -47,6 +47,12 @@ import {
   type ToolMetadata,
   DEFAULT_CLI_OPTIONS,
 } from "./lib/clipper-core";
+import {
+  loadConfig,
+  mergeWithDefaults,
+  getConfigHelpText,
+  type WebClipperConfig,
+} from "./lib/config";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +63,7 @@ interface CLIOptions extends CommonCLIOptions {
   continueOnError: boolean;
   timestamps: boolean;
   progress: boolean;
+  configPath?: string;
 }
 
 interface ClipOutputData {
@@ -85,6 +92,7 @@ function parseArgs(argv: string[], log: Logger): CLIOptions {
     continueOnError: false,
     timestamps: true,
     progress: true,
+    configPath: undefined,
   };
 
   let i = 0;
@@ -131,6 +139,9 @@ function parseArgs(argv: string[], log: Logger): CLIOptions {
       opts.continueOnError = true;
     } else if (arg === "--no-progress") {
       opts.progress = false;
+    } else if (arg === "--config") {
+      i++;
+      opts.configPath = argv[i];
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -173,6 +184,7 @@ OPTIONS:
   --json                Output structured JSON array to stdout
   --stdout              Dump all markdown to stdout (separated by ---)
   --no-timestamps       Don't include timestamps in YouTube transcripts
+  --config <path>       Path to config file (default: .webclipper.json or ~/.webclipper.json)
   --help, -h            Show this help message
 
 INPUT SOURCES:
@@ -193,6 +205,7 @@ EXAMPLES:
 
   # Save all to Obsidian, continue on errors
   bun run tools/batch-clip.ts --cli --vault "Research" --continue-on-error @file:urls.txt
+${getConfigHelpText()}
 `);
 }
 
@@ -823,12 +836,24 @@ async function readStdin(): Promise<string[]> {
 
 async function main(): Promise<void> {
   const log = createLogger();
-  const opts = parseArgs(process.argv.slice(2), log);
+  const cliOpts = parseArgs(process.argv.slice(2), log);
 
   // Quiet mode for JSON/stdout
-  if (opts.json || opts.stdout) {
+  if (cliOpts.json || cliOpts.stdout) {
     log.setQuiet(true);
   }
+
+  // Load config file and merge with CLI options
+  const { config, warnings } = await loadConfig({
+    configPath: cliOpts.configPath,
+    log: cliOpts.json || cliOpts.stdout ? undefined : log,
+  });
+
+  for (const warning of warnings) {
+    log.warn(warning);
+  }
+
+  const opts = mergeWithDefaults(cliOpts, config);
 
   // Resolve URLs
   let urls: string[] = [];
@@ -836,7 +861,7 @@ async function main(): Promise<void> {
   if (opts.stdin) {
     urls = await readStdin();
   } else if (opts.urls.length > 0) {
-    urls = await resolveUrls(opts.urls);
+    urls = await resolveUrls(cliOpts.urls);
   }
 
   if (urls.length === 0) {
