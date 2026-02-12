@@ -1,6 +1,8 @@
 import type { ClipMetadata } from "./types";
 import type { DomainTagRule } from "./domainTags";
 import { DEFAULT_DOMAIN_TAG_RULES, extractDomainTagsFromRules } from "./domainTags";
+import type { TagRule } from "./tagRules";
+import { DEFAULT_TAG_RULES, suggestTagsFromRules } from "./tagRules";
 import {
   shouldExcludeWord,
   MIN_KEYWORD_FREQUENCY,
@@ -16,7 +18,7 @@ import { getFrequentTags, type TagHistoryEntry } from "./tagHistory";
 export interface TagSuggestion {
   tag: string;
   confidence: number; // 0-1, higher = more confident
-  source: "metadata" | "content" | "domain" | "category" | "history";
+  source: "metadata" | "content" | "domain" | "category" | "history" | "rule";
 }
 
 /**
@@ -27,6 +29,10 @@ export interface TagSuggestionOptions {
   domainTagRules?: DomainTagRule[];
   /** Whether to include default domain tag rules */
   useDefaultDomainTags?: boolean;
+  /** Custom tag rules (combined with defaults if useDefaultTagRules is true) */
+  tagRules?: TagRule[];
+  /** Whether to include default tag rules */
+  useDefaultTagRules?: boolean;
 }
 
 /**
@@ -69,7 +75,21 @@ export function suggestTags(
     }
   }
 
-  // Strategy 3: Content keyword extraction (placeholder for Task 58)
+  // Strategy 2.5: Tag rules engine (Task 66)
+  const tagRules = buildTagRules(options);
+  const ruleTags = suggestTagsFromRules(tagRules, metadata, content);
+  for (const suggestion of ruleTags) {
+    const key = suggestion.tag.toLowerCase();
+    if (!suggestions.has(key)) {
+      suggestions.set(key, {
+        tag: suggestion.tag,
+        confidence: suggestion.confidence,
+        source: "rule",
+      });
+    }
+  }
+
+  // Strategy 3: Content keyword extraction
   const contentTags = extractContentKeywords(content);
   for (const suggestion of contentTags) {
     const key = suggestion.tag.toLowerCase();
@@ -129,6 +149,20 @@ export async function suggestTagsWithHistory(
     const key = suggestion.tag.toLowerCase();
     if (!suggestions.has(key)) {
       suggestions.set(key, suggestion);
+    }
+  }
+
+  // Strategy 2.5: Tag rules engine (Task 66)
+  const tagRules = buildTagRules(options);
+  const ruleTags = suggestTagsFromRules(tagRules, metadata, content);
+  for (const suggestion of ruleTags) {
+    const key = suggestion.tag.toLowerCase();
+    if (!suggestions.has(key)) {
+      suggestions.set(key, {
+        tag: suggestion.tag,
+        confidence: suggestion.confidence,
+        source: "rule",
+      });
     }
   }
 
@@ -201,6 +235,24 @@ function buildDomainRules(options?: TagSuggestionOptions): DomainTagRule[] {
     // Combine defaults with custom rules (custom rules can override defaults)
     const customDomains = new Set(customRules.map(r => r.domain));
     const filteredDefaults = DEFAULT_DOMAIN_TAG_RULES.filter(r => !customDomains.has(r.domain));
+    return [...filteredDefaults, ...customRules];
+  }
+
+  return customRules;
+}
+
+/**
+ * Builds the combined tag rules from options.
+ * Part of Task 66 - Tag rules engine.
+ */
+function buildTagRules(options?: TagSuggestionOptions): TagRule[] {
+  const customRules = options?.tagRules ?? [];
+  const useDefaults = options?.useDefaultTagRules ?? true;
+
+  if (useDefaults) {
+    // Combine defaults with custom rules (custom rules can override defaults)
+    const customIds = new Set(customRules.map(r => r.id));
+    const filteredDefaults = DEFAULT_TAG_RULES.filter(r => !customIds.has(r.id));
     return [...filteredDefaults, ...customRules];
   }
 

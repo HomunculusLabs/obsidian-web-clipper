@@ -7,6 +7,7 @@ import type { ObsidianCliConfig, SaveMethod } from "./obsidianCli";
 import type { SiteTemplate, TemplateSettings } from "./templates";
 import type { DomainTagRule } from "./domainTags";
 import type { TitleTemplate, TitleTemplateSettings } from "./titleTemplate";
+import type { TagRule } from "./tagRules";
 
 // Wiki-link injection rule: maps a term to a note name
 export interface WikiLinkRule {
@@ -63,6 +64,10 @@ export interface Settings {
   domainTagRules: DomainTagRule[];
   useDefaultDomainTags: boolean;
 
+  // --- Tag rules engine (Task 66) ---
+  tagRules: TagRule[];
+  useDefaultTagRules: boolean;
+
   // --- Title cleanup settings ---
   cleanTitles: boolean; // Whether to clean titles (remove site names, decode entities)
   preferTitleCase: boolean; // Whether to apply title case to cleaned titles
@@ -80,6 +85,7 @@ export interface Settings {
     | ObsidianCliConfig
     | SiteTemplate[]
     | DomainTagRule[]
+    | TagRule[]
     | TitleTemplateSettings
     | TitleTemplate[]
     | undefined;
@@ -138,6 +144,10 @@ export const DEFAULT_SETTINGS: Settings = {
   domainTagRules: [], // Custom rules; combined with defaults if useDefaultDomainTags is true
   useDefaultDomainTags: true,
 
+  // --- Tag rules engine (Task 66) ---
+  tagRules: [], // Custom tag rules; combined with defaults if useDefaultTagRules is true
+  useDefaultTagRules: true,
+
   // --- Title cleanup settings ---
   cleanTitles: true, // Clean titles by default
   preferTitleCase: true, // Apply title case by default
@@ -190,6 +200,9 @@ export const SETTINGS_KEYS = [
   // Tag suggestions
   "domainTagRules",
   "useDefaultDomainTags",
+  // Tag rules engine
+  "tagRules",
+  "useDefaultTagRules",
   // Title cleanup
   "cleanTitles",
   "preferTitleCase",

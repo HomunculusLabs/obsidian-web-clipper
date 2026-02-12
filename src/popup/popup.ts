@@ -310,7 +310,9 @@ async function handleClip(): Promise<void> {
       result.markdown,
       {
         domainTagRules: settings.domainTagRules,
-        useDefaultDomainTags: settings.useDefaultDomainTags
+        useDefaultDomainTags: settings.useDefaultDomainTags,
+        tagRules: settings.tagRules,
+        useDefaultTagRules: settings.useDefaultTagRules
       }
     );
     
