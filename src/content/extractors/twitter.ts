@@ -1,5 +1,261 @@
 import type { ClipResult } from "../../shared/types";
 
+// ============================================================================
+// Task 54: Twitter API Fallback System
+// ============================================================================
+
+/**
+ * List of nitter instances to try as fallback.
+ * These are privacy-focused Twitter frontends that don't require auth.
+ */
+const NITTER_INSTANCES = [
+  "nitter.net",
+  "nitter.poast.org",
+  "nitter.privacydev.net",
+  "nitter.1d4.us",
+  "nitter.kavin.rocks"
+];
+
+/**
+ * Result from fallback extraction methods.
+ */
+interface FallbackResult {
+  text: string;
+  authorName?: string;
+  authorHandle?: string;
+  html?: string;
+  source: "oembed" | "nitter";
+}
+
+/**
+ * Detect if the page is showing an auth wall / login requirement.
+ * Twitter/X shows different UI when the user is not logged in.
+ */
+function detectAuthWall(): boolean {
+  // Check for login/signup prompts
+  const loginPrompt = document.querySelector('[data-testid="login"]');
+  const signupPrompt = document.querySelector('[data-testid="signup"]');
+  const loginDialog = document.querySelector('div[data-testid="sheet"] [data-testid="LoginFormControl"]');
+
+  // Check for "Log in to view" text
+  const bodyText = document.body.textContent?.toLowerCase() || "";
+  const hasLoginRequiredText =
+    bodyText.includes("log in to view") ||
+    bodyText.includes("sign in to view") ||
+    bodyText.includes("log in to x") ||
+    bodyText.includes("sign up to view");
+
+  // Check if tweet article is missing or empty
+  const tweetArticle = document.querySelector('article[data-testid="tweet"]');
+  const hasNoTweetContent = !tweetArticle || !tweetArticle.querySelector('div[data-testid="tweetText"]');
+
+  return !!(loginPrompt || signupPrompt || loginDialog || (hasLoginRequiredText && hasNoTweetContent));
+}
+
+/**
+ * Detect if DOM extraction produced meaningful content.
+ * Returns true if extraction failed or content is insufficient.
+ */
+function isExtractionEmpty(tweetInfo: { text: string; authorHandle: string }): boolean {
+  // No text content at all
+  if (!tweetInfo.text || tweetInfo.text.trim().length < 5) {
+    return true;
+  }
+
+  // No author handle (critical metadata missing)
+  if (!tweetInfo.authorHandle) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Fetch tweet data via Twitter's public oEmbed API.
+ * This works without authentication and returns HTML.
+ */
+async function fetchFromOEmbed(tweetUrl: string): Promise<FallbackResult | null> {
+  try {
+    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
+
+    const response = await fetch(oembedUrl, {
+      method: "GET",
+      credentials: "omit" // Don't send cookies
+    });
+
+    if (!response.ok) {
+      console.warn(`[Twitter] oEmbed API returned ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.html) {
+      return null;
+    }
+
+    // Extract author info from oEmbed response
+    const authorName = data.author_name || undefined;
+    const authorHandle = data.author_url?.split("/").pop() || undefined;
+
+    // Extract text from HTML (oEmbed returns blockquote HTML)
+    const text = extractTextFromOEmbedHtml(data.html);
+
+    return {
+      text,
+      authorName,
+      authorHandle,
+      html: data.html,
+      source: "oembed"
+    };
+  } catch (error) {
+    console.warn("[Twitter] oEmbed fetch failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Extract plain text from oEmbed HTML (blockquote format).
+ */
+function extractTextFromOEmbedHtml(html: string): string {
+  // oEmbed returns: <blockquote class="twitter-tweet">...<p>text</p>...</blockquote>
+  const pMatch = html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (pMatch) {
+    // Remove HTML tags and decode entities
+    let text = pMatch[1]
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<a[^>]*>([^<]*)<\/a>/gi, "$1")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+    return text;
+  }
+  return "";
+}
+
+/**
+ * Fetch tweet data from a nitter instance.
+ * Nitter is a privacy-focused Twitter frontend.
+ */
+async function fetchFromNitter(tweetUrl: string): Promise<FallbackResult | null> {
+  // Extract tweet ID from URL
+  const tweetIdMatch = tweetUrl.match(/status\/(\d+)/);
+  if (!tweetIdMatch) {
+    return null;
+  }
+
+  // Extract author handle from URL
+  const handleMatch = tweetUrl.match(/(?:twitter|x)\.com\/([^/]+)\/status/);
+  const authorHandle = handleMatch?.[1];
+
+  // Try each nitter instance
+  for (const instance of NITTER_INSTANCES) {
+    try {
+      const nitterUrl = `https://${instance}/${authorHandle}/status/${tweetIdMatch[1]}`;
+
+      const response = await fetch(nitterUrl, {
+        method: "GET",
+        credentials: "omit",
+        headers: {
+          "Accept": "text/html"
+        }
+      });
+
+      if (!response.ok) {
+        continue; // Try next instance
+      }
+
+      const html = await response.text();
+      const result = parseNitterHtml(html, authorHandle);
+
+      if (result && result.text) {
+        return result;
+      }
+    } catch (error) {
+      // Instance might be down, try next one
+      console.debug(`[Twitter] Nitter instance ${instance} failed:`, error);
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Parse nitter HTML to extract tweet content.
+ */
+function parseNitterHtml(html: string, authorHandle?: string): FallbackResult | null {
+  // Nitter uses simple HTML structure:
+  // <div class="tweet-content">...</div>
+  // <a class="fullname">...</a>
+  // <a class="username">...</a>
+
+  // Extract tweet text
+  const contentMatch = html.match(/<div[^>]*class="[^"]*tweet-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  if (!contentMatch) {
+    return null;
+  }
+
+  let text = contentMatch[1]
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<a[^>]*>([^<]*)<\/a>/gi, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+
+  // Extract author name
+  const nameMatch = html.match(/<a[^>]*class="[^"]*fullname[^"]*"[^>]*>([^<]*)<\/a>/i);
+  const authorName = nameMatch?.[1]?.trim();
+
+  // Extract username if not provided
+  let handle = authorHandle;
+  if (!handle) {
+    const usernameMatch = html.match(/<a[^>]*class="[^"]*username[^"]*"[^>]*>@?([^<]*)<\/a>/i);
+    handle = usernameMatch?.[1]?.trim()?.replace("@", "");
+  }
+
+  return {
+    text,
+    authorName,
+    authorHandle: handle,
+    source: "nitter"
+  };
+}
+
+/**
+ * Try all fallback methods to get tweet content.
+ * Order: oEmbed API -> Nitter instances
+ */
+async function tryFallbacks(tweetUrl: string): Promise<FallbackResult | null> {
+  // Try oEmbed first (most reliable, official API)
+  let result = await fetchFromOEmbed(tweetUrl);
+  if (result && result.text) {
+    console.log("[Twitter] Successfully used oEmbed fallback");
+    return result;
+  }
+
+  // Try nitter instances
+  result = await fetchFromNitter(tweetUrl);
+  if (result && result.text) {
+    console.log("[Twitter] Successfully used nitter fallback");
+    return result;
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Original Twitter Extractor Code
+// ============================================================================
+
 /**
  * Media item from a tweet
  */
@@ -1231,10 +1487,53 @@ function formatLinkCardAsMarkdown(card: TwitterLinkCard): string {
 }
 
 /**
+ * Build markdown for a fallback result (Task 54).
+ * Used when DOM extraction fails and we got content from oEmbed/Nitter.
+ */
+function buildFallbackMarkdown(
+  result: ClipResult,
+  fallback: FallbackResult,
+  tweetInfo: Partial<TwitterTweetInfo>
+): string {
+  let markdown = `# ${fallback.authorName || "Unknown Author"}`;
+  if (fallback.authorHandle) {
+    markdown += ` (@${fallback.authorHandle})`;
+  }
+  markdown += "\n\n";
+
+  // Timestamp if available
+  if (tweetInfo.timestamp) {
+    const date = new Date(tweetInfo.timestamp);
+    const dateStr = date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    markdown += `> 📅 ${dateStr}\n\n`;
+  }
+
+  markdown += `---\n\n`;
+  markdown += `${fallback.text}\n`;
+
+  // Add source attribution
+  markdown += `\n\n---\n\n`;
+  markdown += `> ℹ️ **Note:** Content extracted via ${fallback.source === "oembed" ? "Twitter oEmbed API" : "Nitter"} fallback `;
+  markdown += `(DOM extraction unavailable).\n`;
+
+  markdown += `\n---\n\n`;
+  markdown += `[View on X/Twitter](${result.url})\n`;
+
+  return markdown;
+}
+
+/**
  * Extract Twitter/X content from the current page.
  *
  * Implements single tweet extraction (Task 45) and thread detection (Task 46).
  * Full thread markdown formatting is implemented in Tasks 47-50.
+ * Task 54: Added fallback to oEmbed API and Nitter for auth-wall scenarios.
  *
  * @param result - The base clip result to populate
  * @returns Promise<ClipResult> with Twitter content
@@ -1245,7 +1544,39 @@ export async function extractTwitterContent(
   // Task 51: Use "tweet" type for Twitter content
   result.metadata.type = "tweet";
 
+  // Task 54: Check for auth wall before attempting DOM extraction
+  const hasAuthWall = detectAuthWall();
+
   const tweetInfo = getTweetInfo();
+
+  // Task 54: If DOM extraction failed or auth wall detected, try fallbacks
+  let fallbackResult: FallbackResult | null = null;
+  const extractionFailed = isExtractionEmpty(tweetInfo);
+
+  if (hasAuthWall || extractionFailed) {
+    console.log("[Twitter] DOM extraction issue detected, trying fallbacks...");
+    console.log(`[Twitter] Auth wall: ${hasAuthWall}, Extraction empty: ${extractionFailed}`);
+
+    // Try fallback methods
+    fallbackResult = await tryFallbacks(result.url);
+
+    if (fallbackResult) {
+      // Use fallback data to fill in missing info
+      if (!tweetInfo.text && fallbackResult.text) {
+        tweetInfo.text = fallbackResult.text;
+      }
+      if (!tweetInfo.authorHandle && fallbackResult.authorHandle) {
+        tweetInfo.authorHandle = fallbackResult.authorHandle;
+      }
+      if (!tweetInfo.authorName && fallbackResult.authorName) {
+        tweetInfo.authorName = fallbackResult.authorName;
+      }
+      // Mark that we used fallback for the source
+      tweetInfo.text = fallbackResult.text;
+      tweetInfo.authorHandle = fallbackResult.authorHandle || tweetInfo.authorHandle;
+      tweetInfo.authorName = fallbackResult.authorName || tweetInfo.authorName;
+    }
+  }
 
   // Set metadata
   result.metadata.author = tweetInfo.authorName || tweetInfo.authorHandle;
@@ -1459,6 +1790,15 @@ export async function extractTwitterContent(
     } else {
       markdown += `> ⚠️ **Could not extract tweet content.** `;
       markdown += `The page may require JavaScript rendering or the content may be protected.\n`;
+      if (hasAuthWall) {
+        markdown += `> 🔒 **Auth wall detected.** `;
+        markdown += `Try logging in to X/Twitter for full content access.\n`;
+      }
+    }
+
+    // Task 54: Add source attribution if fallback was used
+    if (fallbackResult && fallbackResult.text) {
+      markdown += `\n\n> ℹ️ *Content extracted via ${fallbackResult.source === "oembed" ? "Twitter oEmbed API" : "Nitter"} fallback.*\n`;
     }
 
     // Media attachments
