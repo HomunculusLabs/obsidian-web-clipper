@@ -2,9 +2,12 @@
  * Site-specific templates module.
  * 
  * Re-exports from registry.ts for convenience.
- * Individual template files (reddit.ts, hackernews.ts, etc.) will be
- * added in subsequent tasks and will register themselves on import.
+ * Individual template files (reddit.ts, hackernews.ts, etc.) register
+ * themselves on import via side effects.
  */
+
+// Import built-in templates to trigger registration
+import "./reddit";
 
 export {
   // Template registration
@@ -25,3 +28,18 @@ export {
   // Types
   type GetTemplateOptions
 } from "./registry";
+
+// Re-export individual templates for testing/direct use
+export {
+  redditOldTemplate,
+  redditNewTemplate,
+  redditTemplate,
+  extractSubreddit,
+  extractOldRedditScore,
+  extractNewRedditScore,
+  parseScore,
+  extractOldRedditComments,
+  extractNewRedditComments,
+  detectRedditInterface,
+  formatComments
+} from "./reddit";
