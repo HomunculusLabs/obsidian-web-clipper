@@ -135,6 +135,14 @@ function setupEventListeners(): void {
       void testCliConnection();
     });
   }
+
+  // Auto-detect CLI button
+  const autoDetectCliBtn = getEl<HTMLButtonElement>("autoDetectCliBtn");
+  if (autoDetectCliBtn) {
+    autoDetectCliBtn.addEventListener("click", () => {
+      void autoDetectCli();
+    });
+  }
 }
 
 async function saveCurrentSettings(): Promise<void> {
@@ -306,6 +314,50 @@ async function testCliConnection(): Promise<void> {
     testResult.className = "test-result error";
   } finally {
     testBtn.disabled = false;
+  }
+}
+
+async function autoDetectCli(): Promise<void> {
+  const autoDetectBtn = getEl<HTMLButtonElement>("autoDetectCliBtn");
+  const cliPath = getEl<HTMLInputElement>("cliPath");
+  const testResult = getEl<HTMLSpanElement>("cliTestResult");
+
+  if (!autoDetectBtn || !cliPath) return;
+
+  // Disable button and show detecting state
+  autoDetectBtn.disabled = true;
+  if (testResult) {
+    testResult.textContent = "Detecting...";
+    testResult.className = "test-result";
+  }
+
+  try {
+    // Send detect request to background script
+    const response = await chrome.runtime.sendMessage({
+      action: "detectCli"
+    });
+
+    if (response?.cliPath) {
+      cliPath.value = response.cliPath;
+      if (testResult) {
+        const platform = response.platform || "unknown";
+        testResult.textContent = `✓ Detected (${platform}): ${response.cliPath}`;
+        testResult.className = "test-result success";
+      }
+    } else {
+      if (testResult) {
+        testResult.textContent = `No CLI found. ${response?.note || "Please enter the path manually."}`;
+        testResult.className = "test-result error";
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (testResult) {
+      testResult.textContent = `✗ Detection failed: ${message}`;
+      testResult.className = "test-result error";
+    }
+  } finally {
+    autoDetectBtn.disabled = false;
   }
 }
 

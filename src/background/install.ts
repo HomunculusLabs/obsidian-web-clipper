@@ -1,10 +1,30 @@
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
 import { storageSet } from "../shared/chromeAsync";
+import { detectObsidianCli } from "../shared/cliDetect";
 
 export async function ensureDefaultsOnInstall(details: chrome.runtime.InstalledDetails): Promise<void> {
   if (details.reason !== "install") return;
 
-  await storageSet<Settings>(DEFAULT_SETTINGS);
+  // Start with default settings
+  const settings = { ...DEFAULT_SETTINGS };
+
+  // Auto-detect Obsidian CLI path
+  try {
+    const detection = detectObsidianCli();
+    if (detection.cliPath) {
+      settings.obsidianCli = {
+        ...settings.obsidianCli,
+        cliPath: detection.cliPath,
+      };
+      console.log(
+        `[CLI Auto-Detect] Platform: ${detection.platform}, Suggested path: ${detection.cliPath}`
+      );
+    }
+  } catch (err) {
+    console.warn("[CLI Auto-Detect] Failed to detect CLI:", err);
+  }
+
+  await storageSet<Settings>(settings);
 
   try {
     chrome.runtime.openOptionsPage();

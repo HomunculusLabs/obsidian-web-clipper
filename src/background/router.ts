@@ -6,6 +6,7 @@ import { handleCopyToClipboard } from "./handlers/copyToClipboard";
 import { handleOpenObsidianUri } from "./handlers/openObsidianUri";
 import { handleExtractPdf } from "./handlers/extractPdf";
 import { handleTestCliConnection } from "./handlers/testCliConnection";
+import { handleDetectCli } from "./handlers/detectCli";
 import { handleSaveToCli } from "./handlers/saveToCli";
 import { handleSaveContent } from "./handlers/saveContent";
 
@@ -21,6 +22,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleExtractPdf(request);
     case "testCliConnection":
       return handleTestCliConnection(request);
+    case "detectCli":
+      return handleDetectCli(request);
     case "saveToCli":
       return handleSaveToCli(request);
     case "saveContent":

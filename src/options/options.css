@@ -293,6 +293,27 @@ code {
   cursor: not-allowed;
 }
 
+.auto-detect-btn {
+  padding: 10px 16px;
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.auto-detect-btn:hover {
+  background: #4b5563;
+}
+
+.auto-detect-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
 .test-result {
   margin-left: 12px;
   font-size: 14px;

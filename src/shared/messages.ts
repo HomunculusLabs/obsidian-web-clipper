@@ -10,6 +10,7 @@ export type RuntimeRequest =
   | { action: "openObsidianUri"; uri: string }
   | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number }
   | { action: "testCliConnection"; cliPath: string; vault: string }
+  | { action: "detectCli" }
   | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string }
   | {
       action: "saveContent";
@@ -34,6 +35,19 @@ export type SaveToCliResponse =
 export type TestCliConnectionResponse =
   | { success: true; version?: string }
   | { success: false; error: string };
+
+export type DetectCliResponse = {
+  /** Whether detection was attempted */
+  attempted: boolean;
+  /** The detected or guessed path (may be empty) */
+  cliPath: string;
+  /** The platform that was detected */
+  platform: string;
+  /** List of alternative paths to try */
+  alternatives: string[];
+  /** Note about detection limitations */
+  note: string;
+};
 
 export type ExtractPdfResponse =
   | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }
