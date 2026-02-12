@@ -6,7 +6,9 @@
     "build": "bun run build/build.ts",
     "dev": "bun run build/build.ts --watch",
     "typecheck": "tsc --noEmit",
-    "clip:chatgpt": "bun run tools/chatgpt-clipper.ts"
+    "clip:chatgpt": "bun run tools/chatgpt-clipper.ts",
+    "clip:stdin": "bun run tools/clip-stdin.ts",
+    "clip:url": "bun run tools/clip-url.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
