@@ -9,6 +9,7 @@ import { injectWikiLinks } from "../content/web/wikiLinks";
 import { sanitizeFilename } from "../shared/sanitize";
 import { parseTags, addAutoTags } from "../shared/tags";
 import { cleanTitle } from "../shared/titleSuggestion";
+import { applyTitleTemplate } from "../shared/titleTemplate";
 import { showStatus } from "./ui";
 
 const MAX_URI_CONTENT_CHARS = 180000;
@@ -56,7 +57,19 @@ function prepareSave(options: SaveOptions): PreparedSave {
     rawTitle = cleanTitle(rawTitle, { preferTitleCase: settings.preferTitleCase });
   }
 
-  const finalTitle = sanitizeFilename(rawTitle);
+  // Apply title template if enabled
+  const templateResult = applyTitleTemplate(
+    rawTitle,
+    {
+      metadata: result.metadata,
+      pageType,
+      folder: overrideFolder || settings.defaultFolder,
+      tags: parseTags(overrideTags || settings.defaultTags || "")
+    },
+    settings.titleTemplates || { enabled: false, selectedTemplate: "default", customTemplates: [] }
+  );
+
+  const finalTitle = sanitizeFilename(templateResult);
 
   const folder = (
     overrideFolder || settings.defaultFolder || DEFAULT_SETTINGS.defaultFolder

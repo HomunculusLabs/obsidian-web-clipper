@@ -6,6 +6,7 @@ import type {
 import type { ObsidianCliConfig, SaveMethod } from "./obsidianCli";
 import type { SiteTemplate, TemplateSettings } from "./templates";
 import type { DomainTagRule } from "./domainTags";
+import type { TitleTemplate, TitleTemplateSettings } from "./titleTemplate";
 
 // Wiki-link injection rule: maps a term to a note name
 export interface WikiLinkRule {
@@ -66,6 +67,9 @@ export interface Settings {
   cleanTitles: boolean; // Whether to clean titles (remove site names, decode entities)
   preferTitleCase: boolean; // Whether to apply title case to cleaned titles
 
+  // --- Title template settings ---
+  titleTemplates: TitleTemplateSettings;
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -76,6 +80,8 @@ export interface Settings {
     | ObsidianCliConfig
     | SiteTemplate[]
     | DomainTagRule[]
+    | TitleTemplateSettings
+    | TitleTemplate[]
     | undefined;
 }
 
@@ -134,7 +140,14 @@ export const DEFAULT_SETTINGS: Settings = {
 
   // --- Title cleanup settings ---
   cleanTitles: true, // Clean titles by default
-  preferTitleCase: true // Apply title case by default
+  preferTitleCase: true, // Apply title case by default
+
+  // --- Title template settings ---
+  titleTemplates: {
+    enabled: false,
+    selectedTemplate: "default",
+    customTemplates: []
+  }
 };
 
 export const SETTINGS_KEYS = [
@@ -179,7 +192,9 @@ export const SETTINGS_KEYS = [
   "useDefaultDomainTags",
   // Title cleanup
   "cleanTitles",
-  "preferTitleCase"
+  "preferTitleCase",
+  // Title templates
+  "titleTemplates"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];

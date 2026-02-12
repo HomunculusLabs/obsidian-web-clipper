@@ -17,6 +17,11 @@ import {
   renderCustomTemplates,
   setupTemplateEditor
 } from "./templateEditor";
+import {
+  validateTitleTemplate,
+  BUILTIN_TITLE_TEMPLATES,
+  type TitleTemplate
+} from "../shared/titleTemplate";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 
@@ -80,6 +85,39 @@ function coerceEnum<T extends string>(
 ): T {
   if (!value) return fallback;
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+/**
+ * Build custom templates array from user input.
+ */
+function buildCustomTemplates(
+  selectedTemplate: string | undefined,
+  customTemplateStr: string | undefined
+): TitleTemplate[] {
+  const customTemplates: TitleTemplate[] = [];
+
+  // If the user entered a custom template, validate and add it
+  if (customTemplateStr && customTemplateStr.trim()) {
+    const trimmed = customTemplateStr.trim();
+
+    // Check if it's different from all built-in templates
+    const isBuiltIn = BUILTIN_TITLE_TEMPLATES.some((t) => t.template === trimmed);
+
+    if (!isBuiltIn) {
+      const validation = validateTitleTemplate(trimmed);
+      if (validation.isValid) {
+        customTemplates.push({
+          id: "custom",
+          name: "Custom Template",
+          template: trimmed,
+          builtIn: false,
+          enabled: true
+        });
+      }
+    }
+  }
+
+  return customTemplates;
 }
 
 // --- Lifecycle ---
@@ -175,6 +213,42 @@ function setupEventListeners(): void {
       void autoDetectCli();
     });
   }
+
+  // Title templates toggle - show/hide template settings
+  const titleTemplatesEnabled = getEl<HTMLInputElement>("titleTemplatesEnabled");
+  if (titleTemplatesEnabled) {
+    titleTemplatesEnabled.addEventListener("change", () => {
+      const templateSettings = getEl<HTMLDivElement>("titleTemplateSettings");
+      if (templateSettings) {
+        templateSettings.style.display = titleTemplatesEnabled.checked ? "block" : "none";
+      }
+    });
+  }
+
+  // Custom template input - switch select to custom when user types
+  const customTitleTemplate = getEl<HTMLInputElement>("customTitleTemplate");
+  if (customTitleTemplate) {
+    customTitleTemplate.addEventListener("input", () => {
+      const select = getEl<HTMLSelectElement>("selectedTitleTemplate");
+      if (select && customTitleTemplate.value.trim()) {
+        // Check if it matches a built-in template
+        const matchingBuiltIn = BUILTIN_TITLE_TEMPLATES.find(
+          (t) => t.template === customTitleTemplate.value.trim()
+        );
+        if (!matchingBuiltIn) {
+          // Add or select "custom" option
+          let customOption = select.querySelector<HTMLOptionElement>('option[value="custom"]');
+          if (!customOption) {
+            customOption = document.createElement("option");
+            customOption.value = "custom";
+            customOption.textContent = "Custom Template";
+            select.appendChild(customOption);
+          }
+          select.value = "custom";
+        }
+      }
+    });
+  }
 }
 
 async function saveCurrentSettings(): Promise<void> {
@@ -214,6 +288,11 @@ async function saveCurrentSettings(): Promise<void> {
   // Title cleanup settings
   const cleanTitlesEl = getEl<HTMLInputElement>("cleanTitles");
   const preferTitleCaseEl = getEl<HTMLInputElement>("preferTitleCase");
+
+  // Title template settings
+  const titleTemplatesEnabledEl = getEl<HTMLInputElement>("titleTemplatesEnabled");
+  const selectedTitleTemplateEl = getEl<HTMLSelectElement>("selectedTitleTemplate");
+  const customTitleTemplateEl = getEl<HTMLInputElement>("customTitleTemplate");
 
   // Parse wiki-link rules
   const { rules: wikiLinkRules, errors: wikiRuleErrors } = parseWikiLinkRules(
@@ -291,7 +370,17 @@ async function saveCurrentSettings(): Promise<void> {
 
     // Title cleanup
     cleanTitles: cleanTitlesEl?.checked ?? DEFAULT_SETTINGS.cleanTitles,
-    preferTitleCase: preferTitleCaseEl?.checked ?? DEFAULT_SETTINGS.preferTitleCase
+    preferTitleCase: preferTitleCaseEl?.checked ?? DEFAULT_SETTINGS.preferTitleCase,
+
+    // Title templates
+    titleTemplates: {
+      enabled: titleTemplatesEnabledEl?.checked ?? false,
+      selectedTemplate: selectedTitleTemplateEl?.value || "default",
+      customTemplates: buildCustomTemplates(
+        selectedTitleTemplateEl?.value,
+        customTitleTemplateEl?.value
+      )
+    }
   };
 
   await saveSettingsToStorage(settings);

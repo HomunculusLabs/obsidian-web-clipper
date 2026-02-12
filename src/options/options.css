@@ -641,3 +641,29 @@ code {
 .modal-actions .save-btn:hover {
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
+
+/* Title Template Settings */
+.template-settings {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.placeholders-help {
+  background: #f3f4f6;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #4b5563;
+}
+
+.placeholders-help code {
+  background: #e5e7eb;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #7c3aed;
+}

@@ -62,6 +62,54 @@
       </section>
 
       <section class="section">
+        <h2>Title Templates</h2>
+        <p class="section-desc">Customize how note titles are formatted. Use placeholders to include dates, domains, and other metadata.</p>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="titleTemplatesEnabled">
+          <label for="titleTemplatesEnabled">Enable title templates</label>
+          <small>Apply a template to format note titles automatically</small>
+        </div>
+
+        <div id="titleTemplateSettings" class="template-settings">
+          <div class="field">
+            <label for="selectedTitleTemplate">Title Format</label>
+            <select id="selectedTitleTemplate">
+              <option value="default">Default (Title Only)</option>
+              <option value="date-title">Date - Title</option>
+              <option value="domain-title">Domain/Title</option>
+              <option value="type-title">Type - Title</option>
+              <option value="author-title">Author - Title</option>
+              <option value="year-month-title">Year/Month - Title</option>
+              <option value="site-title">Site Name - Title</option>
+              <option value="datetime-title">DateTime - Title</option>
+            </select>
+            <small>Choose a template format for note titles</small>
+          </div>
+
+          <div class="field">
+            <label for="customTitleTemplate">Custom Template</label>
+            <input type="text" id="customTitleTemplate" placeholder="{date} - {title}">
+            <small>Enter a custom template (e.g., <code>{date} - {title}</code>). Available: {title}, {date}, {time}, {datetime}, {domain}, {type}, {author}, {siteName}, {tags}, {folder}, {year}, {month}, {day}</small>
+          </div>
+
+          <div class="field">
+            <label>Available Placeholders</label>
+            <div class="placeholders-help">
+              <code>{"{title}"}</code> - Page title &nbsp;
+              <code>{"{date}"}</code> - YYYY-MM-DD &nbsp;
+              <code>{"{domain}"}</code> - Website domain<br>
+              <code>{"{type}"}</code> - Page type &nbsp;
+              <code>{"{author}"}</code> - Author name &nbsp;
+              <code>{"{siteName}"}</code> - Site name<br>
+              <code>{"{year}"}</code>, <code>{"{month}"}</code>, <code>{"{day}"}</code> - Date parts &nbsp;
+              <code>{"{time}"}</code> - HH-mm
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Obsidian CLI Integration</h2>
         <p class="section-desc">Use the Obsidian CLI for direct file creation instead of URI schemes.</p>
 

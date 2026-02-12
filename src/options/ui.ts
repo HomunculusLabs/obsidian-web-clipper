@@ -116,4 +116,31 @@ export function populateForm(settings: Settings): void {
 
   if (cleanTitles) cleanTitles.checked = settings.cleanTitles !== false;
   if (preferTitleCase) preferTitleCase.checked = settings.preferTitleCase !== false;
+
+  // Title template settings
+  const titleTemplatesEnabled = getEl<HTMLInputElement>("titleTemplatesEnabled");
+  const selectedTitleTemplate = getEl<HTMLSelectElement>("selectedTitleTemplate");
+  const customTitleTemplate = getEl<HTMLInputElement>("customTitleTemplate");
+  const titleTemplateSettings = getEl<HTMLDivElement>("titleTemplateSettings");
+
+  if (titleTemplatesEnabled) {
+    titleTemplatesEnabled.checked = settings.titleTemplates?.enabled ?? false;
+  }
+  if (selectedTitleTemplate) {
+    selectedTitleTemplate.value = settings.titleTemplates?.selectedTemplate || "default";
+  }
+  if (customTitleTemplate) {
+    // If a custom template exists, show its template string
+    const customTemplates = settings.titleTemplates?.customTemplates || [];
+    const selectedCustom = customTemplates.find(
+      (t) => t.id === settings.titleTemplates?.selectedTemplate
+    );
+    customTitleTemplate.value = selectedCustom?.template || "";
+  }
+
+  // Show/hide template settings based on enabled state
+  if (titleTemplateSettings) {
+    titleTemplateSettings.style.display =
+      settings.titleTemplates?.enabled ? "block" : "none";
+  }
 }
