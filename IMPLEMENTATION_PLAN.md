@@ -94,7 +94,7 @@ Auto-suggest tags and note titles based on page content.
 
 - [x] **Task 56**: Tag suggestion engine — Create `src/shared/tagSuggestion.ts` with `suggestTags(metadata: ClipMetadata, content: string): string[]` that analyzes content and returns tag suggestions.
 - [x] **Task 57**: Domain-based tags — Auto-suggest tags based on domain: github.com → `github`, youtube.com → `youtube`, arxiv.org → `research`, etc. Configurable mapping in settings.
-- [ ] **Task 58**: Content keyword extraction — Extract top keywords from article content using TF-IDF-like scoring (word frequency vs common English words stoplist). Suggest as tags.
+- [x] **Task 58**: Content keyword extraction — Extract top keywords from article content using TF-IDF-like scoring (word frequency vs common English words stoplist). Suggest as tags.
 - [ ] **Task 59**: JSON-LD/meta tag mining — Extract tags from existing page metadata: `<meta name="keywords">`, JSON-LD keywords, Open Graph tags, article:tag meta.
 - [ ] **Task 60**: Category detection — Simple content classifier: detect if content is code/tutorial, news, research, opinion, product, recipe. Suggest category tag.
 - [ ] **Task 61**: Tag suggestion UI in popup — Show suggested tags as clickable chips below the tags input. Click to add, X to dismiss. Remember dismissed suggestions.
