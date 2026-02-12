@@ -5,6 +5,7 @@ import { loadSettings as loadSettingsFromStorage } from "../shared/settingsServi
 import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage } from "../shared/errors";
+import { suggestTags, type TagSuggestion } from "../shared/tagSuggestion";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
@@ -17,6 +18,8 @@ let hasSelection = false;
 let clipSelectionMode = true; // Default to selection mode when selection exists
 let hasTemplate = false;
 let useTemplate = true; // Default to using template when available
+let dismissedTagSuggestions: string[] = []; // Dismissed tag suggestions (lowercase)
+let currentTagSuggestions: TagSuggestion[] = []; // Current tag suggestions with source info
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
@@ -29,6 +32,130 @@ async function loadSettings(): Promise<void> {
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
   if (tagsInput) {
     tagsInput.value = (settings.defaultTags || DEFAULT_SETTINGS.defaultTags || "").trim();
+  }
+
+  // Load dismissed tag suggestions
+  await loadDismissedTagSuggestions();
+}
+
+/** Storage key for dismissed tag suggestions */
+const DISMISSED_TAGS_KEY = "dismissedTagSuggestions";
+
+/** Load dismissed tag suggestions from storage */
+async function loadDismissedTagSuggestions(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(DISMISSED_TAGS_KEY);
+    dismissedTagSuggestions = result[DISMISSED_TAGS_KEY] || [];
+  } catch {
+    dismissedTagSuggestions = [];
+  }
+}
+
+/** Save dismissed tag suggestions to storage */
+async function saveDismissedTagSuggestions(): Promise<void> {
+  try {
+    await chrome.storage.local.set({ [DISMISSED_TAGS_KEY]: dismissedTagSuggestions });
+  } catch (err) {
+    console.error("Failed to save dismissed tag suggestions:", err);
+  }
+}
+
+/** Display tag suggestions as clickable chips */
+function displayTagSuggestions(suggestions: TagSuggestion[]): void {
+  const container = getEl<HTMLDivElement>("tagSuggestions");
+  const chipsContainer = getEl<HTMLDivElement>("tagChips");
+  
+  if (!container || !chipsContainer) return;
+  
+  // Filter out dismissed suggestions and already-added tags
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+  const currentTags = (tagsInput?.value || "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+  
+  const filteredSuggestions = suggestions.filter(s => {
+    const lower = s.tag.toLowerCase();
+    return !dismissedTagSuggestions.includes(lower) && !currentTags.includes(lower);
+  });
+  
+  if (filteredSuggestions.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+  
+  // Store for reference
+  currentTagSuggestions = filteredSuggestions;
+  
+  // Clear existing chips
+  chipsContainer.innerHTML = "";
+  
+  // Create chips
+  for (const suggestion of filteredSuggestions.slice(0, 6)) { // Limit to 6 suggestions
+    const chip = document.createElement("span");
+    chip.className = `tag-chip source-${suggestion.source}`;
+    chip.title = `Source: ${suggestion.source} (${Math.round(suggestion.confidence * 100)}% confidence)`;
+    
+    const textSpan = document.createElement("span");
+    textSpan.className = "tag-chip-text";
+    textSpan.textContent = suggestion.tag;
+    
+    const dismissBtn = document.createElement("span");
+    dismissBtn.className = "tag-chip-dismiss";
+    dismissBtn.textContent = "×";
+    dismissBtn.title = "Dismiss suggestion";
+    
+    // Click to add tag
+    chip.addEventListener("click", (e) => {
+      // Only add if not clicking dismiss button
+      if ((e.target as HTMLElement)?.classList.contains("tag-chip-dismiss")) return;
+      addTagToInput(suggestion.tag);
+      chip.remove();
+      
+      // Hide container if no more chips
+      if (chipsContainer.children.length === 0) {
+        container.style.display = "none";
+      }
+    });
+    
+    // Click dismiss button to dismiss
+    dismissBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dismissTagSuggestion(suggestion.tag);
+      chip.remove();
+      
+      // Hide container if no more chips
+      if (chipsContainer.children.length === 0) {
+        container.style.display = "none";
+      }
+    });
+    
+    chip.appendChild(textSpan);
+    chip.appendChild(dismissBtn);
+    chipsContainer.appendChild(chip);
+  }
+  
+  container.style.display = "flex";
+}
+
+/** Add a tag to the tags input */
+function addTagToInput(tag: string): void {
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+  if (!tagsInput) return;
+  
+  const currentTags = tagsInput.value.split(",").map(t => t.trim()).filter(Boolean);
+  
+  // Don't add if already present
+  if (currentTags.some(t => t.toLowerCase() === tag.toLowerCase())) return;
+  
+  currentTags.push(tag);
+  tagsInput.value = currentTags.join(", ");
+}
+
+/** Dismiss a tag suggestion and remember it */
+function dismissTagSuggestion(tag: string): void {
+  const lower = tag.toLowerCase();
+  if (!dismissedTagSuggestions.includes(lower)) {
+    dismissedTagSuggestions.push(lower);
+    // Save asynchronously
+    void saveDismissedTagSuggestions();
   }
 }
 
@@ -175,6 +302,25 @@ async function handleClip(): Promise<void> {
     });
 
     clipperContent = result;
+
+    // Generate and display tag suggestions based on clipped content
+    const suggestions = suggestTags(
+      result.metadata,
+      result.markdown,
+      {
+        domainTagRules: settings.domainTagRules,
+        useDefaultDomainTags: settings.useDefaultDomainTags
+      }
+    );
+    
+    // Convert to TagSuggestion format (we only get strings back, so we'll assign generic source)
+    const tagSuggestions: TagSuggestion[] = suggestions.map(tag => ({
+      tag,
+      confidence: 0.5,
+      source: "content" as const
+    }));
+    
+    displayTagSuggestions(tagSuggestions);
 
     const titleInput = getEl<HTMLInputElement>("titleInput");
     const folderInput = getEl<HTMLSelectElement>("folderInput");

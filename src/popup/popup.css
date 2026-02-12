@@ -260,3 +260,151 @@ body {
   background: #e0e7ff;
   color: #3730a3;
 }
+
+/* Tag suggestions */
+.tag-suggestions {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-suggestions-label {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  border: 1px solid #c4b5fd;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #5b21b6;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 150px;
+}
+
+.tag-chip:hover {
+  background: linear-gradient(135deg, #ddd6fe, #c4b5fd);
+  border-color: #a78bfa;
+}
+
+.tag-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-chip-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(91, 33, 182, 0.2);
+  color: #5b21b6;
+  font-size: 10px;
+  font-weight: bold;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tag-chip-dismiss:hover {
+  background: rgba(91, 33, 182, 0.4);
+}
+
+.tag-chip.source-metadata {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.tag-chip.source-metadata:hover {
+  background: linear-gradient(135deg, #bfdbfe, #93c5fd);
+  border-color: #60a5fa;
+}
+
+.tag-chip.source-metadata .tag-chip-dismiss {
+  background: rgba(30, 64, 175, 0.2);
+  color: #1e40af;
+}
+
+.tag-chip.source-metadata .tag-chip-dismiss:hover {
+  background: rgba(30, 64, 175, 0.4);
+}
+
+.tag-chip.source-domain {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  border-color: #86efac;
+  color: #166534;
+}
+
+.tag-chip.source-domain:hover {
+  background: linear-gradient(135deg, #bbf7d0, #86efac);
+  border-color: #4ade80;
+}
+
+.tag-chip.source-domain .tag-chip-dismiss {
+  background: rgba(22, 101, 52, 0.2);
+  color: #166534;
+}
+
+.tag-chip.source-domain .tag-chip-dismiss:hover {
+  background: rgba(22, 101, 52, 0.4);
+}
+
+.tag-chip.source-content {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.tag-chip.source-content:hover {
+  background: linear-gradient(135deg, #fde68a, #fcd34d);
+  border-color: #fbbf24;
+}
+
+.tag-chip.source-content .tag-chip-dismiss {
+  background: rgba(146, 64, 14, 0.2);
+  color: #92400e;
+}
+
+.tag-chip.source-content .tag-chip-dismiss:hover {
+  background: rgba(146, 64, 14, 0.4);
+}
+
+.tag-chip.source-category {
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  border-color: #f9a8d4;
+  color: #9d174d;
+}
+
+.tag-chip.source-category:hover {
+  background: linear-gradient(135deg, #fbcfe8, #f9a8d4);
+  border-color: #f472b6;
+}
+
+.tag-chip.source-category .tag-chip-dismiss {
+  background: rgba(157, 23, 77, 0.2);
+  color: #9d174d;
+}
+
+.tag-chip.source-category .tag-chip-dismiss:hover {
+  background: rgba(157, 23, 77, 0.4);
+}
