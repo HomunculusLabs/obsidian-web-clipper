@@ -701,10 +701,11 @@ async function main(): Promise<void> {
 
     // --json mode: output structured JSON to stdout
     if (opts.json) {
-      const output: ClipOutput & { markdown: string; content: string } = {
+      const output: ClipOutput & { markdown: string; content: string; tags: string[] } = {
         ...result,
         markdown: result.success ? buildFullMarkdown(result, opts) : "",
         content: result.markdown,
+        tags: opts.tags,
       };
       console.log(JSON.stringify(output, null, 2));
     } else {
