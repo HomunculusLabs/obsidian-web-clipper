@@ -9,6 +9,7 @@
 // Import built-in templates to trigger registration
 import "./reddit";
 import "./hackernews";
+import "./stackoverflow";
 
 export {
   // Template registration
@@ -61,3 +62,21 @@ export {
   extractStoriesFromListing,
   formatStoriesListing
 } from "./hackernews";
+
+export {
+  stackOverflowTemplate,
+  stackExchangeTemplate,
+  serverFaultTemplate,
+  superUserTemplate,
+  askUbuntuTemplate,
+  extractQuestionId,
+  extractVoteCount,
+  extractCodeLanguage,
+  enhanceCodeBlocks,
+  isAcceptedAnswer,
+  extractQuestionBody,
+  extractQuestionTags,
+  extractAnswers,
+  formatStackOverflowContent,
+  extractStackOverflowQuestion
+} from "./stackoverflow";
