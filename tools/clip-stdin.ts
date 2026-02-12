@@ -25,28 +25,18 @@
  *   curl -s https://example.com/api/content | bun run tools/clip-stdin.ts --source "https://example.com/api" --title "API Response"
  */
 
-import { resolve } from "node:path";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 import { sanitizeFilename } from "../src/shared/sanitize";
-import {
-  buildFrontmatterYaml,
-  type FrontmatterInput
-} from "../src/shared/markdown";
+import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
 import type { ClipContentType } from "../src/shared/types";
+import { createLogger, type CommonCLIOptions, type Logger } from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface CLIOptions {
+interface CLIOptions extends CommonCLIOptions {
   title: string;
   source: string;
   type: ClipContentType;
-  cli: boolean;
-  cliPath: string;
-  vault: string;
-  folder: string;
-  tags: string[];
-  json: boolean;
-  stdout: boolean;
   overwrite: boolean;
   append: boolean;
   author: string;
@@ -62,7 +52,7 @@ interface ClipOutput {
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): CLIOptions {
+function parseArgs(argv: string[], log: Logger): CLIOptions {
   const opts: CLIOptions = {
     title: "",
     source: "stdin",
@@ -76,7 +66,10 @@ function parseArgs(argv: string[]): CLIOptions {
     stdout: false,
     overwrite: true,
     append: false,
-    author: ""
+    author: "",
+    profile: null,
+    headless: true,
+    wait: 5000,
   };
 
   let i = 0;
@@ -129,7 +122,7 @@ function parseArgs(argv: string[]): CLIOptions {
       printHelp();
       process.exit(0);
     } else {
-      console.error(`Unknown argument: ${arg}`);
+      log.error(`Unknown argument: ${arg}`);
       printHelp();
       process.exit(1);
     }
@@ -188,12 +181,6 @@ EXAMPLES:
 `);
 }
 
-// ─── Logging (stderr when --json/--stdout so stdout stays clean) ─────────────
-
-function log(...args: any[]): void {
-  console.error(...args);
-}
-
 // ─── Core Logic ──────────────────────────────────────────────────────────────
 
 async function readStdin(): Promise<string> {
@@ -235,7 +222,7 @@ function buildFullMarkdown(content: string, opts: CLIOptions): { markdown: strin
     type: opts.type,
     dateClippedISO: new Date().toISOString(),
     tags: opts.tags,
-    author: opts.author || undefined
+    author: opts.author || undefined,
   };
 
   const frontmatter = buildFrontmatterYaml(frontmatterInput);
@@ -260,7 +247,7 @@ async function processAndSave(content: string, opts: CLIOptions): Promise<ClipOu
     success: true,
     title,
     filePath,
-    markdown
+    markdown,
   };
 
   // --stdout mode: dump markdown to stdout
@@ -295,7 +282,8 @@ async function processAndSave(content: string, opts: CLIOptions): Promise<ClipOu
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  const log = createLogger();
+  const opts = parseArgs(process.argv.slice(2), log);
 
   log(`\n📎 Stdin Markdown Clipper`);
   if (opts.title) {
@@ -311,13 +299,14 @@ async function main(): Promise<void> {
   let content: string;
   try {
     content = await readStdin();
-  } catch (err: any) {
-    console.error(`Failed to read stdin: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.error(`Failed to read stdin: ${message}`);
     process.exit(1);
   }
 
   if (!content.trim()) {
-    console.error("No content provided on stdin");
+    log.error("No content provided on stdin");
     process.exit(1);
   }
 

@@ -28,36 +28,29 @@
  *   bun run tools/clip-url.ts --no-headless https://example.com
  */
 
-import puppeteer, { type Browser, type Page } from "puppeteer";
 import { resolve } from "node:path";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 import { sanitizeFilename } from "../src/shared/sanitize";
-import {
-  buildFrontmatterYaml,
-  type FrontmatterInput
-} from "../src/shared/markdown";
+import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
 import {
   detectPageType,
-  isYouTubeUrl,
-  isPdfUrl
 } from "../src/shared/pageType";
-import type { ClipResult, ClipContentType, PageType } from "../src/shared/types";
+import type { ClipContentType, PageType } from "../src/shared/types";
+import {
+  launchBrowser,
+  createPage,
+  createLogger,
+  htmlToMarkdown,
+  extractWebContentInPage,
+  type CommonCLIOptions,
+  type Logger,
+} from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface CLIOptions {
+interface CLIOptions extends CommonCLIOptions {
   url: string;
-  cli: boolean;
-  cliPath: string;
-  vault: string;
-  folder: string;
-  profile: string | null;
-  headless: boolean;
-  wait: number;
-  tags: string[];
-  json: boolean;
-  stdout: boolean;
-  timestamps: boolean; // For YouTube transcripts
+  timestamps: boolean;
 }
 
 interface ClipOutput {
@@ -66,13 +59,24 @@ interface ClipOutput {
   title: string;
   pageType: PageType;
   markdown: string;
-  metadata: ClipResult["metadata"];
+  metadata: ClipMetadata;
   error?: string;
+}
+
+interface ClipMetadata {
+  url: string;
+  title: string;
+  type: ClipContentType;
+  author?: string;
+  channel?: string;
+  duration?: string;
+  description?: string;
+  publishedDate?: string;
 }
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): CLIOptions {
+function parseArgs(argv: string[], log: Logger): CLIOptions {
   const opts: CLIOptions = {
     url: "",
     cli: false,
@@ -85,7 +89,7 @@ function parseArgs(argv: string[]): CLIOptions {
     tags: ["web-clip"],
     json: false,
     stdout: false,
-    timestamps: true
+    timestamps: true,
   };
 
   let i = 0;
@@ -129,7 +133,7 @@ function parseArgs(argv: string[]): CLIOptions {
     } else if (arg.startsWith("http")) {
       opts.url = arg;
     } else {
-      console.error(`Unknown argument: ${arg}`);
+      log.error(`Unknown argument: ${arg}`);
       printHelp();
       process.exit(1);
     }
@@ -179,233 +183,7 @@ EXAMPLES:
 `);
 }
 
-// ─── Logging (stderr when --json/--stdout so stdout stays clean) ─────────────
-
-function log(...args: any[]): void {
-  console.error(...args);
-}
-
 // ─── Page Extraction Functions ───────────────────────────────────────────────
-
-/**
- * Extract web page content using Readability-style extraction in browser context
- */
-function extractWebContentInPage(): {
-  title: string;
-  content: string;
-  excerpt: string;
-  byline: string;
-  publishedTime: string;
-} {
-  // Simple content extraction using DOM APIs
-  const title =
-    document.querySelector("meta[property='og:title']")?.getAttribute("content") ||
-    document.querySelector("title")?.textContent ||
-    "Untitled";
-
-  // Try to find main content
-  const mainSelectors = [
-    "article",
-    "[role='main']",
-    "main",
-    ".post-content",
-    ".article-content",
-    ".entry-content",
-    ".content"
-  ];
-
-  let contentEl: Element | null = null;
-  for (const selector of mainSelectors) {
-    contentEl = document.querySelector(selector);
-    if (contentEl) break;
-  }
-
-  // Fallback to body
-  if (!contentEl) {
-    contentEl = document.body;
-  }
-
-  // Get excerpt
-  const excerpt =
-    document.querySelector("meta[name='description']")?.getAttribute("content") ||
-    document.querySelector("meta[property='og:description']")?.getAttribute("content") ||
-    "";
-
-  // Get author
-  const byline =
-    document.querySelector("meta[name='author']")?.getAttribute("content") ||
-    document.querySelector("[rel='author']")?.textContent ||
-    "";
-
-  // Get publish date
-  const publishedTime =
-    document.querySelector("meta[property='article:published_time']")?.getAttribute("content") ||
-    document.querySelector("time")?.getAttribute("datetime") ||
-    "";
-
-  // Clean up content - remove scripts, styles, nav, etc.
-  const clone = contentEl.cloneNode(true) as Element;
-  const removeSelectors = [
-    "script",
-    "style",
-    "nav",
-    "header",
-    "footer",
-    "aside",
-    ".sidebar",
-    ".comments",
-    ".advertisement",
-    ".ad",
-    ".social-share",
-    "[role='navigation']"
-  ];
-
-  for (const selector of removeSelectors) {
-    clone.querySelectorAll(selector).forEach((el) => el.remove());
-  }
-
-  return {
-    title: title.trim(),
-    content: clone.innerHTML,
-    excerpt: excerpt.trim(),
-    byline: byline.trim(),
-    publishedTime: publishedTime.trim()
-  };
-}
-
-/**
- * Convert HTML to markdown (lightweight, runs in browser context)
- */
-function htmlToMarkdown(html: string): string {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const body = doc.body;
-
-  // Code blocks
-  body.querySelectorAll("pre").forEach((pre) => {
-    const code = pre.querySelector("code");
-    const lang =
-      code?.className?.match(/language-(\w+)/)?.[1] ||
-      pre.className?.match(/language-(\w+)/)?.[1] ||
-      "";
-    const text = code?.textContent || pre.textContent || "";
-    const ph = document.createElement("p");
-    ph.textContent = `\n\`\`\`${lang}\n${text}\n\`\`\`\n`;
-    pre.replaceWith(ph);
-  });
-
-  // Inline code
-  body.querySelectorAll("code").forEach((el) => {
-    if (!el.closest("pre")) {
-      el.textContent = `\`${el.textContent}\``;
-    }
-  });
-
-  // Headers
-  for (let i = 1; i <= 6; i++) {
-    body.querySelectorAll(`h${i}`).forEach((el) => {
-      el.textContent = `${"#".repeat(i)} ${el.textContent}\n\n`;
-    });
-  }
-
-  // Bold
-  body.querySelectorAll("strong, b").forEach((el) => {
-    el.textContent = `**${el.textContent}**`;
-  });
-
-  // Italic
-  body.querySelectorAll("em, i").forEach((el) => {
-    el.textContent = `*${el.textContent}*`;
-  });
-
-  // Links
-  body.querySelectorAll("a").forEach((el) => {
-    const href = el.getAttribute("href") || "";
-    const text = el.textContent || "";
-    if (href && text) {
-      el.textContent = `[${text}](${href})`;
-    }
-  });
-
-  // Images
-  body.querySelectorAll("img").forEach((el) => {
-    const src = el.getAttribute("src") || "";
-    const alt = el.getAttribute("alt") || "image";
-    if (src) {
-      const ph = document.createElement("p");
-      ph.textContent = `![${alt}](${src})\n`;
-      el.replaceWith(ph);
-    }
-  });
-
-  // Unordered lists
-  body.querySelectorAll("ul").forEach((ul) => {
-    const items = ul.querySelectorAll(":scope > li");
-    let text = "\n";
-    items.forEach((li) => {
-      text += `- ${li.textContent?.trim()}\n`;
-    });
-    text += "\n";
-    const ph = document.createElement("p");
-    ph.textContent = text;
-    ul.replaceWith(ph);
-  });
-
-  // Ordered lists
-  body.querySelectorAll("ol").forEach((ol) => {
-    const items = ol.querySelectorAll(":scope > li");
-    let text = "\n";
-    items.forEach((li, i) => {
-      text += `${i + 1}. ${li.textContent?.trim()}\n`;
-    });
-    text += "\n";
-    const ph = document.createElement("p");
-    ph.textContent = text;
-    ol.replaceWith(ph);
-  });
-
-  // Blockquotes
-  body.querySelectorAll("blockquote").forEach((bq) => {
-    const lines = (bq.textContent || "").split("\n");
-    bq.textContent = lines.map((l) => `> ${l}`).join("\n") + "\n\n";
-  });
-
-  // Tables
-  body.querySelectorAll("table").forEach((table) => {
-    const rows = table.querySelectorAll("tr");
-    let md = "\n";
-    rows.forEach((row, rowIdx) => {
-      const cells = row.querySelectorAll("th, td");
-      const cellTexts: string[] = [];
-      cells.forEach((cell) =>
-        cellTexts.push((cell.textContent || "").trim())
-      );
-      md += `| ${cellTexts.join(" | ")} |\n`;
-      if (rowIdx === 0) {
-        md += `| ${cellTexts.map(() => "---").join(" | ")} |\n`;
-      }
-    });
-    md += "\n";
-    const ph = document.createElement("p");
-    ph.textContent = md;
-    table.replaceWith(ph);
-  });
-
-  // Paragraphs
-  body.querySelectorAll("p").forEach((p) => {
-    if (!p.textContent?.trim()) return;
-    p.textContent = `${p.textContent?.trim()}\n\n`;
-  });
-
-  // Br tags
-  body.querySelectorAll("br").forEach((br) => {
-    br.replaceWith(document.createTextNode("\n"));
-  });
-
-  let text = body.textContent || "";
-  text = text.replace(/\n{3,}/g, "\n\n").trim();
-
-  return text;
-}
 
 /**
  * Extract YouTube video info and transcript
@@ -442,7 +220,12 @@ function extractYouTubeInPage(): {
 
 // ─── Core Extraction Logic ───────────────────────────────────────────────────
 
-async function clipUrl(page: Page, url: string, opts: CLIOptions): Promise<ClipOutput> {
+async function clipUrl(
+  page: import("puppeteer").Page,
+  url: string,
+  opts: CLIOptions,
+  log: Logger
+): Promise<ClipOutput> {
   const pageType = detectPageType(url);
   const result: ClipOutput = {
     success: false,
@@ -453,8 +236,8 @@ async function clipUrl(page: Page, url: string, opts: CLIOptions): Promise<ClipO
     metadata: {
       url,
       title: "",
-      type: "article"
-    }
+      type: "article",
+    },
   };
 
   try {
@@ -465,24 +248,24 @@ async function clipUrl(page: Page, url: string, opts: CLIOptions): Promise<ClipO
     await new Promise((r) => setTimeout(r, opts.wait));
 
     if (pageType === "youtube") {
-      return await extractYouTube(page, url, opts);
+      return await extractYouTube(page, url, opts, log);
     } else if (pageType === "pdf") {
-      // PDF extraction is more complex, requires offscreen document in extension
-      // For CLI tool, we'll extract text from PDF viewer if available
-      return await extractPdfFromViewer(page, url, opts);
+      return await extractPdfFromViewer(page, url, opts, log);
     } else {
-      return await extractWebPage(page, url, opts);
+      return await extractWebPage(page, url, opts, log);
     }
-  } catch (err: any) {
-    result.error = err.message || String(err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    result.error = message;
     return result;
   }
 }
 
 async function extractWebPage(
-  page: Page,
+  page: import("puppeteer").Page,
   url: string,
-  opts: CLIOptions
+  opts: CLIOptions,
+  log: Logger
 ): Promise<ClipOutput> {
   const result: ClipOutput = {
     success: false,
@@ -493,13 +276,143 @@ async function extractWebPage(
     metadata: {
       url,
       title: "",
-      type: "article"
-    }
+      type: "article",
+    },
   };
 
   try {
     const pageData = await page.evaluate(extractWebContentInPage);
-    const markdown = await page.evaluate(htmlToMarkdown, pageData.content);
+    const markdown = await page.evaluate(
+      (html: string) => {
+        // Inline htmlToMarkdown for browser context
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const body = doc.body;
+
+        // Code blocks
+        body.querySelectorAll("pre").forEach((pre) => {
+          const code = pre.querySelector("code");
+          const lang = code?.className?.match(/language-(\w+)/)?.[1] || "";
+          const text = code?.textContent || pre.textContent || "";
+          const ph = document.createElement("p");
+          ph.textContent = `\n\`\`\`${lang}\n${text}\n\`\`\`\n`;
+          pre.replaceWith(ph);
+        });
+
+        // Inline code
+        body.querySelectorAll("code").forEach((el) => {
+          if (!el.closest("pre")) {
+            el.textContent = `\`${el.textContent}\``;
+          }
+        });
+
+        // Headers
+        for (let i = 1; i <= 6; i++) {
+          body.querySelectorAll(`h${i}`).forEach((el) => {
+            el.textContent = `${"#".repeat(i)} ${el.textContent}\n\n`;
+          });
+        }
+
+        // Bold
+        body.querySelectorAll("strong, b").forEach((el) => {
+          el.textContent = `**${el.textContent}**`;
+        });
+
+        // Italic
+        body.querySelectorAll("em, i").forEach((el) => {
+          el.textContent = `*${el.textContent}*`;
+        });
+
+        // Links
+        body.querySelectorAll("a").forEach((el) => {
+          const href = el.getAttribute("href") || "";
+          const text = el.textContent || "";
+          if (href && text) {
+            el.textContent = `[${text}](${href})`;
+          }
+        });
+
+        // Images
+        body.querySelectorAll("img").forEach((el) => {
+          const src = el.getAttribute("src") || "";
+          const alt = el.getAttribute("alt") || "image";
+          if (src) {
+            const ph = document.createElement("p");
+            ph.textContent = `![${alt}](${src})\n`;
+            el.replaceWith(ph);
+          }
+        });
+
+        // Unordered lists
+        body.querySelectorAll("ul").forEach((ul) => {
+          const items = ul.querySelectorAll(":scope > li");
+          let text = "\n";
+          items.forEach((li) => {
+            text += `- ${li.textContent?.trim()}\n`;
+          });
+          text += "\n";
+          const ph = document.createElement("p");
+          ph.textContent = text;
+          ul.replaceWith(ph);
+        });
+
+        // Ordered lists
+        body.querySelectorAll("ol").forEach((ol) => {
+          const items = ol.querySelectorAll(":scope > li");
+          let text = "\n";
+          items.forEach((li, i) => {
+            text += `${i + 1}. ${li.textContent?.trim()}\n`;
+          });
+          text += "\n";
+          const ph = document.createElement("p");
+          ph.textContent = text;
+          ol.replaceWith(ph);
+        });
+
+        // Blockquotes
+        body.querySelectorAll("blockquote").forEach((bq) => {
+          const lines = (bq.textContent || "").split("\n");
+          bq.textContent = lines.map((l) => `> ${l}`).join("\n") + "\n\n";
+        });
+
+        // Tables
+        body.querySelectorAll("table").forEach((table) => {
+          const rows = table.querySelectorAll("tr");
+          let md = "\n";
+          rows.forEach((row, rowIdx) => {
+            const cells = row.querySelectorAll("th, td");
+            const cellTexts: string[] = [];
+            cells.forEach((cell) =>
+              cellTexts.push((cell.textContent || "").trim())
+            );
+            md += `| ${cellTexts.join(" | ")} |\n`;
+            if (rowIdx === 0) {
+              md += `| ${cellTexts.map(() => "---").join(" | ")} |\n`;
+            }
+          });
+          md += "\n";
+          const ph = document.createElement("p");
+          ph.textContent = md;
+          table.replaceWith(ph);
+        });
+
+        // Paragraphs
+        body.querySelectorAll("p").forEach((p) => {
+          if (!p.textContent?.trim()) return;
+          p.textContent = `${p.textContent?.trim()}\n\n`;
+        });
+
+        // Br tags
+        body.querySelectorAll("br").forEach((br) => {
+          br.replaceWith(document.createTextNode("\n"));
+        });
+
+        let text = body.textContent || "";
+        text = text.replace(/\n{3,}/g, "\n\n").trim();
+
+        return text;
+      },
+      pageData.content
+    );
 
     result.title = pageData.title;
     result.metadata.title = pageData.title;
@@ -519,16 +432,18 @@ async function extractWebPage(
 
     log(`  ✓ Extracted web page: "${pageData.title}"`);
     return result;
-  } catch (err: any) {
-    result.error = `Failed to extract web page: ${err.message}`;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    result.error = `Failed to extract web page: ${message}`;
     return result;
   }
 }
 
 async function extractYouTube(
-  page: Page,
+  page: import("puppeteer").Page,
   url: string,
-  opts: CLIOptions
+  opts: CLIOptions,
+  log: Logger
 ): Promise<ClipOutput> {
   const result: ClipOutput = {
     success: false,
@@ -539,8 +454,8 @@ async function extractYouTube(
     metadata: {
       url,
       title: "",
-      type: "video"
-    }
+      type: "video",
+    },
   };
 
   try {
@@ -556,7 +471,7 @@ async function extractYouTube(
     result.metadata.description = videoInfo.description;
 
     // Try to get transcript
-    const transcript = await getYouTubeTranscriptInPage(page);
+    const transcript = await getYouTubeTranscriptInPage(page, opts.timestamps);
 
     let bodyMarkdown = `# ${videoInfo.title}\n\n`;
     bodyMarkdown += `**Channel:** ${videoInfo.channel || "Unknown"}\n`;
@@ -578,13 +493,17 @@ async function extractYouTube(
 
     log(`  ✓ Extracted YouTube video: "${videoInfo.title}"`);
     return result;
-  } catch (err: any) {
-    result.error = `Failed to extract YouTube video: ${err.message}`;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    result.error = `Failed to extract YouTube video: ${message}`;
     return result;
   }
 }
 
-async function getYouTubeTranscriptInPage(page: Page): Promise<string | null> {
+async function getYouTubeTranscriptInPage(
+  page: import("puppeteer").Page,
+  includeTimestamps: boolean
+): Promise<string | null> {
   try {
     // Try to click "Show transcript" button if available
     const transcriptButton = await page.$(
@@ -594,12 +513,12 @@ async function getYouTubeTranscriptInPage(page: Page): Promise<string | null> {
     if (transcriptButton) {
       await transcriptButton.click();
       await page.waitForSelector("ytd-transcript-segment-renderer", {
-        timeout: 5000
+        timeout: 5000,
       }).catch(() => {});
     }
 
     // Try to extract transcript from the panel
-    const transcript = await page.evaluate(() => {
+    const transcript = await page.evaluate((timestamps) => {
       const segments = document.querySelectorAll(
         "ytd-transcript-segment-renderer, .cue-group"
       );
@@ -610,13 +529,11 @@ async function getYouTubeTranscriptInPage(page: Page): Promise<string | null> {
         const timeEl = seg.querySelector(
           ".segment-timestamp, .cue-group-start-offset"
         );
-        const textEl = seg.querySelector(
-          ".segment-text, .cue"
-        );
+        const textEl = seg.querySelector(".segment-text, .cue");
         if (textEl?.textContent?.trim()) {
           const time = timeEl?.textContent?.trim() || "";
           const text = textEl.textContent.trim();
-          if (time) {
+          if (timestamps && time) {
             lines.push(`**[${time}]** ${text}`);
           } else {
             lines.push(text);
@@ -625,7 +542,7 @@ async function getYouTubeTranscriptInPage(page: Page): Promise<string | null> {
       });
 
       return lines.length > 0 ? lines.join("\n\n") : null;
-    });
+    }, includeTimestamps);
 
     return transcript;
   } catch {
@@ -634,9 +551,10 @@ async function getYouTubeTranscriptInPage(page: Page): Promise<string | null> {
 }
 
 async function extractPdfFromViewer(
-  page: Page,
+  page: import("puppeteer").Page,
   url: string,
-  opts: CLIOptions
+  opts: CLIOptions,
+  log: Logger
 ): Promise<ClipOutput> {
   const result: ClipOutput = {
     success: false,
@@ -647,8 +565,8 @@ async function extractPdfFromViewer(
     metadata: {
       url,
       title: "",
-      type: "document"
-    }
+      type: "document",
+    },
   };
 
   try {
@@ -679,8 +597,9 @@ async function extractPdfFromViewer(
 
     log(`  ✓ PDF detected: "${result.title}" (limited extraction)`);
     return result;
-  } catch (err: any) {
-    result.error = `Failed to extract PDF: ${err.message}`;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    result.error = `Failed to extract PDF: ${message}`;
     return result;
   }
 }
@@ -702,15 +621,15 @@ function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
     channel: result.metadata.channel,
     duration: result.metadata.duration,
     extra: {
-      page_type: result.pageType
-    }
+      page_type: result.pageType,
+    },
   };
 
   const frontmatter = buildFrontmatterYaml(frontmatterInput);
   return frontmatter + result.markdown + (result.markdown.endsWith("\n") ? "" : "\n");
 }
 
-async function saveResult(result: ClipOutput, opts: CLIOptions): Promise<void> {
+async function saveResult(result: ClipOutput, opts: CLIOptions, log: Logger): Promise<void> {
   if (!result.success) {
     log(`  ✗ Failed: ${result.error}`);
     return;
@@ -755,10 +674,11 @@ async function saveResult(result: ClipOutput, opts: CLIOptions): Promise<void> {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  const log = createLogger();
+  const opts = parseArgs(process.argv.slice(2), log);
 
   if (!opts.url) {
-    console.error("No URL provided. Use --help for usage info.");
+    log.error("No URL provided. Use --help for usage info.");
     process.exit(1);
   }
 
@@ -766,37 +686,29 @@ async function main(): Promise<void> {
   log(`   URL: ${opts.url}`);
   log(`   Type: ${detectPageType(opts.url)}\n`);
 
-  const launchOpts: Parameters<typeof puppeteer.launch>[0] = {
-    headless: opts.headless,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  };
-
   if (opts.profile) {
-    launchOpts.userDataDir = resolve(opts.profile);
     log(`   Using Chrome profile: ${opts.profile}\n`);
   }
 
-  const browser: Browser = await puppeteer.launch(launchOpts);
+  const browser = await launchBrowser({
+    headless: opts.headless,
+    profile: opts.profile,
+  });
 
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 900 });
-    await page.setUserAgent(
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    );
-
-    const result = await clipUrl(page, opts.url, opts);
+    const page = await createPage(browser);
+    const result = await clipUrl(page, opts.url, opts, log);
 
     // --json mode: output structured JSON to stdout
     if (opts.json) {
       const output: ClipOutput & { markdown: string; content: string } = {
         ...result,
         markdown: result.success ? buildFullMarkdown(result, opts) : "",
-        content: result.markdown
+        content: result.markdown,
       };
       console.log(JSON.stringify(output, null, 2));
     } else {
-      await saveResult(result, opts);
+      await saveResult(result, opts, log);
     }
 
     if (result.success) {

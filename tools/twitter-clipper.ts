@@ -38,28 +38,25 @@
  *   bun add puppeteer    (or: npm install puppeteer)
  */
 
-import puppeteer, { type Browser, type Page } from "puppeteer";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 import { sanitizeFilename } from "../src/shared/sanitize";
 import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
+import {
+  launchBrowser,
+  createPage,
+  resolveUrls,
+  createLogger,
+  formatNumber,
+  parseEngagementCount,
+  type CommonCLIOptions,
+  type Logger,
+} from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface CLIOptions {
+interface CLIOptions extends CommonCLIOptions {
   urls: string[];
-  cli: boolean;
-  cliPath: string;
-  vault: string;
-  folder: string;
-  profile: string | null;
-  headless: boolean;
-  wait: number;
-  tags: string[];
-  json: boolean;
-  stdout: boolean;
 }
 
 interface TwitterMedia {
@@ -136,7 +133,7 @@ interface ThreadResult {
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): CLIOptions {
+function parseArgs(argv: string[], log: Logger): CLIOptions {
   const opts: CLIOptions = {
     urls: [],
     cli: false,
@@ -159,7 +156,7 @@ function parseArgs(argv: string[]): CLIOptions {
       i++;
       const filePath = argv[i];
       if (!filePath) {
-        console.error("--file requires a path argument");
+        log.error("--file requires a path argument");
         process.exit(1);
       }
       opts.urls.push(`@file:${filePath}`);
@@ -195,7 +192,7 @@ function parseArgs(argv: string[]): CLIOptions {
     } else if (arg.startsWith("http")) {
       opts.urls.push(arg);
     } else {
-      console.error(`Unknown argument: ${arg}`);
+      log.error(`Unknown argument: ${arg}`);
       printHelp();
       process.exit(1);
     }
@@ -245,83 +242,6 @@ EXAMPLES:
 `);
 }
 
-// ─── URL Resolution ──────────────────────────────────────────────────────────
-
-async function resolveUrls(rawUrls: string[]): Promise<string[]> {
-  const resolved: string[] = [];
-
-  for (const entry of rawUrls) {
-    if (entry.startsWith("@file:")) {
-      const filePath = entry.slice(6);
-      if (!existsSync(filePath)) {
-        console.error(`File not found: ${filePath}`);
-        process.exit(1);
-      }
-      const content = await readFile(filePath, "utf-8");
-      const lines = content
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0 && !l.startsWith("#"));
-      resolved.push(...lines);
-    } else {
-      resolved.push(entry);
-    }
-  }
-
-  // Validate URLs
-  for (const url of resolved) {
-    if (!url.includes("twitter.com") && !url.includes("x.com")) {
-      console.warn(`⚠ URL doesn't look like Twitter/X: ${url}`);
-    }
-  }
-
-  return resolved;
-}
-
-// ─── Logging (stderr when --json/--stdout so stdout stays clean) ─────────────
-
-function log(...args: any[]): void {
-  console.error(...args);
-}
-
-// ─── Helper Functions ────────────────────────────────────────────────────────
-
-/**
- * Format a number for display (e.g., 1234 -> "1.2K")
- */
-function formatNumber(num: number): string {
-  if (num >= 1000000000) {
-    return `${(num / 1000000000).toFixed(1)}B`;
-  } else if (num >= 1000000) {
-    return `${(num / 1000000).toFixed(1)}M`;
-  } else if (num >= 1000) {
-    return `${(num / 1000).toFixed(1)}K`;
-  }
-  return num.toString();
-}
-
-/**
- * Parse engagement count from aria-label strings like "123 replies", "1.2K Likes"
- */
-function parseEngagementCount(ariaLabel: string): number {
-  if (!ariaLabel) return 0;
-
-  const match = ariaLabel.match(/[\d,.]+[KkMmBb]?/);
-  if (!match) return 0;
-
-  let numStr = match[0].replace(/,/g, "");
-
-  if (numStr.endsWith("K") || numStr.endsWith("k")) {
-    return Math.round(parseFloat(numStr) * 1000);
-  } else if (numStr.endsWith("M") || numStr.endsWith("m")) {
-    return Math.round(parseFloat(numStr) * 1000000);
-  } else if (numStr.endsWith("B") || numStr.endsWith("b")) {
-    return Math.round(parseFloat(numStr) * 1000000000);
-  }
-
-  return parseInt(numStr, 10) || 0;
-}
-
 // ─── Page Extraction Functions ───────────────────────────────────────────────
 
 /**
@@ -333,30 +253,31 @@ function extractTweetId(url: string): string {
 }
 
 /**
- * Extract engagement stats from aria-labels in the page
+ * Extract engagement stats from aria-labels in the page (runs in browser context)
  */
 function extractEngagementInPage(): TwitterEngagement {
   const engagement: TwitterEngagement = {
     replies: 0,
     retweets: 0,
-    likes: 0
+    likes: 0,
   };
 
   const buttons = document.querySelectorAll('button[aria-label]');
 
   for (const button of buttons) {
     const label = button.getAttribute("aria-label")?.toLowerCase() || "";
+    const value = button.getAttribute("aria-label") || "";
 
     if (label.includes("repl")) {
-      engagement.replies = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.replies = parseEngagementCount(value);
     } else if (label.includes("repost") || label.includes("retweet")) {
-      engagement.retweets = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.retweets = parseEngagementCount(value);
     } else if (label.includes("like")) {
-      engagement.likes = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.likes = parseEngagementCount(value);
     } else if (label.includes("view")) {
-      engagement.views = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.views = parseEngagementCount(value);
     } else if (label.includes("bookmark")) {
-      engagement.bookmarks = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.bookmarks = parseEngagementCount(value);
     }
   }
 
@@ -364,7 +285,7 @@ function extractEngagementInPage(): TwitterEngagement {
 }
 
 /**
- * Get author handle from a tweet article element
+ * Get author handle from a tweet article element (runs in browser context)
  */
 function getAuthorHandleFromArticle(article: Element): string {
   const authorLinks = article.querySelectorAll('a[role="link"]');
@@ -378,7 +299,7 @@ function getAuthorHandleFromArticle(article: Element): string {
 }
 
 /**
- * Get tweet text from article element
+ * Get tweet text from article element (runs in browser context)
  */
 function getTextFromArticle(article: Element): string {
   const tweetTextEl = article.querySelector('div[data-testid="tweetText"]');
@@ -386,7 +307,7 @@ function getTextFromArticle(article: Element): string {
 }
 
 /**
- * Get timestamp from article element
+ * Get timestamp from article element (runs in browser context)
  */
 function getTimestampFromArticle(article: Element): string {
   const timeEl = article.querySelector("time");
@@ -394,7 +315,7 @@ function getTimestampFromArticle(article: Element): string {
 }
 
 /**
- * Get media from article element
+ * Get media from article element (runs in browser context)
  */
 function getMediaFromArticle(article: Element): TwitterMedia[] {
   const media: TwitterMedia[] = [];
@@ -406,12 +327,12 @@ function getMediaFromArticle(article: Element): TwitterMedia[] {
       media.push({
         type: "image",
         url: src,
-        altText: img.getAttribute("alt") || undefined
+        altText: img.getAttribute("alt") || undefined,
       });
     }
   }
 
-  const videos = article.querySelectorAll('video');
+  const videos = article.querySelectorAll("video");
   for (const video of videos) {
     const poster = video.getAttribute("poster");
     const src = video.querySelector("source")?.getAttribute("src") || poster;
@@ -419,7 +340,7 @@ function getMediaFromArticle(article: Element): TwitterMedia[] {
       const isGif = src.includes("tweet_video_gif") || video.hasAttribute("loop");
       media.push({
         type: isGif ? "gif" : "video",
-        url: poster || src
+        url: poster || src,
       });
     }
   }
@@ -428,29 +349,30 @@ function getMediaFromArticle(article: Element): TwitterMedia[] {
 }
 
 /**
- * Get engagement stats from a specific article element
+ * Get engagement stats from a specific article element (runs in browser context)
  */
 function getEngagementFromArticle(article: Element): TwitterEngagement {
   const engagement: TwitterEngagement = {
     replies: 0,
     retweets: 0,
-    likes: 0
+    likes: 0,
   };
 
   const buttons = article.querySelectorAll('button[aria-label]');
   for (const button of buttons) {
     const label = button.getAttribute("aria-label")?.toLowerCase() || "";
+    const value = button.getAttribute("aria-label") || "";
 
     if (label.includes("repl")) {
-      engagement.replies = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.replies = parseEngagementCount(value);
     } else if (label.includes("repost") || label.includes("retweet")) {
-      engagement.retweets = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.retweets = parseEngagementCount(value);
     } else if (label.includes("like")) {
-      engagement.likes = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.likes = parseEngagementCount(value);
     } else if (label.includes("view")) {
-      engagement.views = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.views = parseEngagementCount(value);
     } else if (label.includes("bookmark")) {
-      engagement.bookmarks = parseEngagementCount(button.getAttribute("aria-label") || "");
+      engagement.bookmarks = parseEngagementCount(value);
     }
   }
 
@@ -458,7 +380,7 @@ function getEngagementFromArticle(article: Element): TwitterEngagement {
 }
 
 /**
- * Get quoted tweet from article element
+ * Get quoted tweet from article element (runs in browser context)
  */
 function getQuotedTweetFromArticle(article: Element): TwitterThreadTweet["quotedTweet"] {
   const quoteContainer = article.querySelector('div[data-testid="tweet"] > div[role="link"]');
@@ -472,12 +394,12 @@ function getQuotedTweetFromArticle(article: Element): TwitterThreadTweet["quoted
 
   return {
     authorHandle: quoteHandleMatch[1],
-    text: quoteText
+    text: quoteText,
   };
 }
 
 /**
- * Check for retweet indicator
+ * Check for retweet indicator (runs in browser context)
  */
 function getRetweetInfo(article: Element): { retweeterHandle: string; retweeterName: string } | null {
   const socialContext = article.querySelector('[data-testid="socialContext"]');
@@ -498,7 +420,7 @@ function getRetweetInfo(article: Element): { retweeterHandle: string; retweeterN
 }
 
 /**
- * Get original author from a retweet article
+ * Get original author from a retweet article (runs in browser context)
  */
 function getOriginalAuthorFromArticle(article: Element): { handle: string; name: string } {
   let handle = "";
@@ -524,7 +446,7 @@ function getOriginalAuthorFromArticle(article: Element): { handle: string; name:
 }
 
 /**
- * Check for thread continuation indicator
+ * Check for thread continuation indicator (runs in browser context)
  */
 function hasThreadContinuation(): boolean {
   const showMoreButtons = document.querySelectorAll('div[role="button"], span');
@@ -542,8 +464,7 @@ function hasThreadContinuation(): boolean {
 }
 
 /**
- * Detect and extract a thread of tweets from the page.
- * Runs in browser context.
+ * Detect and extract a thread of tweets from the page (runs in browser context)
  */
 function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
   const threadTweets: TwitterThreadTweet[] = [];
@@ -570,7 +491,7 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
           position: 1,
           media: getMediaFromArticle(article),
           engagement: getEngagementFromArticle(article),
-          quotedTweet: getQuotedTweetFromArticle(article)
+          quotedTweet: getQuotedTweetFromArticle(article),
         });
       }
       continue;
@@ -586,7 +507,7 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
         position,
         media: getMediaFromArticle(article),
         engagement: getEngagementFromArticle(article),
-        quotedTweet: getQuotedTweetFromArticle(article)
+        quotedTweet: getQuotedTweetFromArticle(article),
       });
     } else {
       const retweetInfo = getRetweetInfo(article);
@@ -605,7 +526,7 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
           quotedTweet: getQuotedTweetFromArticle(article),
           isRetweet: true,
           retweetAuthorHandle: originalAuthor.handle || handle,
-          retweetAuthorName: originalAuthor.name
+          retweetAuthorName: originalAuthor.name,
         });
       } else {
         threadEnded = true;
@@ -617,8 +538,7 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
 }
 
 /**
- * Extract tweet content from the page.
- * This function runs inside the browser context.
+ * Extract tweet content from the page (runs in browser context)
  */
 function extractTweetInPage(): ExtractedTweet {
   const url = window.location.href;
@@ -706,12 +626,12 @@ function extractTweetInPage(): ExtractedTweet {
         media.push({
           type: "image",
           url: src,
-          altText: img.getAttribute("alt") || undefined
+          altText: img.getAttribute("alt") || undefined,
         });
       }
     }
 
-    const videos = tweetArticle.querySelectorAll('video');
+    const videos = tweetArticle.querySelectorAll("video");
     for (const video of videos) {
       const poster = video.getAttribute("poster");
       const src = video.querySelector("source")?.getAttribute("src") || poster;
@@ -719,7 +639,7 @@ function extractTweetInPage(): ExtractedTweet {
         const isGif = src.includes("tweet_video_gif") || video.hasAttribute("loop");
         media.push({
           type: isGif ? "gif" : "video",
-          url: poster || src
+          url: poster || src,
         });
       }
     }
@@ -736,7 +656,7 @@ function extractTweetInPage(): ExtractedTweet {
     if (quoteText && quoteHandleMatch) {
       quotedTweet = {
         authorHandle: quoteHandleMatch[1],
-        text: quoteText
+        text: quoteText,
       };
     }
   }
@@ -762,16 +682,17 @@ function extractTweetInPage(): ExtractedTweet {
     media,
     engagement,
     quotedTweet,
-    hasMoreInThread
+    hasMoreInThread,
   };
 }
 
 // ─── Core Extraction Logic ───────────────────────────────────────────────────
 
 async function extractThread(
-  page: Page,
+  page: import("puppeteer").Page,
   url: string,
-  waitMs: number
+  waitMs: number,
+  log: Logger
 ): Promise<ThreadResult> {
   try {
     log(`  → Navigating to ${url}`);
@@ -784,7 +705,7 @@ async function extractThread(
     try {
       await page.waitForSelector('article[data-testid="tweet"]', { timeout: 15000 });
     } catch {
-      log("  ⚠ No tweet found after waiting. Page might require login.");
+      log.warn("No tweet found after waiting. Page might require login.");
     }
 
     // Additional wait for dynamic content
@@ -796,7 +717,7 @@ async function extractThread(
       return {
         url,
         success: false,
-        error: "No tweet content found — you may need to log in (use --profile or --no-headless)"
+        error: "No tweet content found — you may need to log in (use --profile or --no-headless)",
       };
     }
 
@@ -806,13 +727,14 @@ async function extractThread(
       url,
       success: true,
       tweet,
-      markdown: buildTweetMarkdown(tweet)
+      markdown: buildTweetMarkdown(tweet),
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return {
       url,
       success: false,
-      error: err.message || String(err)
+      error: message,
     };
   }
 }
@@ -848,7 +770,7 @@ function buildTweetMarkdown(tweet: ExtractedTweet): string {
       month: "long",
       day: "numeric",
       hour: "2-digit",
-      minute: "2-digit"
+      minute: "2-digit",
     });
     markdown += `> 📅 ${dateStr}\n\n`;
   }
@@ -875,7 +797,7 @@ function buildTweetMarkdown(tweet: ExtractedTweet): string {
           day: "numeric",
           year: "numeric",
           hour: "2-digit",
-          minute: "2-digit"
+          minute: "2-digit",
         });
         markdown += `*${dateStr}`;
         if (threadTweet.isRetweet) {
@@ -1009,8 +931,8 @@ function buildFullMarkdown(result: ThreadResult, opts: CLIOptions): string {
       tweet_id: tweet.tweetId,
       is_thread: tweet.isThread,
       thread_length: tweet.threadLength,
-      verified: tweet.isVerified
-    }
+      verified: tweet.isVerified,
+    },
   };
 
   const frontmatter = buildFrontmatterYaml(frontmatterInput);
@@ -1021,7 +943,7 @@ function buildFullMarkdown(result: ThreadResult, opts: CLIOptions): string {
 
 // ─── Save Logic ──────────────────────────────────────────────────────────────
 
-async function saveResult(result: ThreadResult, opts: CLIOptions): Promise<void> {
+async function saveResult(result: ThreadResult, opts: CLIOptions, log: Logger): Promise<void> {
   if (!result.success) {
     log(`  ✗ Failed: ${result.error}`);
     return;
@@ -1070,37 +992,39 @@ async function saveResult(result: ThreadResult, opts: CLIOptions): Promise<void>
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  const log = createLogger();
+  const opts = parseArgs(process.argv.slice(2), log);
+
   const urls = await resolveUrls(opts.urls);
 
+  // Validate URLs
+  for (const url of urls) {
+    if (!url.includes("twitter.com") && !url.includes("x.com")) {
+      log.warn(`URL doesn't look like Twitter/X: ${url}`);
+    }
+  }
+
   if (urls.length === 0) {
-    console.error("No URLs provided. Use --help for usage info.");
+    log.error("No URLs provided. Use --help for usage info.");
     process.exit(1);
   }
 
   log(`\n🔖 Twitter/X Headless Clipper`);
   log(`   ${urls.length} URL(s) to process\n`);
 
-  const launchOpts: Parameters<typeof puppeteer.launch>[0] = {
-    headless: opts.headless,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  };
-
   if (opts.profile) {
-    launchOpts.userDataDir = resolve(opts.profile);
     log(`   Using Chrome profile: ${opts.profile}\n`);
   }
 
-  const browser: Browser = await puppeteer.launch(launchOpts);
+  const browser = await launchBrowser({
+    headless: opts.headless,
+    profile: opts.profile,
+  });
+
   const allResults: ThreadResult[] = [];
 
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 900 });
-    await page.setUserAgent(
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    );
-
+    const page = await createPage(browser);
     let successCount = 0;
     let failCount = 0;
 
@@ -1108,7 +1032,7 @@ async function main(): Promise<void> {
       const url = urls[i];
       log(`\n[${i + 1}/${urls.length}] Processing: ${url}`);
 
-      const result = await extractThread(page, url, opts.wait);
+      const result = await extractThread(page, url, opts.wait, log);
       allResults.push(result);
 
       if (result.success) {
@@ -1118,7 +1042,7 @@ async function main(): Promise<void> {
       }
 
       if (!opts.json && !opts.stdout) {
-        await saveResult(result, opts);
+        await saveResult(result, opts, log);
       }
 
       if (i < urls.length - 1) {
@@ -1137,18 +1061,20 @@ async function main(): Promise<void> {
           url: r.url,
           success: r.success,
           error: r.error || null,
-          tweet: r.tweet ? {
-            tweet_id: r.tweet.tweetId,
-            author_handle: r.tweet.authorHandle,
-            author_name: r.tweet.authorName,
-            is_thread: r.tweet.isThread,
-            thread_length: r.tweet.threadLength,
-            text: r.tweet.text,
-            engagement: r.tweet.engagement,
-            media_count: r.tweet.media.length
-          } : null,
-          markdown: r.markdown
-        }))
+          tweet: r.tweet
+            ? {
+                tweet_id: r.tweet.tweetId,
+                author_handle: r.tweet.authorHandle,
+                author_name: r.tweet.authorName,
+                is_thread: r.tweet.isThread,
+                thread_length: r.tweet.threadLength,
+                text: r.tweet.text,
+                engagement: r.tweet.engagement,
+                media_count: r.tweet.media.length,
+              }
+            : null,
+          markdown: r.markdown,
+        })),
       };
       console.log(JSON.stringify(output, null, 2));
     }

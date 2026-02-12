@@ -21,6 +21,9 @@
  *   # With Obsidian vault integration (opens obsidian:// URIs)
  *   bun run tools/chatgpt-clipper.ts --obsidian --vault "My Vault" https://chatgpt.com/c/abc123
  *
+ *   # Use Obsidian CLI for file creation
+ *   bun run tools/chatgpt-clipper.ts --cli --vault "My Vault" https://chatgpt.com/c/abc123
+ *
  *   # Use existing Chrome profile (for auth - RECOMMENDED)
  *   bun run tools/chatgpt-clipper.ts --profile /path/to/chrome/profile https://chatgpt.com/c/abc123
  *
@@ -34,35 +37,33 @@
  *   bun add puppeteer    (or: npm install puppeteer)
  */
 
-import puppeteer, { type Browser, type Page } from "puppeteer";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { existsSync } from "node:fs";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
+import { sanitizeFilename } from "../src/shared/sanitize";
+import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
+import {
+  launchBrowser,
+  createPage,
+  resolveUrls,
+  createLogger,
+  type CommonCLIOptions,
+  type Logger,
+} from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface CLIOptions {
+interface CLIOptions extends CommonCLIOptions {
   urls: string[];
   outdir: string;
   obsidian: boolean;
-  cli: boolean;         // Use Obsidian CLI directly
-  cliPath: string;      // Path to obsidian-cli binary
-  vault: string;
-  folder: string;
-  profile: string | null;
-  headless: boolean;
-  wait: number;
-  tags: string[];
-  perResponse: boolean; // true = one file per response, false = one file per conversation
-  json: boolean;        // Output structured JSON to stdout (for LLM tool calls)
-  stdout: boolean;      // Dump markdown to stdout instead of files
+  perResponse: boolean;
 }
 
 interface ExtractedResponse {
   index: number;
   markdown: string;
-  preview: string; // first ~80 chars for filename
+  preview: string;
 }
 
 interface ConversationResult {
@@ -74,13 +75,13 @@ interface ConversationResult {
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): CLIOptions {
+function parseArgs(argv: string[], log: Logger): CLIOptions {
   const opts: CLIOptions = {
     urls: [],
     outdir: "./chatgpt-clips",
     obsidian: false,
     cli: false,
-    cliPath: "obsidian-cli",  // Default to PATH lookup
+    cliPath: "obsidian-cli",
     vault: "Main Vault",
     folder: "2 - Source Material/Clips/ChatGPT",
     profile: null,
@@ -100,10 +101,9 @@ function parseArgs(argv: string[]): CLIOptions {
       i++;
       const filePath = argv[i];
       if (!filePath) {
-        console.error("--file requires a path argument");
+        log.error("--file requires a path argument");
         process.exit(1);
       }
-      // Will be loaded later
       opts.urls.push(`@file:${filePath}`);
     } else if (arg === "--outdir" || arg === "-o") {
       i++;
@@ -144,7 +144,7 @@ function parseArgs(argv: string[]): CLIOptions {
     } else if (arg.startsWith("http")) {
       opts.urls.push(arg);
     } else {
-      console.error(`Unknown argument: ${arg}`);
+      log.error(`Unknown argument: ${arg}`);
       printHelp();
       process.exit(1);
     }
@@ -204,77 +204,6 @@ EXAMPLES:
   # Pipe markdown to another tool
   bun run tools/chatgpt-clipper.ts --stdout https://chatgpt.com/c/abc123 | head -100
 `);
-}
-
-// ─── URL Resolution ──────────────────────────────────────────────────────────
-
-async function resolveUrls(rawUrls: string[]): Promise<string[]> {
-  const resolved: string[] = [];
-
-  for (const entry of rawUrls) {
-    if (entry.startsWith("@file:")) {
-      const filePath = entry.slice(6);
-      if (!existsSync(filePath)) {
-        console.error(`File not found: ${filePath}`);
-        process.exit(1);
-      }
-      const content = await readFile(filePath, "utf-8");
-      const lines = content
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0 && !l.startsWith("#"));
-      resolved.push(...lines);
-    } else {
-      resolved.push(entry);
-    }
-  }
-
-  // Validate URLs
-  for (const url of resolved) {
-    if (!url.includes("chatgpt.com") && !url.includes("chat.openai.com")) {
-      console.warn(`⚠ URL doesn't look like ChatGPT: ${url}`);
-    }
-  }
-
-  return resolved;
-}
-
-// ─── Markdown Helpers ────────────────────────────────────────────────────────
-
-function sanitizeFilename(name: string, maxLen = 100): string {
-  return (
-    name
-      .replace(/[\u0000-\u001F\u007F]/g, " ")
-      .replace(/[<>:"/\\|?*]/g, "-")
-      .replace(/\s+/g, " ")
-      .trim()
-      .substring(0, maxLen)
-      .trim() || "Untitled"
-  );
-}
-
-function buildFrontmatter(opts: {
-  title: string;
-  source: string;
-  tags: string[];
-  extra?: Record<string, string | undefined>;
-}): string {
-  const lines = ["---"];
-  lines.push(`source: "${opts.source.replace(/"/g, '\\"')}"`);
-  lines.push(`title: "${opts.title.replace(/"/g, '\\"')}"`);
-  lines.push(`date_clipped: "${new Date().toISOString()}"`);
-  lines.push(`tags:`);
-  for (const tag of opts.tags) {
-    lines.push(`  - "${tag}"`);
-  }
-  lines.push(`type: "article"`);
-  if (opts.extra) {
-    for (const [k, v] of Object.entries(opts.extra)) {
-      if (v) lines.push(`${k}: "${v.replace(/"/g, '\\"')}"`);
-    }
-  }
-  lines.push("---", "");
-  return lines.join("\n");
 }
 
 // ─── Page Extraction ─────────────────────────────────────────────────────────
@@ -390,19 +319,13 @@ function extractResponsesInPage(): { title: string; responses: { index: number; 
   return { title, responses };
 }
 
-// ─── Logging (stderr when --json/--stdout so stdout stays clean) ─────────────
-
-let _quiet = false;
-function log(...args: any[]): void {
-  if (!_quiet) console.error(...args);
-}
-
 // ─── Core Extraction Logic ───────────────────────────────────────────────────
 
 async function extractConversation(
-  page: Page,
+  page: import("puppeteer").Page,
   url: string,
-  waitMs: number
+  waitMs: number,
+  log: Logger
 ): Promise<ConversationResult> {
   try {
     log(`  → Navigating to ${url}`);
@@ -414,7 +337,7 @@ async function extractConversation(
     try {
       await page.waitForSelector('[data-message-author-role="assistant"]', { timeout: 15000 });
     } catch {
-      log("  ⚠ No assistant messages found after waiting. Page might require login.");
+      log.warn("No assistant messages found after waiting. Page might require login.");
     }
 
     await new Promise((r) => setTimeout(r, 2000));
@@ -427,16 +350,35 @@ async function extractConversation(
 
     log(`  ✓ Found ${result.responses.length} response(s) in "${result.title}"`);
     return { url, title: result.title, responses: result.responses };
-  } catch (err: any) {
-    return { url, title: "Unknown", responses: [], error: err.message || String(err) };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { url, title: "Unknown", responses: [], error: message };
   }
 }
 
 // ─── Save Logic ──────────────────────────────────────────────────────────────
 
+function buildFrontmatter(opts: {
+  title: string;
+  source: string;
+  tags: string[];
+  extra?: Record<string, string | undefined>;
+}): string {
+  const input: FrontmatterInput = {
+    source: opts.source,
+    title: opts.title,
+    type: "article",
+    dateClippedISO: new Date().toISOString(),
+    tags: opts.tags,
+    extra: opts.extra,
+  };
+  return buildFrontmatterYaml(input);
+}
+
 async function saveConversation(
   conv: ConversationResult,
-  opts: CLIOptions
+  opts: CLIOptions,
+  log: Logger
 ): Promise<void> {
   if (conv.error) {
     log(`  ✗ Error for ${conv.url}: ${conv.error}`);
@@ -571,43 +513,42 @@ async function saveConversation(
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
-  const urls = await resolveUrls(opts.urls);
-
-  if (urls.length === 0) {
-    console.error("No URLs provided. Use --help for usage info.");
-    process.exit(1);
-  }
+  const log = createLogger();
+  const opts = parseArgs(process.argv.slice(2), log);
 
   // In --json and --stdout mode, all status goes to stderr so stdout is clean
-  _quiet = false; // always log to stderr
-  if (opts.json || opts.stdout) {
-    // log() already uses console.error, so stdout stays clean
+  log.setQuiet(false);
+
+  const urls = await resolveUrls(opts.urls);
+
+  // Validate URLs
+  for (const url of urls) {
+    if (!url.includes("chatgpt.com") && !url.includes("chat.openai.com")) {
+      log.warn(`URL doesn't look like ChatGPT: ${url}`);
+    }
+  }
+
+  if (urls.length === 0) {
+    log.error("No URLs provided. Use --help for usage info.");
+    process.exit(1);
   }
 
   log(`\n🔖 ChatGPT Headless Clipper`);
   log(`   ${urls.length} conversation(s) to process\n`);
 
-  const launchOpts: Parameters<typeof puppeteer.launch>[0] = {
-    headless: opts.headless,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  };
-
   if (opts.profile) {
-    launchOpts.userDataDir = resolve(opts.profile);
     log(`   Using Chrome profile: ${opts.profile}\n`);
   }
 
-  const browser: Browser = await puppeteer.launch(launchOpts);
+  const browser = await launchBrowser({
+    headless: opts.headless,
+    profile: opts.profile,
+  });
+
   const allResults: ConversationResult[] = [];
 
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 900 });
-    await page.setUserAgent(
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    );
-
+    const page = await createPage(browser);
     let successCount = 0;
     let failCount = 0;
 
@@ -615,9 +556,9 @@ async function main(): Promise<void> {
       const url = urls[i];
       log(`\n[${i + 1}/${urls.length}] Processing: ${url}`);
 
-      const result = await extractConversation(page, url, opts.wait);
+      const result = await extractConversation(page, url, opts.wait, log);
       allResults.push(result);
-      await saveConversation(result, opts);
+      await saveConversation(result, opts, log);
 
       if (result.error) {
         failCount++;
