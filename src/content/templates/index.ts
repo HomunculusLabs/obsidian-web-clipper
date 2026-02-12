@@ -13,6 +13,7 @@ import "./stackoverflow";
 import "./github";
 import "./wikipedia";
 import "./medium";
+import "./substack";
 
 export {
   // Template registration
@@ -131,3 +132,21 @@ export {
   extractMediumArticle,
   formatMediumContent
 } from "./medium";
+
+export {
+  substackTemplate,
+  substackMainTemplate,
+  isSubstackPage,
+  extractPublicationName as extractSubstackPublicationName,
+  extractAuthorHandle as extractSubstackAuthorHandle,
+  isPaidContent,
+  extractPaywallPreview as extractSubstackPaywallPreview,
+  extractLikeCount,
+  extractCommentCount as extractSubstackCommentCount,
+  extractSubstackTags,
+  extractCanonicalUrl as extractSubstackCanonicalUrl,
+  extractPostId,
+  isFreePost,
+  extractSubstackNewsletter,
+  formatSubstackContent
+} from "./substack";
