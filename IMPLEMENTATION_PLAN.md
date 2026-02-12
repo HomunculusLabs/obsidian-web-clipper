@@ -115,7 +115,7 @@ Headless Puppeteer tools for research pipeline automation.
 - [x] **Task 69**: Core clipper library — Extract shared clipping logic from `tools/chatgpt-clipper.ts` into `tools/lib/clipper-core.ts`. Shared browser launch, page extraction, markdown generation.
 - [x] **Task 70**: Universal URL clipper — `tools/clip-url.ts`: Clip any URL headlessly. `bun run tools/clip-url.ts --json <url>` → structured JSON with markdown, metadata, tags. Already planned in Task 9, ensure full implementation.
 - [x] **Task 71**: Batch URL clipper — `tools/batch-clip.ts`: Clip multiple URLs from stdin, file, or args. Support concurrency (`--parallel 4`), progress reporting, JSON array output.
-- [ ] **Task 72**: YouTube transcript CLI — `tools/youtube-transcript.ts`: Extract YouTube transcript headlessly. `bun run tools/youtube-transcript.ts --json <url>` → JSON with transcript, metadata.
+- [x] **Task 72**: YouTube transcript CLI — `tools/youtube-transcript.ts`: Extract YouTube transcript headlessly. `bun run tools/youtube-transcript.ts --json <url>` → JSON with transcript, metadata.
 - [ ] **Task 73**: Twitter thread CLI — Already planned as Task 53. Ensure `--json` output format matches other tools.
 - [ ] **Task 74**: Search-and-clip tool — `tools/search-clip.ts`: Google search a query, clip top N results. `bun run tools/search-clip.ts --query "obsidian plugins" --top 5 --json`. For research pipelines.
 - [ ] **Task 75**: PDF extraction CLI — `tools/pdf-clip.ts`: Extract text from PDF URLs or local files. Support `--json`, `--stdout`, `--pages 1-5`.
