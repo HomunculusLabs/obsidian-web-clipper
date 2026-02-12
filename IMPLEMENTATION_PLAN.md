@@ -45,7 +45,7 @@ Clip only the user's text selection instead of the full page.
 
 Custom extraction rules per domain for optimal clipping.
 
-- [ ] **Task 23**: Template system types — Create `src/shared/templates.ts` with `SiteTemplate { domain: string; name: string; selectors: { title?: string; content?: string; author?: string; date?: string; tags?: string }; removeSelectors?: string[]; frontmatterExtras?: Record<string, string>; enabled: boolean }`.
+- [x] **Task 23**: Template system types — Create `src/shared/templates.ts` with `SiteTemplate { domain: string; name: string; selectors: { title?: string; content?: string; author?: string; date?: string; tags?: string }; removeSelectors?: string[]; frontmatterExtras?: Record<string, string>; enabled: boolean }`.
 - [ ] **Task 24**: Template registry — Create `src/content/templates/registry.ts` with `getTemplateForUrl(url: string): SiteTemplate | null` that matches URLs against registered templates. Support glob patterns.
 - [ ] **Task 25**: Template-aware web extraction — Modify `extractWebPageContent()` to check for matching template first. If found, use template selectors instead of Readability for extraction.
 - [ ] **Task 26**: Reddit template — `src/content/templates/reddit.ts`: Extract post title, body, author, subreddit, score, comments. Handle old.reddit.com and new reddit. Add subreddit as tag.
