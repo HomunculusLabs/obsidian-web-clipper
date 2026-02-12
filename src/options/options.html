@@ -93,6 +93,19 @@
       </section>
 
       <section class="section">
+        <h2>Custom Templates</h2>
+        <p class="section-desc">Create site-specific extraction rules for better clipping. Templates use CSS selectors to extract content from specific domains.</p>
+
+        <div class="template-toolbar">
+          <button id="addTemplateBtn" class="add-template-btn">+ Add Template</button>
+          <button id="importTemplatesBtn" class="import-btn">Import JSON</button>
+          <button id="exportTemplatesBtn" class="export-btn">Export JSON</button>
+        </div>
+
+        <div id="customTemplatesList" class="templates-list"></div>
+      </section>
+
+      <section class="section">
         <h2>Save Folders</h2>
         <p>Quick-access folders for the popup:</p>
 
@@ -112,6 +125,135 @@
 
       <div id="status" class="status"></div>
     </main>
+  </div>
+
+  <!-- Template Editor Modal -->
+  <div id="templateModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="templateModalTitle">Add New Template</h3>
+        <button id="templateModalClose" class="modal-close" type="button">&times;</button>
+      </div>
+      
+      <form id="templateForm" class="template-form">
+        <div class="form-tabs">
+          <button type="button" class="tab-btn active" data-tab="basic">Basic</button>
+          <button type="button" class="tab-btn" data-tab="selectors">Selectors</button>
+          <button type="button" class="tab-btn" data-tab="advanced">Advanced</button>
+        </div>
+
+        <div class="tab-content active" data-tab="basic">
+          <div class="field">
+            <label for="templateName">Template Name *</label>
+            <input type="text" id="templateName" placeholder="My Custom Site" required>
+            <small>Human-readable name for this template</small>
+          </div>
+
+          <div class="field">
+            <label for="templateDomain">Domain Pattern *</label>
+            <input type="text" id="templateDomain" placeholder="example.com or *.example.com" required>
+            <small>Domain to match (supports wildcards like *.medium.com)</small>
+          </div>
+
+          <div class="field checkbox">
+            <input type="checkbox" id="templateEnabled" checked>
+            <label for="templateEnabled">Enabled</label>
+          </div>
+
+          <div class="field">
+            <label for="templateDescription">Description</label>
+            <input type="text" id="templateDescription" placeholder="What this template extracts">
+            <small>Optional description of what this template does</small>
+          </div>
+
+          <div class="field">
+            <label for="templatePriority">Priority</label>
+            <input type="number" id="templatePriority" value="0" min="0" max="1000">
+            <small>Higher priority templates are checked first (default: 0)</small>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="selectors">
+          <p class="tab-desc">CSS selectors for extracting content. Leave blank to skip extraction.</p>
+
+          <div class="field">
+            <label for="selectorTitle">Title Selector</label>
+            <input type="text" id="selectorTitle" placeholder="h1, .title, [data-title]">
+            <small>CSS selector for the page title</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorContent">Content Selector</label>
+            <input type="text" id="selectorContent" placeholder="article, .content, [data-content]">
+            <small>CSS selector for the main content area</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorAuthor">Author Selector</label>
+            <input type="text" id="selectorAuthor" placeholder=".author, [data-author]">
+            <small>CSS selector for the author name</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorDate">Date Selector</label>
+            <input type="text" id="selectorDate" placeholder="time, .date, [data-date]">
+            <small>CSS selector for the publication date</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorTags">Tags Selector</label>
+            <input type="text" id="selectorTags" placeholder=".tags a, [data-tags]">
+            <small>CSS selector for tags/categories</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorDescription">Description Selector</label>
+            <input type="text" id="selectorDescription" placeholder=".description, [data-description]">
+            <small>CSS selector for description/summary</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorUrl">URL Selector</label>
+            <input type="text" id="selectorUrl" placeholder="link[rel=canonical]">
+            <small>CSS selector for canonical URL</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorImage">Image Selector</label>
+            <input type="text" id="selectorImage" placeholder=".hero img, [data-image]">
+            <small>CSS selector for main image</small>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="advanced">
+          <div class="field">
+            <label for="templateUrlPattern">URL Pattern (Optional)</label>
+            <input type="text" id="templateUrlPattern" placeholder="^/article/ or /blog/*">
+            <small>Additional regex/glob pattern to match specific URL paths</small>
+          </div>
+
+          <div class="field">
+            <label for="templateRemoveSelectors">Remove Selectors (one per line)</label>
+            <textarea id="templateRemoveSelectors" rows="4" placeholder=".sidebar&#10;.ads&#10;.comments"></textarea>
+            <small>CSS selectors for elements to remove before extraction</small>
+          </div>
+
+          <div class="field">
+            <label for="templateFrontmatter">Frontmatter Extras (JSON)</label>
+            <textarea id="templateFrontmatter" rows="4" placeholder='{
+  "site": "mysite",
+  "type": "article"
+}'></textarea>
+            <small>Additional frontmatter fields to include in the clip</small>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="templateFormCancel" class="cancel-btn">Cancel</button>
+          <button type="submit" id="templateFormSave" class="save-btn">Save Template</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="options.js"></script>

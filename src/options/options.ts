@@ -13,6 +13,10 @@ import {
 } from "../shared/settingsService";
 import { getEl, showStatus, populateForm } from "./ui";
 import { addFolder, renderSavedFolders } from "./folderList";
+import {
+  renderCustomTemplates,
+  setupTemplateEditor
+} from "./templateEditor";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 
@@ -83,6 +87,34 @@ function coerceEnum<T extends string>(
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
   populateForm(settings);
+}
+
+/**
+ * Set up tab switching for the template editor modal.
+ */
+function setupTabSwitching(): void {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tabName = (btn as HTMLButtonElement).dataset.tab;
+      if (!tabName) return;
+
+      // Update button states
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      // Update content visibility
+      const tabContents = document.querySelectorAll(".tab-content");
+      tabContents.forEach((content) => {
+        if ((content as HTMLElement).dataset.tab === tabName) {
+          content.classList.add("active");
+        } else {
+          content.classList.remove("active");
+        }
+      });
+    });
+  });
 }
 
 function setupEventListeners(): void {
@@ -365,6 +397,14 @@ async function init(): Promise<void> {
   await loadSettings();
   setupEventListeners();
   renderSavedFolders(settings);
+  renderCustomTemplates(settings.customTemplates || []);
+  setupTemplateEditor(
+    settings.customTemplates || [],
+    async () => {
+      await saveSettingsToStorage({ customTemplates: settings.customTemplates });
+    }
+  );
+  setupTabSwitching();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
