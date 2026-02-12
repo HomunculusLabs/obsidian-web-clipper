@@ -65,7 +65,16 @@ export type TabRequest =
       includeTimestamps?: boolean;
       settings: Settings; // Pass settings to content script for extraction
     }
-  | { action: "getPageInfo" };
+  | { action: "getPageInfo" }
+  | { action: "getSelectionInfo" };
+
+/** Selection info returned from content script */
+export type SelectionInfo = {
+  /** Whether user has text selected */
+  hasSelection: boolean;
+  /** Preview of selected text (truncated) */
+  preview: string;
+};
 
 export type TabResponse =
   | { ok: true; result: ClipResult }

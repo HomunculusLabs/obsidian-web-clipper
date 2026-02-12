@@ -1,5 +1,5 @@
 import type { ClipResult, PageType } from "../shared/types";
-import type { PageInfo, TabRequest } from "../shared/messages";
+import type { PageInfo, SelectionInfo, TabRequest } from "../shared/messages";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
 import { loadSettings as loadSettingsFromStorage } from "../shared/settingsService";
 import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
@@ -13,6 +13,8 @@ let currentTab: chrome.tabs.Tab | null = null;
 let pageType: PageType = "web";
 let clipperContent: ClipResult | null = null;
 let settings: Settings = { ...DEFAULT_SETTINGS };
+let hasSelection = false;
+let clipSelectionMode = true; // Default to selection mode when selection exists
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
@@ -62,6 +64,53 @@ function setupEventListeners(): void {
       clipperContent = { ...clipperContent, title: titleInput.value };
     });
   }
+
+  const selectionToggle = getEl<HTMLInputElement>("selectionToggle");
+  if (selectionToggle) {
+    selectionToggle.addEventListener("change", () => {
+      clipSelectionMode = selectionToggle.checked;
+      updateClipButtonText();
+    });
+  }
+}
+
+/** Update the clip button text based on selection mode */
+function updateClipButtonText(): void {
+  const clipBtn = getEl<HTMLButtonElement>("clipBtn");
+  const btnText = clipBtn?.querySelector(".btn-text");
+  if (btnText) {
+    if (hasSelection && clipSelectionMode) {
+      btnText.textContent = "Clip Selection to Obsidian";
+    } else {
+      btnText.textContent = "Clip to Obsidian";
+    }
+  }
+}
+
+/** Show the selection indicator with preview */
+function showSelectionIndicator(preview: string): void {
+  const indicator = getEl<HTMLDivElement>("selectionIndicator");
+  const previewEl = getEl<HTMLDivElement>("selectionPreview");
+
+  if (indicator) {
+    indicator.style.display = "block";
+  }
+  if (previewEl && preview) {
+    previewEl.textContent = `"${preview}"`;
+  }
+
+  // Update clip button text
+  updateClipButtonText();
+}
+
+/** Hide the selection indicator */
+function hideSelectionIndicator(): void {
+  const indicator = getEl<HTMLDivElement>("selectionIndicator");
+  if (indicator) {
+    indicator.style.display = "none";
+  }
+  hasSelection = false;
+  updateClipButtonText();
 }
 
 async function handleClip(): Promise<void> {
@@ -78,7 +127,8 @@ async function handleClip(): Promise<void> {
     const result = await performClip({
       tab: currentTab,
       pageType,
-      settings
+      settings,
+      selectionOnly: hasSelection && clipSelectionMode
     });
 
     clipperContent = result;
@@ -122,8 +172,18 @@ async function init(): Promise<void> {
       await ensureContentScriptLoaded(tabId);
       const pageInfo = await tabsSendMessage<TabRequest, PageInfo>(tabId, { action: "getPageInfo" });
       pageType = pageInfo.type || pageType;
+
+      // Query selection state
+      const selectionInfo = await tabsSendMessage<TabRequest, SelectionInfo>(tabId, { action: "getSelectionInfo" });
+      if (selectionInfo.hasSelection) {
+        hasSelection = true;
+        showSelectionIndicator(selectionInfo.preview);
+      } else {
+        hideSelectionIndicator();
+      }
     } catch {
       // Keep URL-based fallback.
+      hideSelectionIndicator();
     }
   }
 

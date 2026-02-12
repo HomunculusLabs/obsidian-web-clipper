@@ -76,10 +76,12 @@ export type ClipOptions = {
   tab: chrome.tabs.Tab;
   pageType: PageType;
   settings: Settings;
+  /** Whether to clip only the selected text */
+  selectionOnly?: boolean;
 };
 
 export async function performClip(options: ClipOptions): Promise<ClipResult> {
-  const { tab, pageType, settings } = options;
+  const { tab, pageType, settings, selectionOnly } = options;
 
   if (!tab.id) {
     throw new Error("Active tab has no id (cannot clip)");
@@ -95,6 +97,7 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
     action: "clip",
     pageType,
     isSPA: isLikelySPA(tab.url),
+    selectionOnly,
     includeTimestamps: settings.includeTimestamps,
     settings
   };

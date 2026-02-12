@@ -16,6 +16,19 @@
       <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
     </header>
 
+    <!-- Selection indicator -->
+    <div class="selection-indicator" id="selectionIndicator" style="display: none;">
+      <span class="selection-badge">📝 Selection detected</span>
+      <div class="selection-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" id="selectionToggle" checked>
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">Clip Selection</span>
+        </label>
+      </div>
+      <div class="selection-preview" id="selectionPreview"></div>
+    </div>
+
     <div class="content">
       <div class="field">
         <label for="titleInput">Title</label>
