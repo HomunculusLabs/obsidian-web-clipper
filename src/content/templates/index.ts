@@ -10,6 +10,7 @@
 import "./reddit";
 import "./hackernews";
 import "./stackoverflow";
+import "./github";
 
 export {
   // Template registration
@@ -80,3 +81,19 @@ export {
   formatStackOverflowContent,
   extractStackOverflowQuestion
 } from "./stackoverflow";
+
+export {
+  githubRepoTemplate,
+  githubIssueTemplate,
+  githubPRTemplate,
+  githubCodeTemplate,
+  githubGistTemplate,
+  extractRepoInfo,
+  extractIssueOrPRNumber,
+  detectGitHubPageType,
+  type GitHubPageType,
+  extractRepoStats,
+  extractIssueMetadata,
+  extractCodeLanguages,
+  formatGitHubContent
+} from "./github";
