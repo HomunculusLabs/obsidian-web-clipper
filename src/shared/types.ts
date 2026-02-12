@@ -119,6 +119,11 @@ export interface ClipMetadata {
 
   /** Number of selection ranges (for multi-selection, >1 means Ctrl+click) */
   selectionCount?: number;
+
+  // --- Template extraction ---
+
+  /** Name of the site template used for extraction (if any) */
+  templateUsed?: string;
 }
 
 export interface ClipResult {

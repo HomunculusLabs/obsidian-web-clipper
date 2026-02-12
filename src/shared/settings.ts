@@ -4,6 +4,7 @@ import type {
   ImageHandlingMode
 } from "./types";
 import type { ObsidianCliConfig, SaveMethod } from "./obsidianCli";
+import type { SiteTemplate, TemplateSettings } from "./templates";
 
 // Wiki-link injection rule: maps a term to a note name
 export interface WikiLinkRule {
@@ -51,6 +52,11 @@ export interface Settings {
   imageDownloadEndpoint: string; // For future Obsidian plugin API integration
   imageAttachmentsFolder: string;
 
+  // --- Template settings ---
+  templatesEnabled: boolean;
+  customTemplates: SiteTemplate[];
+  disabledBuiltIns: string[];
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -59,6 +65,7 @@ export interface Settings {
     | number
     | WikiLinkRule[]
     | ObsidianCliConfig
+    | SiteTemplate[]
     | undefined;
 }
 
@@ -104,7 +111,12 @@ export const DEFAULT_SETTINGS: Settings = {
   // --- Image settings ---
   imageHandling: "keep",
   imageDownloadEndpoint: "",
-  imageAttachmentsFolder: "attachments"
+  imageAttachmentsFolder: "attachments",
+
+  // --- Template settings ---
+  templatesEnabled: true,
+  customTemplates: [],
+  disabledBuiltIns: []
 };
 
 export const SETTINGS_KEYS = [
@@ -139,7 +151,11 @@ export const SETTINGS_KEYS = [
   // Images
   "imageHandling",
   "imageDownloadEndpoint",
-  "imageAttachmentsFolder"
+  "imageAttachmentsFolder",
+  // Templates
+  "templatesEnabled",
+  "customTemplates",
+  "disabledBuiltIns"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];
