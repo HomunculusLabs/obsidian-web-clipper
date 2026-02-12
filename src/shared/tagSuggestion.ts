@@ -8,6 +8,7 @@ import {
   isGenericTechTerm,
 } from "./stoplist";
 import { detectCategories as detectCategoriesImpl, categoryToTag } from "./categoryDetection";
+import { getFrequentTags, type TagHistoryEntry } from "./tagHistory";
 
 /**
  * Tag suggestion result with confidence score
@@ -15,7 +16,7 @@ import { detectCategories as detectCategoriesImpl, categoryToTag } from "./categ
 export interface TagSuggestion {
   tag: string;
   confidence: number; // 0-1, higher = more confident
-  source: "metadata" | "content" | "domain" | "category";
+  source: "metadata" | "content" | "domain" | "category" | "history";
 }
 
 /**
@@ -92,6 +93,101 @@ export function suggestTags(
     .map(s => s.tag);
 
   return sorted;
+}
+
+/**
+ * Async version of suggestTags that includes history-based suggestions.
+ * Part of Task 65 - Tag history/frequency.
+ *
+ * @param metadata - Clip metadata containing URL, title, keywords, etc.
+ * @param content - The markdown content of the clipped page
+ * @param options - Optional configuration for tag suggestion
+ * @returns Array of tag suggestions with source and confidence info
+ */
+export async function suggestTagsWithHistory(
+  metadata: ClipMetadata,
+  content: string,
+  options?: TagSuggestionOptions
+): Promise<TagSuggestion[]> {
+  const suggestions: Map<string, TagSuggestion> = new Map();
+
+  // Build the combined domain tag rules
+  const domainRules = buildDomainRules(options);
+
+  // Strategy 1: Extract from metadata (keywords, JSON-LD, etc.)
+  const metadataTags = extractMetadataTags(metadata);
+  for (const suggestion of metadataTags) {
+    const key = suggestion.tag.toLowerCase();
+    if (!suggestions.has(key) || suggestions.get(key)!.confidence < suggestion.confidence) {
+      suggestions.set(key, suggestion);
+    }
+  }
+
+  // Strategy 2: Domain-based tags (configurable via options)
+  const domainTags = extractDomainTags(metadata.url, domainRules);
+  for (const suggestion of domainTags) {
+    const key = suggestion.tag.toLowerCase();
+    if (!suggestions.has(key)) {
+      suggestions.set(key, suggestion);
+    }
+  }
+
+  // Strategy 3: Content keyword extraction
+  const contentTags = extractContentKeywords(content);
+  for (const suggestion of contentTags) {
+    const key = suggestion.tag.toLowerCase();
+    if (!suggestions.has(key)) {
+      suggestions.set(key, suggestion);
+    }
+  }
+
+  // Strategy 4: Category detection
+  const categoryTags = detectCategories(metadata, content);
+  for (const suggestion of categoryTags) {
+    const key = suggestion.tag.toLowerCase();
+    if (!suggestions.has(key)) {
+      suggestions.set(key, suggestion);
+    }
+  }
+
+  // Strategy 5: Tag history (Task 65)
+  const historyTags = await getHistoryTagSuggestions();
+  for (const suggestion of historyTags) {
+    const key = suggestion.tag.toLowerCase();
+    // Only add if not already suggested from other sources
+    // (other sources have higher confidence)
+    if (!suggestions.has(key)) {
+      suggestions.set(key, suggestion);
+    }
+  }
+
+  // Sort by confidence and return
+  const sorted = Array.from(suggestions.values())
+    .sort((a, b) => b.confidence - a.confidence);
+
+  return sorted;
+}
+
+/**
+ * Gets tag suggestions from history.
+ * Maps frequency counts to confidence scores.
+ */
+async function getHistoryTagSuggestions(): Promise<TagSuggestion[]> {
+  try {
+    const historyTags = await getFrequentTags(10);
+    
+    // Map frequency to confidence
+    // Most frequent tag gets 0.4, decreasing from there
+    return historyTags.map((entry, index) => ({
+      tag: entry.tag,
+      // Scale confidence based on rank and count
+      confidence: Math.max(0.2, 0.4 - (index * 0.02)),
+      source: "history" as const
+    }));
+  } catch {
+    // If history is unavailable, return empty
+    return [];
+  }
 }
 
 /**

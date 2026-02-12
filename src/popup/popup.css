@@ -408,3 +408,23 @@ body {
 .tag-chip.source-category .tag-chip-dismiss:hover {
   background: rgba(157, 23, 77, 0.4);
 }
+
+.tag-chip.source-history {
+  background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+  border-color: #d8b4fe;
+  color: #6b21a8;
+}
+
+.tag-chip.source-history:hover {
+  background: linear-gradient(135deg, #e9d5ff, #d8b4fe);
+  border-color: #c084fc;
+}
+
+.tag-chip.source-history .tag-chip-dismiss {
+  background: rgba(107, 33, 168, 0.2);
+  color: #6b21a8;
+}
+
+.tag-chip.source-history .tag-chip-dismiss:hover {
+  background: rgba(107, 33, 168, 0.4);
+}

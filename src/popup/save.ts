@@ -10,6 +10,7 @@ import { sanitizeFilename } from "../shared/sanitize";
 import { parseTags, addAutoTags } from "../shared/tags";
 import { cleanTitle } from "../shared/titleSuggestion";
 import { applyTitleTemplate } from "../shared/titleTemplate";
+import { recordTagUsage } from "../shared/tagHistory";
 import { showStatus } from "./ui";
 
 const MAX_URI_CONTENT_CHARS = 180000;
@@ -41,6 +42,7 @@ interface PreparedSave {
   vault: string;
   baseObsidianUri: string;
   contentTooLargeForUri: boolean;
+  tags: string[];
 }
 
 /**
@@ -228,7 +230,8 @@ function prepareSave(options: SaveOptions): PreparedSave {
     filePath,
     vault,
     baseObsidianUri,
-    contentTooLargeForUri
+    contentTooLargeForUri,
+    tags
   };
 }
 
@@ -384,6 +387,11 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
           showStatus("success", "Saved to Obsidian via CLI.");
         } else {
           showStatus("success", "Saved to Obsidian.");
+        }
+
+        // Record tag usage in history (fire-and-forget)
+        if (prepared.tags.length > 0) {
+          void recordTagUsage(prepared.tags);
         }
 
         return { usedClipboardFallback, usedMethod: method };

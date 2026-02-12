@@ -101,7 +101,7 @@ Auto-suggest tags and note titles based on page content.
 - [x] **Task 62**: Smart title generation — Create `src/shared/titleSuggestion.ts` with `suggestTitle(metadata, content): string[]` that generates 2-3 title options.
 - [x] **Task 63**: Title cleanup — Clean extracted titles: remove site names (` - Medium`, ` | HN`), decode entities, normalize whitespace, title case option.
 - [x] **Task 64**: Title template system — Allow users to define title templates: `{date} - {title}`, `{domain}/{title}`, `{type} - {title}`. Apply in settings.
-- [ ] **Task 65**: Tag history/frequency — Track previously used tags in chrome.storage. Suggest frequent tags and show autocomplete from history.
+- [x] **Task 65**: Tag history/frequency — Track previously used tags in chrome.storage. Suggest frequent tags and show autocomplete from history.
 - [ ] **Task 66**: Tag rules engine — Create user-configurable rules: "If domain contains 'github.com', add tag 'code'". "If title contains 'tutorial', add tag 'learning'". Store in settings.
 - [ ] **Task 67**: Name suggestion in popup — Show 2-3 suggested titles as radio options in popup, plus the original. Let user pick or edit.
 - [ ] **Task 68**: Suggestion tests — Test tag and title suggestions with various page types and content.

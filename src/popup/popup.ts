@@ -5,7 +5,7 @@ import { loadSettings as loadSettingsFromStorage } from "../shared/settingsServi
 import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage } from "../shared/errors";
-import { suggestTags, type TagSuggestion } from "../shared/tagSuggestion";
+import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
@@ -304,7 +304,8 @@ async function handleClip(): Promise<void> {
     clipperContent = result;
 
     // Generate and display tag suggestions based on clipped content
-    const suggestions = suggestTags(
+    // Uses suggestTagsWithHistory to include frequently used tags from history (Task 65)
+    const tagSuggestions = await suggestTagsWithHistory(
       result.metadata,
       result.markdown,
       {
@@ -312,13 +313,6 @@ async function handleClip(): Promise<void> {
         useDefaultDomainTags: settings.useDefaultDomainTags
       }
     );
-    
-    // Convert to TagSuggestion format (we only get strings back, so we'll assign generic source)
-    const tagSuggestions: TagSuggestion[] = suggestions.map(tag => ({
-      tag,
-      confidence: 0.5,
-      source: "content" as const
-    }));
     
     displayTagSuggestions(tagSuggestions);
 
