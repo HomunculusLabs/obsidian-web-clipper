@@ -13,7 +13,8 @@
     "clip:twitter": "bun run tools/twitter-clipper.ts",
     "clip:search": "bun run tools/search-clip.ts",
     "clip:pdf": "npx tsx tools/pdf-clip.ts",
-    "clip:scrape": "bun run tools/scrape-site.ts"
+    "clip:scrape": "bun run tools/scrape-site.ts",
+    "mcp": "bun run tools/mcp-server.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
