@@ -211,6 +211,10 @@ async function saveCurrentSettings(): Promise<void> {
   const cliPath = getEl<HTMLInputElement>("cliPath");
   const cliVault = getEl<HTMLInputElement>("cliVault");
 
+  // Title cleanup settings
+  const cleanTitlesEl = getEl<HTMLInputElement>("cleanTitles");
+  const preferTitleCaseEl = getEl<HTMLInputElement>("preferTitleCase");
+
   // Parse wiki-link rules
   const { rules: wikiLinkRules, errors: wikiRuleErrors } = parseWikiLinkRules(
     wikiLinkRulesEl?.value ?? ""
@@ -283,7 +287,11 @@ async function saveCurrentSettings(): Promise<void> {
       enabled: cliEnabled?.checked ?? false,
       cliPath: (cliPath?.value || "").trim(),
       vault: (cliVault?.value || "").trim()
-    }
+    },
+
+    // Title cleanup
+    cleanTitles: cleanTitlesEl?.checked ?? DEFAULT_SETTINGS.cleanTitles,
+    preferTitleCase: preferTitleCaseEl?.checked ?? DEFAULT_SETTINGS.preferTitleCase
   };
 
   await saveSettingsToStorage(settings);

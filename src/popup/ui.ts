@@ -2,6 +2,7 @@ import type { PageType } from "../shared/types";
 import type { Settings } from "../shared/settings";
 import { DEFAULT_SETTINGS } from "../shared/settings";
 import { getFolderCandidates } from "../shared/folders";
+import { cleanTitle } from "../shared/titleSuggestion";
 
 export type StatusType = "success" | "error" | "loading";
 
@@ -101,13 +102,20 @@ export function populateFolderSelect(select: HTMLSelectElement, settings: Settin
   }
 }
 
-export function updateUI(tab: chrome.tabs.Tab | null, pageType: PageType): void {
+export function updateUI(tab: chrome.tabs.Tab | null, pageType: PageType, settings?: Settings): void {
   if (!tab) return;
 
   setPageTypeDisplay(pageType);
 
   const titleInput = getEl<HTMLInputElement>("titleInput");
   if (titleInput) {
-    titleInput.value = tab.title || "Untitled";
+    let title = tab.title || "Untitled";
+    
+    // Apply title cleanup if enabled
+    if (settings?.cleanTitles) {
+      title = cleanTitle(title, { preferTitleCase: settings.preferTitleCase });
+    }
+    
+    titleInput.value = title;
   }
 }

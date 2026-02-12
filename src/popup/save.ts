@@ -8,6 +8,7 @@ import { buildClipMarkdown, type FrontmatterInput } from "../shared/markdown";
 import { injectWikiLinks } from "../content/web/wikiLinks";
 import { sanitizeFilename } from "../shared/sanitize";
 import { parseTags, addAutoTags } from "../shared/tags";
+import { cleanTitle } from "../shared/titleSuggestion";
 import { showStatus } from "./ui";
 
 const MAX_URI_CONTENT_CHARS = 180000;
@@ -47,9 +48,15 @@ interface PreparedSave {
 function prepareSave(options: SaveOptions): PreparedSave {
   const { result, settings, pageType, currentTabUrl, overrideTitle, overrideFolder, overrideTags } = options;
 
-  const finalTitle = sanitizeFilename(
-    (overrideTitle || "").trim() || result.title || "Untitled"
-  );
+  // Get the raw title (from override or result)
+  let rawTitle = (overrideTitle || "").trim() || result.title || "Untitled";
+
+  // Apply title cleanup if enabled
+  if (settings.cleanTitles) {
+    rawTitle = cleanTitle(rawTitle, { preferTitleCase: settings.preferTitleCase });
+  }
+
+  const finalTitle = sanitizeFilename(rawTitle);
 
   const folder = (
     overrideFolder || settings.defaultFolder || DEFAULT_SETTINGS.defaultFolder

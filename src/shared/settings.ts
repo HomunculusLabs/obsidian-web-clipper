@@ -62,6 +62,10 @@ export interface Settings {
   domainTagRules: DomainTagRule[];
   useDefaultDomainTags: boolean;
 
+  // --- Title cleanup settings ---
+  cleanTitles: boolean; // Whether to clean titles (remove site names, decode entities)
+  preferTitleCase: boolean; // Whether to apply title case to cleaned titles
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -126,7 +130,11 @@ export const DEFAULT_SETTINGS: Settings = {
 
   // --- Tag suggestion settings ---
   domainTagRules: [], // Custom rules; combined with defaults if useDefaultDomainTags is true
-  useDefaultDomainTags: true
+  useDefaultDomainTags: true,
+
+  // --- Title cleanup settings ---
+  cleanTitles: true, // Clean titles by default
+  preferTitleCase: true // Apply title case by default
 };
 
 export const SETTINGS_KEYS = [
@@ -168,7 +176,10 @@ export const SETTINGS_KEYS = [
   "disabledBuiltIns",
   // Tag suggestions
   "domainTagRules",
-  "useDefaultDomainTags"
+  "useDefaultDomainTags",
+  // Title cleanup
+  "cleanTitles",
+  "preferTitleCase"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];

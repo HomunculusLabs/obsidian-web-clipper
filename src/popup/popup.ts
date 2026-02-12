@@ -391,7 +391,7 @@ async function init(): Promise<void> {
   }
 
   setPageTypeDisplay(pageType, twitterThreadLength);
-  updateUI(currentTab, pageType);
+  updateUI(currentTab, pageType, settings);
   setupEventListeners();
 }
 

@@ -109,4 +109,11 @@ export function populateForm(settings: Settings): void {
   if (cliSettings) {
     cliSettings.style.display = saveMethod?.value === "cli" ? "block" : "none";
   }
+
+  // Title cleanup settings
+  const cleanTitles = getEl<HTMLInputElement>("cleanTitles");
+  const preferTitleCase = getEl<HTMLInputElement>("preferTitleCase");
+
+  if (cleanTitles) cleanTitles.checked = settings.cleanTitles !== false;
+  if (preferTitleCase) preferTitleCase.checked = settings.preferTitleCase !== false;
 }

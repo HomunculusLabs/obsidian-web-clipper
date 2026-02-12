@@ -45,6 +45,23 @@
       </section>
 
       <section class="section">
+        <h2>Title Cleanup</h2>
+        <p class="section-desc">Automatically clean up page titles when clipping.</p>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="cleanTitles" checked>
+          <label for="cleanTitles">Clean titles automatically</label>
+          <small>Remove site names (e.g., " - Medium"), decode HTML entities, normalize whitespace</small>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="preferTitleCase" checked>
+          <label for="preferTitleCase">Apply title case</label>
+          <small>Capitalize the first letter of each word (except small words like "the", "and")</small>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Obsidian CLI Integration</h2>
         <p class="section-desc">Use the Obsidian CLI for direct file creation instead of URI schemes.</p>
 

@@ -215,11 +215,47 @@ function normalizeTitle(title: string): string {
 }
 
 /**
- * Cleans a title by removing common site suffixes/prefixes and normalizing whitespace.
+ * Options for title cleanup.
+ * Used by cleanTitle and deepCleanTitle functions.
  */
-function cleanTitle(
+export interface TitleCleanupOptions {
+  /** Whether to apply title case (default: true) */
+  preferTitleCase?: boolean;
+  /** Custom patterns to remove from titles (regex strings) */
+  removePatterns?: string[];
+  /** Maximum title length before truncation (default: no truncation in cleanTitle) */
+  maxLength?: number;
+}
+
+/**
+ * Cleans a title by removing common site suffixes/prefixes and normalizing whitespace.
+ *
+ * This function:
+ * - Removes site name suffixes like " - Medium", " | Hacker News"
+ * - Removes site name prefixes like "GitHub - ", "Reddit: "
+ * - Decodes HTML entities (&amp;, &quot;, &#39;, etc.)
+ * - Normalizes whitespace (collapses multiple spaces, trims)
+ * - Optionally applies title case
+ *
+ * @param title - The title to clean
+ * @param options - Optional configuration for cleanup behavior
+ * @returns The cleaned title
+ *
+ * @example
+ * ```ts
+ * cleanTitle("My Article - Medium")
+ * // "My Article"
+ *
+ * cleanTitle("GitHub - User/Repo: Description")
+ * // "User/Repo: Description"
+ *
+ * cleanTitle("Hello&nbsp;World &amp; Friends")
+ * // "Hello World & Friends"
+ * ```
+ */
+export function cleanTitle(
   title: string,
-  options?: TitleSuggestionOptions
+  options?: TitleCleanupOptions
 ): string {
   let cleaned = title;
 
@@ -265,10 +301,19 @@ function cleanTitle(
 /**
  * Performs aggressive cleaning for a "deep cleaned" variant.
  * This removes more patterns and normalizes more aggressively.
+ *
+ * In addition to standard cleanup, this also removes:
+ * - Parenthetical site references like "(on GitHub)", "[YouTube]"
+ * - Year/date patterns like " - 2024", " | Jan 2024"
+ * - Trailing numbers like "Article #123"
+ *
+ * @param title - The title to clean
+ * @param options - Optional configuration for cleanup behavior
+ * @returns The deeply cleaned title
  */
-function deepCleanTitle(
+export function deepCleanTitle(
   title: string,
-  options?: TitleSuggestionOptions
+  options?: TitleCleanupOptions
 ): string {
   let cleaned = cleanTitle(title, { ...options, preferTitleCase: false });
 
@@ -296,8 +341,25 @@ function deepCleanTitle(
 
 /**
  * Decodes common HTML entities in a string.
+ *
+ * Handles:
+ * - Named entities: &amp;, &lt;, &gt;, &quot;, &apos;, &nbsp;, &mdash;, etc.
+ * - Decimal numeric entities: &#39;, &#123;
+ * - Hexadecimal numeric entities: &#x27;, &#x7B;
+ *
+ * @param text - The text containing HTML entities
+ * @returns The text with entities decoded
+ *
+ * @example
+ * ```ts
+ * decodeHtmlEntities("Hello &amp; World")
+ * // "Hello & World"
+ *
+ * decodeHtmlEntities("Price: &#36;99")
+ * // "Price: $99"
+ * ```
  */
-function decodeHtmlEntities(text: string): string {
+export function decodeHtmlEntities(text: string): string {
   // Named entities
   const namedEntities: Record<string, string> = {
     "&amp;": "&",
@@ -347,8 +409,26 @@ function decodeHtmlEntities(text: string): string {
 /**
  * Converts a string to title case.
  * Handles common edge cases like small words in the middle of titles.
+ *
+ * Small words (a, an, the, and, but, or, etc.) remain lowercase
+ * unless they appear at the start or end of the title.
+ *
+ * @param text - The text to convert to title case
+ * @returns The title-cased text
+ *
+ * @example
+ * ```ts
+ * toTitleCase("hello world")
+ * // "Hello World"
+ *
+ * toTitleCase("the lord of the rings")
+ * // "The Lord of the Rings"
+ *
+ * toTitleCase("ALL CAPS TITLE")
+ * // "All Caps Title"
+ * ```
  */
-function toTitleCase(text: string): string {
+export function toTitleCase(text: string): string {
   // Words that should remain lowercase unless at the start
   const smallWords = new Set([
     "a", "an", "the", "and", "but", "or", "nor", "for", "yet", "so",
