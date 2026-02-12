@@ -7,6 +7,7 @@ import {
   MAX_KEYWORDS,
   isGenericTechTerm,
 } from "./stoplist";
+import { detectCategories as detectCategoriesImpl, categoryToTag } from "./categoryDetection";
 
 /**
  * Tag suggestion result with confidence score
@@ -384,72 +385,17 @@ function calculateKeywordScore(
 }
 
 /**
- * Detects content category based on patterns.
- * Placeholder for Task 60 - Category detection.
+ * Detects content categories using the category detection module.
+ * Implements Task 60 - Category detection.
  */
 function detectCategories(metadata: ClipMetadata, content: string): TagSuggestion[] {
-  const tags: TagSuggestion[] = [];
+  const results = detectCategoriesImpl(metadata, content);
 
-  // Simple pattern-based category detection
-  // This will be enhanced in Task 60
-
-  const lowerContent = content.toLowerCase();
-  const title = metadata.title.toLowerCase();
-
-  // Code/tutorial detection
-  if (
-    lowerContent.includes("```") ||
-    lowerContent.includes("npm install") ||
-    lowerContent.includes("git clone") ||
-    title.includes("tutorial") ||
-    title.includes("how to")
-  ) {
-    tags.push({
-      tag: "code",
-      confidence: 0.7,
-      source: "category"
-    });
-  }
-
-  // Research paper detection
-  if (
-    metadata.url.includes("arxiv.org") ||
-    lowerContent.includes("abstract") ||
-    lowerContent.includes("bibliography") ||
-    metadata.jsonLd?.schemaType === "ScholarlyArticle"
-  ) {
-    tags.push({
-      tag: "research",
-      confidence: 0.75,
-      source: "category"
-    });
-  }
-
-  // Recipe detection
-  if (
-    lowerContent.includes("ingredients") &&
-    (lowerContent.includes("instructions") || lowerContent.includes("directions"))
-  ) {
-    tags.push({
-      tag: "recipe",
-      confidence: 0.8,
-      source: "category"
-    });
-  }
-
-  // News detection
-  if (
-    metadata.publishedDate &&
-    (title.includes("breaking") || title.includes("news"))
-  ) {
-    tags.push({
-      tag: "news",
-      confidence: 0.6,
-      source: "category"
-    });
-  }
-
-  return tags;
+  return results.map((result) => ({
+    tag: categoryToTag(result.category),
+    confidence: result.confidence,
+    source: result.source,
+  }));
 }
 
 /**
