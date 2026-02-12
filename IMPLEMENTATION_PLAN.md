@@ -20,7 +20,7 @@ The new Obsidian CLI (`obsidian-cli`) enables direct file creation, replacing th
 - [x] **Task 9**: Create `tools/clip-url.ts` — New headless CLI tool: `bun run tools/clip-url.ts <url>` that clips any URL to Obsidian via CLI. Supports `--json`, `--stdout`, `--cli`, `--vault`, `--folder` flags.
 - [x] **Task 10**: Create `tools/clip-stdin.ts` — CLI tool that reads markdown from stdin and saves to Obsidian: `echo "# Note" | bun run tools/clip-stdin.ts --title "My Note"`. For piping from other tools.
 - [x] **Task 11**: CLI auto-detection — On extension install/settings load, try to detect obsidian CLI in PATH (`which obsidian` / common install locations). Auto-populate cliPath if found.
-- [ ] **Task 12**: CLI integration tests — Create `tests/cli-save.test.ts` with mock tests for the CLI save pipeline. Test fallback chain, error handling, path sanitization.
+- [x] **Task 12**: CLI integration tests — Create `tests/cli-save.test.ts` with mock tests for the CLI save pipeline. Test fallback chain, error handling, path sanitization.
 
 ---
 
