@@ -8,6 +8,7 @@
 
 // Import built-in templates to trigger registration
 import "./reddit";
+import "./hackernews";
 
 export {
   // Template registration
@@ -43,3 +44,20 @@ export {
   detectRedditInterface,
   formatComments
 } from "./reddit";
+
+export {
+  hackerNewsItemTemplate,
+  hackerNewsListingTemplate,
+  extractStoryId,
+  isItemPage,
+  extractPoints,
+  extractStoryUrl,
+  extractStoryText,
+  extractCommentCount,
+  extractComments as extractHackerNewsComments,
+  formatComments as formatHackerNewsComments,
+  extractHackerNewsStory,
+  isSelfPost,
+  extractStoriesFromListing,
+  formatStoriesListing
+} from "./hackernews";
