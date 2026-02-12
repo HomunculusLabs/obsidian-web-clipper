@@ -38,6 +38,7 @@ import puppeteer, { type Browser, type Page } from "puppeteer";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,8 @@ interface CLIOptions {
   urls: string[];
   outdir: string;
   obsidian: boolean;
+  cli: boolean;         // Use Obsidian CLI directly
+  cliPath: string;      // Path to obsidian-cli binary
   vault: string;
   folder: string;
   profile: string | null;
@@ -76,6 +79,8 @@ function parseArgs(argv: string[]): CLIOptions {
     urls: [],
     outdir: "./chatgpt-clips",
     obsidian: false,
+    cli: false,
+    cliPath: "obsidian-cli",  // Default to PATH lookup
     vault: "Main Vault",
     folder: "2 - Source Material/Clips/ChatGPT",
     profile: null,
@@ -105,6 +110,11 @@ function parseArgs(argv: string[]): CLIOptions {
       opts.outdir = argv[i] || opts.outdir;
     } else if (arg === "--obsidian") {
       opts.obsidian = true;
+    } else if (arg === "--cli") {
+      opts.cli = true;
+    } else if (arg === "--cli-path") {
+      i++;
+      opts.cliPath = argv[i] || opts.cliPath;
     } else if (arg === "--vault") {
       i++;
       opts.vault = argv[i] || opts.vault;
@@ -156,6 +166,8 @@ OPTIONS:
   --file, -f <path>     Read URLs from a text file (one per line)
   --outdir, -o <dir>    Output directory (default: ./chatgpt-clips)
   --obsidian            Open obsidian:// URIs instead of saving files
+  --cli                 Use Obsidian CLI directly for file creation
+  --cli-path <path>     Path to obsidian-cli binary (default: obsidian-cli from PATH)
   --vault <name>        Obsidian vault name (default: "Main Vault")
   --folder <path>       Obsidian folder path (default: "2 - Source Material/Clips/ChatGPT")
   --profile <path>      Chrome user data dir (for auth cookies)
@@ -179,6 +191,12 @@ EXAMPLES:
 
   # Debug mode: see the browser
   bun run tools/chatgpt-clipper.ts --no-headless https://chatgpt.com/c/abc123
+
+  # Save directly to Obsidian via CLI (recommended for automation)
+  bun run tools/chatgpt-clipper.ts --cli --vault "My Vault" --folder "Notes/ChatGPT" https://chatgpt.com/c/abc123
+
+  # Use a specific CLI path
+  bun run tools/chatgpt-clipper.ts --cli --cli-path /opt/homebrew/bin/obsidian-cli https://chatgpt.com/c/abc123
 
   # LLM tool call: get structured JSON back
   bun run tools/chatgpt-clipper.ts --json --profile ~/.config/google-chrome/Default https://chatgpt.com/c/abc123
@@ -475,6 +493,36 @@ async function saveConversation(
     return;
   }
 
+  // --cli mode: use obsidian-cli directly for file creation
+  if (opts.cli) {
+    for (const resp of conv.responses) {
+      const title = sanitizeFilename(`${conv.title} - Response ${resp.index}`);
+      const body = `# ${resp.preview}\n\n${resp.markdown}`;
+      const fm = buildFrontmatter({
+        title,
+        source: conv.url,
+        tags: opts.tags,
+        extra: { page_type: "chatgpt", conversation_title: conv.title },
+      });
+      const content = fm + body + "\n";
+      const filePath = opts.folder ? `${opts.folder}/${title}` : title;
+
+      const result: CliSaveResult = await saveViaCli(
+        { cliPath: opts.cliPath, vault: opts.vault, enabled: true },
+        { filePath, content, overwrite: true }
+      );
+
+      if (result.success) {
+        log(`  📎 Saved via CLI: ${title}`);
+      } else {
+        log(`  ✗ CLI save failed: ${result.error}`);
+        log(`    Command: ${result.command}`);
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return;
+  }
+
   if (!opts.perResponse) {
     const title = sanitizeFilename(conv.title);
     const fm = buildFrontmatter({
@@ -606,7 +654,7 @@ async function main(): Promise<void> {
 
     log(`\n────────────────────────────────────`);
     log(`✅ Done: ${successCount} succeeded, ${failCount} failed`);
-    if (!opts.obsidian && !opts.json && !opts.stdout) {
+    if (!opts.obsidian && !opts.cli && !opts.json && !opts.stdout) {
       log(`📁 Output: ${resolve(opts.outdir)}`);
     }
     log();
