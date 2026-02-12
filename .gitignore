@@ -2,3 +2,18 @@ dist/
 node_modules/
 bun.lockb
 .DS_Store
+
+# Agent artifacts
+.call_count
+.circuit_breaker_*
+.exit_signals
+.last_reset
+.ralph_session
+.ralph_session_history
+@AGENT.md
+@fix_plan.md
+PROMPT.md
+status.json
+logs/
+.claude/
+.pi/
