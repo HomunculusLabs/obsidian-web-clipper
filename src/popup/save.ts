@@ -146,6 +146,14 @@ function prepareSave(options: SaveOptions): PreparedSave {
     extra.reading_time_minutes = rs.estimatedReadingTimeMinutes;
   }
 
+  // Selection clipping metadata
+  if (result.metadata?.clipMode) {
+    extra.clip_mode = result.metadata.clipMode;
+  }
+  if (result.metadata?.selectionContext) {
+    extra.selection_context = result.metadata.selectionContext;
+  }
+
   const frontmatter: FrontmatterInput = {
     source,
     title: finalTitle,

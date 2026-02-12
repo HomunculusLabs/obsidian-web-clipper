@@ -108,6 +108,14 @@ export interface ClipMetadata {
   // Site-specific metadata
   siteName?: string;
   language?: string;
+
+  // --- Selection clipping context ---
+
+  /** Clip mode: "selection" when clipping only user-selected text */
+  clipMode?: "full" | "selection";
+
+  /** Surrounding context for selection (e.g., parent paragraph or heading) */
+  selectionContext?: string;
 }
 
 export interface ClipResult {
