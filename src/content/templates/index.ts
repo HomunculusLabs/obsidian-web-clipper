@@ -16,6 +16,7 @@ import "./medium";
 import "./substack";
 import "./arxiv";
 import "./docs";
+import "./amazon";
 
 export {
   // Template registration
@@ -196,3 +197,28 @@ export {
   formatDocsContent,
   generateDocsFilename
 } from "./docs";
+
+export {
+  amazonTemplate,
+  amazonUKTemplate,
+  amazonDETemplate,
+  amazonCATemplate,
+  amazonGenericTemplate,
+  extractAsin,
+  extractTitle as extractAmazonTitle,
+  extractPrice,
+  extractListPrice,
+  extractRating,
+  extractReviewCount,
+  extractFeatures,
+  extractDescription,
+  extractMainImage,
+  extractImages,
+  extractAvailability,
+  extractBrand,
+  extractCategory,
+  extractAmazonProduct,
+  formatAmazonContent,
+  generateAmazonFilename,
+  type AmazonProduct
+} from "./amazon";
