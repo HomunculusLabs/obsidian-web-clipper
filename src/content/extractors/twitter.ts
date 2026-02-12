@@ -83,6 +83,56 @@ interface TwitterThreadTweet {
 }
 
 /**
+ * Author profile information (Task 49)
+ */
+interface TwitterAuthorInfo {
+  /** Author display name */
+  name: string;
+  /** Author handle (e.g., "username" without @) */
+  handle: string;
+  /** Author bio/description */
+  bio?: string;
+  /** Author profile avatar URL */
+  avatar?: string;
+  /** Author is verified */
+  isVerified?: boolean;
+  /** Follower count */
+  followersCount?: number;
+  /** Following count */
+  followingCount?: number;
+  /** Location */
+  location?: string;
+  /** Website URL */
+  website?: string;
+  /** Account creation date */
+  joinedDate?: string;
+}
+
+/**
+ * Aggregated thread statistics (Task 49)
+ */
+interface TwitterThreadStats {
+  /** Total replies across all thread tweets */
+  totalReplies: number;
+  /** Total retweets/reposts across all thread tweets */
+  totalRetweets: number;
+  /** Total likes across all thread tweets */
+  totalLikes: number;
+  /** Total views across all thread tweets (if available) */
+  totalViews?: number;
+  /** Total bookmarks across all thread tweets (if available) */
+  totalBookmarks?: number;
+  /** Number of tweets in the thread */
+  tweetCount: number;
+  /** Average engagement per tweet */
+  avgEngagement: {
+    replies: number;
+    retweets: number;
+    likes: number;
+  };
+}
+
+/**
  * Twitter/X tweet information extracted from the DOM.
  */
 interface TwitterTweetInfo {
@@ -121,6 +171,10 @@ interface TwitterTweetInfo {
   poll?: TwitterPoll;
   /** Link card (Task 48) */
   linkCard?: TwitterLinkCard;
+  /** Author profile info with bio (Task 49) */
+  authorInfo?: TwitterAuthorInfo;
+  /** Aggregated thread statistics (Task 49) */
+  threadStats?: TwitterThreadStats;
 }
 
 /**
@@ -698,6 +752,191 @@ function hasThreadContinuation(): boolean {
 }
 
 /**
+ * Extract author profile information including bio (Task 49)
+ *
+ * Tries multiple extraction methods:
+ * 1. From hover cards/popovers (if user has hovered over profile)
+ * 2. From profile link metadata
+ * 3. From meta tags
+ *
+ * @param tweetArticle - The tweet article element
+ * @param authorHandle - The author's handle
+ */
+function getAuthorInfo(tweetArticle: Element | null, authorHandle: string): TwitterAuthorInfo | undefined {
+  if (!authorHandle) return undefined;
+
+  const authorInfo: TwitterAuthorInfo = {
+    name: "",
+    handle: authorHandle
+  };
+
+  // Method 1: Try to extract from hover card/popover (if visible)
+  // Twitter shows hover cards when user hovers over profile links
+  const hoverCards = document.querySelectorAll('[data-testid="HoverCard"], [data-testid="popover"]');
+  for (const card of hoverCards) {
+    const cardHandle = card.querySelector('a[href="/' + authorHandle + '"]');
+    if (cardHandle) {
+      // Found a hover card for this author
+      const nameEl = card.querySelector('span[lang]');
+      if (nameEl) {
+        authorInfo.name = nameEl.textContent?.trim() || "";
+      }
+
+      // Extract bio from the hover card
+      const bioEl = card.querySelector('div[data-testid="UserDescription"]');
+      if (bioEl) {
+        authorInfo.bio = bioEl.textContent?.trim();
+      }
+
+      // Extract follower/following counts
+      const statsContainer = card.querySelector('div[data-testid="UserProfileHeader_Items"]');
+      if (statsContainer) {
+        const statLinks = statsContainer.querySelectorAll('a[href*="/followers"], a[href*="/following"]');
+        for (const link of statLinks) {
+          const href = link.getAttribute("href") || "";
+          const countText = link.textContent?.trim() || "";
+          const count = parseEngagementCount(countText);
+          if (href.includes("/followers")) {
+            authorInfo.followersCount = count;
+          } else if (href.includes("/following")) {
+            authorInfo.followingCount = count;
+          }
+        }
+      }
+
+      // Extract avatar
+      const avatarEl = card.querySelector('img[src*="profile_images"]');
+      if (avatarEl) {
+        authorInfo.avatar = avatarEl.getAttribute("src") || undefined;
+      }
+
+      // Extract location and website
+      const locationEl = card.querySelector('span[data-testid="UserLocation"]');
+      if (locationEl) {
+        authorInfo.location = locationEl.textContent?.trim();
+      }
+
+      const websiteLink = card.querySelector('a[data-testid="UserUrl"]');
+      if (websiteLink) {
+        authorInfo.website = websiteLink.getAttribute("href") || websiteLink.textContent?.trim();
+      }
+
+      // Check for verified badge
+      authorInfo.isVerified = card.querySelector('[data-testid="icon-verified"]') !== null;
+
+      if (authorInfo.name || authorInfo.bio) {
+        return authorInfo;
+      }
+    }
+  }
+
+  // Method 2: Extract from tweet article if available
+  if (tweetArticle) {
+    // Get name from the tweet
+    const authorLinks = tweetArticle.querySelectorAll('a[role="link"]');
+    for (const link of authorLinks) {
+      const href = link.getAttribute("href") || "";
+      if (href === "/" + authorHandle || href === "/" + authorHandle + "/") {
+        const nameEl = link.querySelector('span[lang]');
+        if (nameEl) {
+          authorInfo.name = nameEl.textContent?.trim() || "";
+        }
+        break;
+      }
+    }
+
+    // Get avatar from tweet
+    const avatarEl = tweetArticle.querySelector('img[src*="profile_images"]');
+    if (avatarEl) {
+      authorInfo.avatar = avatarEl.getAttribute("src") || undefined;
+    }
+
+    // Check for verified badge
+    authorInfo.isVerified = tweetArticle.querySelector('[data-testid="icon-verified"]') !== null;
+  }
+
+  // Method 3: Try meta tags for basic info
+  if (!authorInfo.name) {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || "";
+    const titleMatch = ogTitle.match(/^(.+?)\s+on\s+(?:X|Twitter)/);
+    if (titleMatch) {
+      authorInfo.name = titleMatch[1].trim();
+    }
+  }
+
+  // Method 4: Try to extract bio from page description meta tag
+  if (!authorInfo.bio) {
+    const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute("content") || "";
+    // Format: ""Tweet text" — Author Name (@handle)"
+    // The bio isn't typically in the meta description, but let's try to extract any context
+    if (metaDesc && !metaDesc.includes("Tweet")) {
+      authorInfo.bio = metaDesc;
+    }
+  }
+
+  // Only return if we have at least a name
+  return authorInfo.name ? authorInfo : undefined;
+}
+
+/**
+ * Calculate aggregated thread statistics (Task 49)
+ *
+ * Sums up engagement metrics from all tweets in the thread
+ * and calculates average engagement per tweet.
+ *
+ * @param threadTweets - Array of thread tweets
+ * @returns Aggregated thread statistics
+ */
+function calculateThreadStats(threadTweets: TwitterThreadTweet[]): TwitterThreadStats {
+  const stats: TwitterThreadStats = {
+    totalReplies: 0,
+    totalRetweets: 0,
+    totalLikes: 0,
+    tweetCount: threadTweets.length,
+    avgEngagement: {
+      replies: 0,
+      retweets: 0,
+      likes: 0
+    }
+  };
+
+  let hasViews = false;
+  let hasBookmarks = false;
+
+  for (const tweet of threadTweets) {
+    stats.totalReplies += tweet.engagement.replies;
+    stats.totalRetweets += tweet.engagement.retweets;
+    stats.totalLikes += tweet.engagement.likes;
+
+    if (tweet.engagement.views !== undefined) {
+      stats.totalViews = (stats.totalViews || 0) + tweet.engagement.views;
+      hasViews = true;
+    }
+
+    if (tweet.engagement.bookmarks !== undefined) {
+      stats.totalBookmarks = (stats.totalBookmarks || 0) + tweet.engagement.bookmarks;
+      hasBookmarks = true;
+    }
+  }
+
+  // Clean up undefined values if none of the tweets had them
+  if (!hasViews) {
+    stats.totalViews = undefined;
+  }
+  if (!hasBookmarks) {
+    stats.totalBookmarks = undefined;
+  }
+
+  // Calculate averages
+  const count = threadTweets.length || 1;
+  stats.avgEngagement.replies = Math.round(stats.totalReplies / count);
+  stats.avgEngagement.retweets = Math.round(stats.totalRetweets / count);
+  stats.avgEngagement.likes = Math.round(stats.totalLikes / count);
+
+  return stats;
+}
+
+/**
  * Extract media attachments from the tweet
  */
 function getMediaAttachments(): TwitterMedia[] {
@@ -869,6 +1108,14 @@ function getTweetInfo(): TwitterTweetInfo {
   const poll = tweetArticle ? getPollFromArticle(tweetArticle) : undefined;
   const linkCard = tweetArticle ? getLinkCardFromArticle(tweetArticle) : undefined;
 
+  // Extract author info including bio (Task 49)
+  const authorInfo = getAuthorInfo(tweetArticle, authorHandle);
+
+  // Calculate thread stats if this is a thread (Task 49)
+  const threadStats = isThread && threadTweets.length > 0
+    ? calculateThreadStats(threadTweets)
+    : undefined;
+
   return {
     text: text.trim(),
     authorName,
@@ -885,7 +1132,9 @@ function getTweetInfo(): TwitterTweetInfo {
     quotedTweet,
     hasMoreInThread,
     poll,
-    linkCard
+    linkCard,
+    authorInfo,
+    threadStats
   };
 }
 
@@ -1014,6 +1263,31 @@ export async function extractTwitterContent(
   }
   markdown += "\n\n";
 
+  // Author bio (Task 49)
+  if (tweetInfo.authorInfo?.bio) {
+    markdown += `> 📝 *${tweetInfo.authorInfo.bio}*\n\n`;
+  }
+
+  // Author profile stats (Task 49)
+  if (tweetInfo.authorInfo && (tweetInfo.authorInfo.followersCount || tweetInfo.authorInfo.followingCount)) {
+    const profileStats: string[] = [];
+    if (tweetInfo.authorInfo.followersCount) {
+      profileStats.push(`👥 ${formatNumber(tweetInfo.authorInfo.followersCount)} followers`);
+    }
+    if (tweetInfo.authorInfo.followingCount) {
+      profileStats.push(`➡️ ${formatNumber(tweetInfo.authorInfo.followingCount)} following`);
+    }
+    if (tweetInfo.authorInfo.location) {
+      profileStats.push(`📍 ${tweetInfo.authorInfo.location}`);
+    }
+    if (tweetInfo.authorInfo.website) {
+      profileStats.push(`🔗 [Website](${tweetInfo.authorInfo.website})`);
+    }
+    if (profileStats.length > 0) {
+      markdown += `<small>${profileStats.join(" • ")}</small>\n\n`;
+    }
+  }
+
   if (tweetInfo.timestamp) {
     const date = new Date(tweetInfo.timestamp);
     const dateStr = date.toLocaleDateString("en-US", {
@@ -1026,13 +1300,34 @@ export async function extractTwitterContent(
     markdown += `> 📅 ${dateStr}\n\n`;
   }
 
-  // Thread indicator with count
+  // Thread indicator with count and total stats (Task 49)
   if (tweetInfo.isThread) {
     markdown += `> 🧵 **Thread** (${tweetInfo.threadLength} tweets`;
     if (tweetInfo.hasMoreInThread) {
       markdown += ` + more`;
     }
     markdown += `)\n\n`;
+
+    // Thread total stats summary (Task 49)
+    if (tweetInfo.threadStats) {
+      const stats = tweetInfo.threadStats;
+      markdown += `> **Thread Totals:** `;
+      const totalStats: string[] = [];
+      totalStats.push(`💬 ${formatNumber(stats.totalReplies)} replies`);
+      totalStats.push(`🔄 ${formatNumber(stats.totalRetweets)} reposts`);
+      totalStats.push(`❤️ ${formatNumber(stats.totalLikes)} likes`);
+      if (stats.totalViews) {
+        totalStats.push(`👁️ ${formatNumber(stats.totalViews)} views`);
+      }
+      if (stats.totalBookmarks) {
+        totalStats.push(`🔖 ${formatNumber(stats.totalBookmarks)} bookmarks`);
+      }
+      markdown += totalStats.join(" • ");
+      markdown += `\n`;
+
+      // Add average engagement
+      markdown += `> *Avg per tweet: ${formatNumber(stats.avgEngagement.likes)} likes, ${formatNumber(stats.avgEngagement.retweets)} reposts, ${formatNumber(stats.avgEngagement.replies)} replies*\n\n`;
+    }
   }
 
   markdown += `---\n\n`;
@@ -1164,22 +1459,41 @@ export async function extractTwitterContent(
     }
   }
 
-  // Engagement stats (total from main tweet)
-  const { engagement } = tweetInfo;
+  // Engagement stats (total from main tweet, or thread totals if thread)
+  const { engagement, isThread, threadStats } = tweetInfo;
   markdown += `\n\n---\n\n`;
-  markdown += `**Engagement:** `;
-  const stats: string[] = [];
-  if (engagement.replies > 0) stats.push(`💬 ${formatNumber(engagement.replies)} replies`);
-  if (engagement.retweets > 0) stats.push(`🔄 ${formatNumber(engagement.retweets)} reposts`);
-  if (engagement.likes > 0) stats.push(`❤️ ${formatNumber(engagement.likes)} likes`);
-  if (engagement.bookmarks && engagement.bookmarks > 0) {
-    stats.push(`🔖 ${formatNumber(engagement.bookmarks)} bookmarks`);
+
+  if (isThread && threadStats) {
+    // For threads, show aggregated stats (already shown at top, but also here for reference)
+    markdown += `**Thread Engagement Total:** `;
+    const stats: string[] = [];
+    stats.push(`💬 ${formatNumber(threadStats.totalReplies)} replies`);
+    stats.push(`🔄 ${formatNumber(threadStats.totalRetweets)} reposts`);
+    stats.push(`❤️ ${formatNumber(threadStats.totalLikes)} likes`);
+    if (threadStats.totalBookmarks) {
+      stats.push(`🔖 ${formatNumber(threadStats.totalBookmarks)} bookmarks`);
+    }
+    if (threadStats.totalViews) {
+      stats.push(`👁️ ${formatNumber(threadStats.totalViews)} views`);
+    }
+    markdown += stats.join(" • ");
+    markdown += `\n`;
+  } else {
+    // Single tweet engagement
+    markdown += `**Engagement:** `;
+    const stats: string[] = [];
+    if (engagement.replies > 0) stats.push(`💬 ${formatNumber(engagement.replies)} replies`);
+    if (engagement.retweets > 0) stats.push(`🔄 ${formatNumber(engagement.retweets)} reposts`);
+    if (engagement.likes > 0) stats.push(`❤️ ${formatNumber(engagement.likes)} likes`);
+    if (engagement.bookmarks && engagement.bookmarks > 0) {
+      stats.push(`🔖 ${formatNumber(engagement.bookmarks)} bookmarks`);
+    }
+    if (engagement.views && engagement.views > 0) {
+      stats.push(`👁️ ${formatNumber(engagement.views)} views`);
+    }
+    markdown += stats.length > 0 ? stats.join(" • ") : "No engagement data";
+    markdown += `\n`;
   }
-  if (engagement.views && engagement.views > 0) {
-    stats.push(`👁️ ${formatNumber(engagement.views)} views`);
-  }
-  markdown += stats.join(" • ");
-  markdown += `\n`;
 
   markdown += `\n---\n\n`;
   markdown += `[View on X/Twitter](${result.url})\n`;
