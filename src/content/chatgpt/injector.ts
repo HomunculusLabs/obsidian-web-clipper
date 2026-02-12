@@ -12,6 +12,7 @@ import { DEFAULT_SETTINGS, type Settings } from "../../shared/settings";
 import { sanitizeFilename } from "../../shared/sanitize";
 import { parseTags, addAutoTags } from "../../shared/tags";
 import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
+import { getSelection } from "../selection";
 
 const CLIP_BUTTON_ATTR = "data-obsidian-clip-injected";
 
@@ -167,11 +168,42 @@ function htmlToMarkdown(html: string): string {
 }
 
 /**
+ * Check if a selection range is contained within a given element.
+ */
+function isSelectionInElement(element: HTMLElement): boolean {
+  const domSelection = window.getSelection();
+  if (!domSelection || domSelection.rangeCount === 0 || domSelection.isCollapsed) {
+    return false;
+  }
+
+  const range = domSelection.getRangeAt(0);
+  return element.contains(range.commonAncestorContainer);
+}
+
+/**
  * Clip a single ChatGPT message to Obsidian using the save pipeline.
+ * If the user has text selected within the message, clips just that selection.
  */
 async function clipMessage(messageEl: HTMLElement): Promise<void> {
-  const html = messageEl.innerHTML;
-  const markdown = htmlToMarkdown(html);
+  // Check for selection within this message
+  const selection = getSelection();
+  const hasSelectionInMessage = selection.hasSelection && isSelectionInElement(messageEl);
+
+  let html: string;
+  let markdown: string;
+  let clipMode: "full" | "selection" = "full";
+
+  if (hasSelectionInMessage) {
+    // Clip only the selected portion
+    html = selection.html;
+    markdown = htmlToMarkdown(html);
+    clipMode = "selection";
+  } else {
+    // Clip the full message
+    html = messageEl.innerHTML;
+    markdown = htmlToMarkdown(html);
+  }
+
   const shortTitle = extractTitle(markdown);
 
   // Get settings from background
@@ -205,6 +237,7 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
     extra: {
       page_type: "chatgpt",
       conversation_title: pageTitle,
+      clip_mode: clipMode,
     },
   };
 
@@ -225,9 +258,11 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
 
     if (response?.success) {
       if (response.usedMethod === "clipboard") {
-        showToast("Copied to clipboard (too large for URI). Paste into Obsidian.");
+        const modeMsg = clipMode === "selection" ? "Selection" : "Content";
+        showToast(`${modeMsg} copied to clipboard (too large for URI). Paste into Obsidian.`);
       } else {
-        showToast("Clipped to Obsidian ✓");
+        const modeMsg = clipMode === "selection" ? "Selection" : "Response";
+        showToast(`${modeMsg} clipped to Obsidian ✓`);
       }
     } else {
       // Save failed, show error
