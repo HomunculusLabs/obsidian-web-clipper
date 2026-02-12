@@ -4,9 +4,40 @@ import type { ClipResult } from "../../shared/types";
  * Media item from a tweet
  */
 interface TwitterMedia {
-  type: "image" | "video" | "gif";
+  type: "image" | "video" | "gif" | "poll" | "card";
   url: string;
   altText?: string;
+}
+
+/**
+ * Poll option from a Twitter poll (Task 48)
+ */
+interface TwitterPollOption {
+  label: string;
+  votes?: number;
+  percentage?: number;
+  isWinner?: boolean;
+}
+
+/**
+ * Poll data from a tweet (Task 48)
+ */
+interface TwitterPoll {
+  options: TwitterPollOption[];
+  totalVotes?: number;
+  endTime?: string;
+  hasEnded?: boolean;
+}
+
+/**
+ * Link card (preview of external URL) from a tweet (Task 48)
+ */
+interface TwitterLinkCard {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  domain?: string;
 }
 
 /**
@@ -45,6 +76,10 @@ interface TwitterThreadTweet {
   retweetAuthorHandle?: string;
   /** Original tweet author name if this is a retweet */
   retweetAuthorName?: string;
+  /** Poll data (Task 48) */
+  poll?: TwitterPoll;
+  /** Link card (Task 48) */
+  linkCard?: TwitterLinkCard;
 }
 
 /**
@@ -82,6 +117,10 @@ interface TwitterTweetInfo {
   };
   /** Whether there's a "Show more" indicator suggesting hidden thread content */
   hasMoreInThread?: boolean;
+  /** Poll data (Task 48) */
+  poll?: TwitterPoll;
+  /** Link card (Task 48) */
+  linkCard?: TwitterLinkCard;
 }
 
 /**
@@ -244,6 +283,195 @@ function getMediaFromArticle(article: Element): TwitterMedia[] {
 }
 
 /**
+ * Extract poll data from a tweet article element (Task 48)
+ *
+ * Twitter poll DOM structure:
+ * - Container with data-testid="poll"
+ * - Options in nested divs with radio-button-like structure
+ * - Vote counts and percentages shown in result view
+ */
+function getPollFromArticle(article: Element): TwitterPoll | undefined {
+  // Find poll container - Twitter uses data-testid="poll" or nested poll structure
+  const pollContainer = article.querySelector('div[data-testid="poll"]') ||
+                        article.querySelector('[data-testid="Poll"]');
+
+  if (!pollContainer) return undefined;
+
+  const options: TwitterPollOption[] = [];
+  let totalVotes = 0;
+  let endTime: string | undefined;
+  let hasEnded = false;
+
+  // Extract poll options
+  // Twitter shows options as clickable elements or result bars
+  const optionElements = pollContainer.querySelectorAll('div[role="radiogroup"] > div, div[role="group"] > div');
+
+  for (const optionEl of optionElements) {
+    // Try to extract label and votes
+    const text = optionEl.textContent?.trim() || "";
+    if (!text) continue;
+
+    // Parse format like "Option text · 45% · 123 votes" or just "Option text"
+    const percentMatch = text.match(/(\d+(?:\.\d+)?)\s*%/);
+    const votesMatch = text.match(/([\d,]+)\s*(?:votes?|people)/i);
+    const winnerIndicator = optionEl.querySelector('[data-testid="poll-winner"]') !== null ||
+                            optionEl.classList.contains("winner");
+
+    // Find just the option label (before the percentage/vote info)
+    let label = text;
+    if (percentMatch) {
+      label = text.split(percentMatch[0])[0].trim();
+    } else if (votesMatch) {
+      label = text.split(votesMatch[0])[0].trim();
+    }
+    // Clean up label - remove common separators
+    label = label.replace(/[·|]\s*$/,"").trim();
+
+    if (label) {
+      const option: TwitterPollOption = {
+        label,
+        isWinner: winnerIndicator
+      };
+
+      if (percentMatch) {
+        option.percentage = parseFloat(percentMatch[1]);
+      }
+
+      if (votesMatch) {
+        option.votes = parseInt(votesMatch[1].replace(/,/g, ""), 10);
+        totalVotes += option.votes;
+      }
+
+      options.push(option);
+    }
+  }
+
+  // Alternative extraction if the above didn't work
+  // Try extracting from aria-label or data attributes
+  if (options.length === 0) {
+    const allText = pollContainer.textContent?.trim() || "";
+    // Check for poll options in the format often shown
+    const optionMatches = allText.match(/(.+?)\s+(\d+(?:\.\d+)?%)/g);
+    if (optionMatches) {
+      for (const match of optionMatches) {
+        const parts = match.split(/\s+(?=\d)/);
+        if (parts.length >= 2) {
+          const label = parts[0].trim();
+          const percent = parseFloat(parts[1]);
+          if (label && !isNaN(percent)) {
+            options.push({ label, percentage: percent });
+          }
+        }
+      }
+    }
+  }
+
+  // Check for "ends at" or "final results" text
+  const timeElements = pollContainer.querySelectorAll("time");
+  for (const timeEl of timeElements) {
+    const datetime = timeEl.getAttribute("datetime");
+    if (datetime) {
+      endTime = datetime;
+      // Check if poll has ended
+      const endDate = new Date(datetime);
+      hasEnded = endDate < new Date();
+    }
+  }
+
+  // Look for "final results" or "ended" text
+  const pollText = pollContainer.textContent?.toLowerCase() || "";
+  if (pollText.includes("final results") || pollText.includes("ended")) {
+    hasEnded = true;
+  }
+
+  // Extract total votes from summary text
+  if (totalVotes === 0) {
+    const totalMatch = pollText.match(/([\d,]+)\s*(?:votes?|people\s+ voted)/i);
+    if (totalMatch) {
+      totalVotes = parseInt(totalMatch[1].replace(/,/g, ""), 10);
+    }
+  }
+
+  // Only return if we found at least 2 options
+  if (options.length < 2) return undefined;
+
+  return {
+    options,
+    totalVotes: totalVotes > 0 ? totalVotes : undefined,
+    endTime,
+    hasEnded
+  };
+}
+
+/**
+ * Extract link card (URL preview) from a tweet article element (Task 48)
+ *
+ * Twitter link card DOM structure:
+ * - Container with data-testid="card.wrapper"
+ * - Contains title, description, image, and domain
+ * - Links to external URL
+ */
+function getLinkCardFromArticle(article: Element): TwitterLinkCard | undefined {
+  // Find card wrapper - Twitter uses data-testid="card.wrapper"
+  const cardWrapper = article.querySelector('div[data-testid="card.wrapper"]') ||
+                       article.querySelector('[data-testid="card"]') ||
+                       article.querySelector('div[data-testid="previewCard"]');
+
+  if (!cardWrapper) return undefined;
+
+  // Extract the link URL
+  const linkEl = cardWrapper.closest('a[href]') ||
+                  cardWrapper.querySelector('a[href]') ||
+                  cardWrapper.querySelector('[role="link"]');
+  const url = linkEl?.getAttribute("href") || "";
+
+  // Extract title
+  const titleEl = cardWrapper.querySelector('h2, [data-testid="card-title"], span[dir="auto"]');
+  const title = titleEl?.textContent?.trim() || "";
+
+  // Extract description
+  const descEl = cardWrapper.querySelector('[data-testid="card-description"], p, span[dir="auto"]');
+  // Get description from second text span if available
+  let description = "";
+  const textSpans = cardWrapper.querySelectorAll('span[dir="auto"]');
+  if (textSpans.length > 1) {
+    description = textSpans[1]?.textContent?.trim() || "";
+  }
+  if (!description) {
+    description = descEl?.textContent?.trim() || "";
+  }
+
+  // Extract image
+  const imgEl = cardWrapper.querySelector('img[src]');
+  const image = imgEl?.getAttribute("src") || "";
+
+  // Extract domain - often shown at bottom of card
+  const domainEl = cardWrapper.querySelector('[data-testid="card-domain"], [data-testid="card-domain-display"]');
+  let domain = domainEl?.textContent?.trim() || "";
+
+  // Fallback: extract domain from URL
+  if (!domain && url) {
+    try {
+      const urlObj = new URL(url);
+      domain = urlObj.hostname;
+    } catch {
+      // URL parsing failed, use empty domain
+    }
+  }
+
+  // Only return if we have at least a URL or title
+  if (!url && !title) return undefined;
+
+  return {
+    url,
+    title: title || undefined,
+    description: description || undefined,
+    image: image || undefined,
+    domain: domain || undefined
+  };
+}
+
+/**
  * Extract quoted tweet from a tweet article element
  */
 function getQuotedTweetFromArticle(article: Element): TwitterThreadTweet["quotedTweet"] {
@@ -389,7 +617,9 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
           position: 1,
           media: getMediaFromArticle(article),
           engagement: getEngagementStatsFromArticle(article),
-          quotedTweet: getQuotedTweetFromArticle(article)
+          quotedTweet: getQuotedTweetFromArticle(article),
+          poll: getPollFromArticle(article),
+          linkCard: getLinkCardFromArticle(article)
         });
       }
       continue;
@@ -407,7 +637,9 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
         position,
         media: getMediaFromArticle(article),
         engagement: getEngagementStatsFromArticle(article),
-        quotedTweet: getQuotedTweetFromArticle(article)
+        quotedTweet: getQuotedTweetFromArticle(article),
+        poll: getPollFromArticle(article),
+        linkCard: getLinkCardFromArticle(article)
       });
     } else {
       // Different author - check if this is a retweet by the main author (Task 47)
@@ -428,7 +660,9 @@ function detectAndExtractThread(mainTweetHandle: string): TwitterThreadTweet[] {
           quotedTweet: getQuotedTweetFromArticle(article),
           isRetweet: true,
           retweetAuthorHandle: originalAuthor.handle || handle,
-          retweetAuthorName: originalAuthor.name
+          retweetAuthorName: originalAuthor.name,
+          poll: getPollFromArticle(article),
+          linkCard: getLinkCardFromArticle(article)
         });
       } else {
         // Different author and not a retweet by main author - this is a reply, thread has ended
@@ -630,6 +864,11 @@ function getTweetInfo(): TwitterTweetInfo {
   const threadLength = isThread ? threadTweets.length : undefined;
   const hasMoreInThread = isThread && hasThreadContinuation();
 
+  // Extract poll and link card from main tweet (Task 48)
+  // Note: tweetArticle is already defined at the top of this function
+  const poll = tweetArticle ? getPollFromArticle(tweetArticle) : undefined;
+  const linkCard = tweetArticle ? getLinkCardFromArticle(tweetArticle) : undefined;
+
   return {
     text: text.trim(),
     authorName,
@@ -644,7 +883,9 @@ function getTweetInfo(): TwitterTweetInfo {
     media,
     engagement,
     quotedTweet,
-    hasMoreInThread
+    hasMoreInThread,
+    poll,
+    linkCard
   };
 }
 
@@ -660,6 +901,84 @@ function formatNumber(num: number): string {
     return `${(num / 1000).toFixed(1)}K`;
   }
   return num.toString();
+}
+
+/**
+ * Format poll as markdown (Task 48)
+ */
+function formatPollAsMarkdown(poll: TwitterPoll): string {
+  let md = `\n\n**📊 Poll**`;
+  if (poll.hasEnded) {
+    md += ` (ended)`;
+  }
+  md += `\n\n`;
+
+  // Sort options by percentage (winners first)
+  const sortedOptions = [...poll.options].sort((a, b) => {
+    const aPct = a.percentage ?? 0;
+    const bPct = b.percentage ?? 0;
+    return bPct - aPct;
+  });
+
+  for (const option of sortedOptions) {
+    let line = `- ${option.label}`;
+    if (option.percentage !== undefined) {
+      line += ` — **${option.percentage}%**`;
+    }
+    if (option.votes !== undefined) {
+      line += ` (${formatNumber(option.votes)} votes)`;
+    }
+    if (option.isWinner) {
+      line += ` ✓`;
+    }
+    md += `${line}\n`;
+  }
+
+  if (poll.totalVotes) {
+    md += `\n*${formatNumber(poll.totalVotes)} total votes*`;
+  }
+  if (poll.endTime && !poll.hasEnded) {
+    const endDate = new Date(poll.endTime);
+    md += `\n*Ends: ${endDate.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    })}*`;
+  }
+
+  return md;
+}
+
+/**
+ * Format link card as markdown (Task 48)
+ */
+function formatLinkCardAsMarkdown(card: TwitterLinkCard): string {
+  let md = `\n\n**🔗 Link Card**\n\n`;
+
+  if (card.image) {
+    md += `![${card.title || "Card image"}](${card.image})\n\n`;
+  }
+
+  if (card.title) {
+    md += `**${card.title}**\n\n`;
+  }
+
+  if (card.description) {
+    md += `${card.description}\n\n`;
+  }
+
+  if (card.domain) {
+    md += `🌐 ${card.domain}`;
+    if (card.url) {
+      md += ` — [Open link](${card.url})`;
+    }
+  } else if (card.url) {
+    md += `🔗 [${card.url}](${card.url})`;
+  }
+
+  return md;
 }
 
 /**
@@ -765,6 +1084,16 @@ export async function extractTwitterContent(
         }
       }
 
+      // Poll for this tweet (Task 48)
+      if (tweet.poll) {
+        markdown += formatPollAsMarkdown(tweet.poll);
+      }
+
+      // Link card for this tweet (Task 48)
+      if (tweet.linkCard) {
+        markdown += formatLinkCardAsMarkdown(tweet.linkCard);
+      }
+
       // Quoted tweet for this thread tweet
       if (tweet.quotedTweet) {
         markdown += `\n\n> **Quoted:** @${tweet.quotedTweet.authorHandle}: ${tweet.quotedTweet.text}\n`;
@@ -815,6 +1144,16 @@ export async function extractTwitterContent(
           markdown += `\n${emoji} [${media.type === "gif" ? "GIF" : "Video"}](${media.url})`;
         }
       }
+    }
+
+    // Poll (Task 48)
+    if (tweetInfo.poll) {
+      markdown += formatPollAsMarkdown(tweetInfo.poll);
+    }
+
+    // Link card (Task 48)
+    if (tweetInfo.linkCard) {
+      markdown += formatLinkCardAsMarkdown(tweetInfo.linkCard);
     }
 
     // Quoted tweet
