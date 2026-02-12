@@ -60,7 +60,7 @@ Custom extraction rules per domain for optimal clipping.
 - [x] **Task 35**: Amazon product template — `src/content/templates/amazon.ts`: Extract product name, price, rating, features list, description. Useful for purchase research.
 - [x] **Task 36**: Recipe template — `src/content/templates/recipe.ts`: Extract recipe name, ingredients list, instructions, prep/cook time. Use schema.org Recipe JSON-LD when available.
 - [x] **Task 37**: Custom template editor — Add UI in options page to create/edit/delete custom templates. JSON editor with preview. Import/export templates as JSON.
-- [ ] **Task 38**: Template matching in popup — Show which template matched in the popup (if any). Allow user to override or disable template for current clip.
+- [x] **Task 38**: Template matching in popup — Show which template matched in the popup (if any). Allow user to override or disable template for current clip.
 - [ ] **Task 39**: Template priority system — Allow user to set priority order when multiple templates could match. Add `priority: number` to SiteTemplate.
 - [ ] **Task 40**: Template test harness — Create `tests/templates/` with test HTML fixtures for each site template. Verify extraction produces expected markdown.
 - [ ] **Task 41**: Template contribution guide — Write `docs/custom-templates.md` explaining how to create and share site templates.
