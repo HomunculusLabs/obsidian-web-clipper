@@ -6,6 +6,7 @@ import { handleCopyToClipboard } from "./handlers/copyToClipboard";
 import { handleOpenObsidianUri } from "./handlers/openObsidianUri";
 import { handleExtractPdf } from "./handlers/extractPdf";
 import { handleTestCliConnection } from "./handlers/testCliConnection";
+import { handleSaveToCli } from "./handlers/saveToCli";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -19,6 +20,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleExtractPdf(request);
     case "testCliConnection":
       return handleTestCliConnection(request);
+    case "saveToCli":
+      return handleSaveToCli(request);
     default:
       throw new Error(`Unknown action: ${(request as any).action}`);
   }

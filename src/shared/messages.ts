@@ -9,7 +9,12 @@ export type RuntimeRequest =
   | { action: "copyToClipboard"; data: string }
   | { action: "openObsidianUri"; uri: string }
   | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number }
-  | { action: "testCliConnection"; cliPath: string; vault: string };
+  | { action: "testCliConnection"; cliPath: string; vault: string }
+  | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string };
+
+export type SaveToCliResponse =
+  | { success: true }
+  | { success: false; error: string; requiresBridge?: boolean };
 
 export type TestCliConnectionResponse =
   | { success: true; version?: string }
