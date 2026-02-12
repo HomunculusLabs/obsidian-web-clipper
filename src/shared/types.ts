@@ -1,6 +1,6 @@
 export type PageType = "web" | "youtube" | "pdf" | "twitter";
 
-export type ClipContentType = "article" | "video" | "document";
+export type ClipContentType = "article" | "video" | "document" | "tweet";
 
 export type YouTubeVideoType =
   | "normal"
@@ -124,6 +124,23 @@ export interface ClipMetadata {
 
   /** Name of the site template used for extraction (if any) */
   templateUsed?: string;
+
+  // --- Twitter/X specific metadata (Task 51) ---
+
+  /** Twitter author handle (without @) */
+  twitterAuthorHandle?: string;
+
+  /** Number of tweets in thread (if this is a thread) */
+  twitterThreadLength?: number;
+
+  /** Twitter engagement stats */
+  twitterEngagement?: {
+    replies: number;
+    retweets: number;
+    likes: number;
+    views?: number;
+    bookmarks?: number;
+  };
 }
 
 export interface ClipResult {

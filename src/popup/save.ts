@@ -157,6 +157,26 @@ function prepareSave(options: SaveOptions): PreparedSave {
     extra.selection_count = result.metadata.selectionCount;
   }
 
+  // Twitter/X specific metadata (Task 51)
+  if (result.metadata?.twitterAuthorHandle) {
+    extra.twitter_author_handle = result.metadata.twitterAuthorHandle;
+  }
+  if (result.metadata?.twitterThreadLength && result.metadata.twitterThreadLength > 1) {
+    extra.twitter_thread_length = result.metadata.twitterThreadLength;
+  }
+  if (result.metadata?.twitterEngagement) {
+    const eng = result.metadata.twitterEngagement;
+    extra.twitter_replies = eng.replies;
+    extra.twitter_retweets = eng.retweets;
+    extra.twitter_likes = eng.likes;
+    if (eng.views !== undefined) {
+      extra.twitter_views = eng.views;
+    }
+    if (eng.bookmarks !== undefined) {
+      extra.twitter_bookmarks = eng.bookmarks;
+    }
+  }
+
   const frontmatter: FrontmatterInput = {
     source,
     title: finalTitle,

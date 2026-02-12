@@ -1242,7 +1242,8 @@ function formatLinkCardAsMarkdown(card: TwitterLinkCard): string {
 export async function extractTwitterContent(
   result: ClipResult
 ): Promise<ClipResult> {
-  result.metadata.type = "article";
+  // Task 51: Use "tweet" type for Twitter content
+  result.metadata.type = "tweet";
 
   const tweetInfo = getTweetInfo();
 
@@ -1255,6 +1256,29 @@ export async function extractTwitterContent(
       : `Tweet by @${tweetInfo.authorHandle}`
     : result.title;
   result.metadata.publishedDate = tweetInfo.timestamp;
+
+  // Task 51: Twitter-specific frontmatter fields
+  result.metadata.twitterAuthorHandle = tweetInfo.authorHandle || undefined;
+  result.metadata.twitterThreadLength = tweetInfo.isThread ? tweetInfo.threadLength : undefined;
+
+  // Set engagement - use thread stats for threads, single tweet engagement otherwise
+  if (tweetInfo.isThread && tweetInfo.threadStats) {
+    result.metadata.twitterEngagement = {
+      replies: tweetInfo.threadStats.totalReplies,
+      retweets: tweetInfo.threadStats.totalRetweets,
+      likes: tweetInfo.threadStats.totalLikes,
+      views: tweetInfo.threadStats.totalViews,
+      bookmarks: tweetInfo.threadStats.totalBookmarks
+    };
+  } else if (tweetInfo.engagement) {
+    result.metadata.twitterEngagement = {
+      replies: tweetInfo.engagement.replies,
+      retweets: tweetInfo.engagement.retweets,
+      likes: tweetInfo.engagement.likes,
+      views: tweetInfo.engagement.views,
+      bookmarks: tweetInfo.engagement.bookmarks
+    };
+  }
 
   // Build markdown - Task 50: Clean thread formatting with "# Thread by @handle"
   if (tweetInfo.isThread) {
