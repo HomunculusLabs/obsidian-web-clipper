@@ -47,7 +47,7 @@ Custom extraction rules per domain for optimal clipping.
 
 - [x] **Task 23**: Template system types — Create `src/shared/templates.ts` with `SiteTemplate { domain: string; name: string; selectors: { title?: string; content?: string; author?: string; date?: string; tags?: string }; removeSelectors?: string[]; frontmatterExtras?: Record<string, string>; enabled: boolean }`.
 - [x] **Task 24**: Template registry — Create `src/content/templates/registry.ts` with `getTemplateForUrl(url: string): SiteTemplate | null` that matches URLs against registered templates. Support glob patterns.
-- [ ] **Task 25**: Template-aware web extraction — Modify `extractWebPageContent()` to check for matching template first. If found, use template selectors instead of Readability for extraction.
+- [x] **Task 25**: Template-aware web extraction — Modify `extractWebPageContent()` to check for matching template first. If found, use template selectors instead of Readability for extraction.
 - [ ] **Task 26**: Reddit template — `src/content/templates/reddit.ts`: Extract post title, body, author, subreddit, score, comments. Handle old.reddit.com and new reddit. Add subreddit as tag.
 - [ ] **Task 27**: Hacker News template — `src/content/templates/hackernews.ts`: Extract story title, URL, points, author, top comments. Handle comment pages vs story pages.
 - [ ] **Task 28**: Stack Overflow template — `src/content/templates/stackoverflow.ts`: Extract question, accepted answer, top answers with votes. Preserve code blocks with language hints.
