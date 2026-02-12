@@ -1,4 +1,4 @@
-export type PageType = "web" | "youtube" | "pdf";
+export type PageType = "web" | "youtube" | "pdf" | "twitter";
 
 export type ClipContentType = "article" | "video" | "document";
 
