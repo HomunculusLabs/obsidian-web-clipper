@@ -18,11 +18,12 @@ export interface ExtractWebPageArgs {
   settings: Settings;
   pageUrl?: string; // optional override
   selectionOnly?: boolean; // extract only user-selected content
+  disableTemplate?: boolean; // skip template matching for this extraction
 }
 
 // Extract web page content using Readability
 export function extractWebPageContent(args: ExtractWebPageArgs): ClipResult {
-  const { result, settings, selectionOnly } = args;
+  const { result, settings, selectionOnly, disableTemplate } = args;
   const pageUrl = args.pageUrl || result.url || window.location.href;
 
   // Handle selection-only mode
@@ -31,7 +32,7 @@ export function extractWebPageContent(args: ExtractWebPageArgs): ClipResult {
   }
 
   // Standard full-page extraction
-  return extractFullPageContent(result, settings, pageUrl);
+  return extractFullPageContent(result, settings, pageUrl, disableTemplate);
 }
 
 /**
@@ -151,12 +152,13 @@ function getSelectionContext(): string | null {
 function extractFullPageContent(
   result: ClipResult,
   settings: Settings,
-  pageUrl: string
+  pageUrl: string,
+  disableTemplate?: boolean
 ): ClipResult {
   const documentClone = document.cloneNode(true) as Document;
 
-  // Check for a matching template first
-  if (settings.templatesEnabled !== false) {
+  // Check for a matching template first (unless disabled)
+  if (!disableTemplate && settings.templatesEnabled !== false) {
     const template = getTemplateForUrl(pageUrl, {
       customTemplates: settings.customTemplates,
       disabledBuiltIns: settings.disabledBuiltIns,

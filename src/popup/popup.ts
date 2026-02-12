@@ -1,5 +1,5 @@
 import type { ClipResult, PageType } from "../shared/types";
-import type { PageInfo, SelectionInfo, TabRequest } from "../shared/messages";
+import type { PageInfo, SelectionInfo, TabRequest, TemplateInfo } from "../shared/messages";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
 import { loadSettings as loadSettingsFromStorage } from "../shared/settingsService";
 import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
@@ -15,6 +15,8 @@ let clipperContent: ClipResult | null = null;
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let hasSelection = false;
 let clipSelectionMode = true; // Default to selection mode when selection exists
+let hasTemplate = false;
+let useTemplate = true; // Default to using template when available
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
@@ -72,6 +74,13 @@ function setupEventListeners(): void {
       updateClipButtonText();
     });
   }
+
+  const templateToggle = getEl<HTMLInputElement>("templateToggle");
+  if (templateToggle) {
+    templateToggle.addEventListener("change", () => {
+      useTemplate = templateToggle.checked;
+    });
+  }
 }
 
 /** Update the clip button text based on selection mode */
@@ -113,6 +122,39 @@ function hideSelectionIndicator(): void {
   updateClipButtonText();
 }
 
+/** Show the template indicator with template name */
+function showTemplateIndicator(name: string, source: "built-in" | "custom"): void {
+  const indicator = getEl<HTMLDivElement>("templateIndicator");
+  const nameEl = getEl<HTMLSpanElement>("templateName");
+
+  if (indicator) {
+    indicator.style.display = "block";
+  }
+  if (nameEl) {
+    const prefix = source === "built-in" ? "" : "✨ ";
+    nameEl.textContent = prefix + name;
+  }
+
+  // Ensure toggle is checked by default
+  const templateToggle = getEl<HTMLInputElement>("templateToggle");
+  if (templateToggle) {
+    templateToggle.checked = true;
+    useTemplate = true;
+  }
+
+  hasTemplate = true;
+}
+
+/** Hide the template indicator */
+function hideTemplateIndicator(): void {
+  const indicator = getEl<HTMLDivElement>("templateIndicator");
+  if (indicator) {
+    indicator.style.display = "none";
+  }
+  hasTemplate = false;
+  useTemplate = true;
+}
+
 async function handleClip(): Promise<void> {
   const clipBtn = getEl<HTMLButtonElement>("clipBtn");
 
@@ -128,7 +170,8 @@ async function handleClip(): Promise<void> {
       tab: currentTab,
       pageType,
       settings,
-      selectionOnly: hasSelection && clipSelectionMode
+      selectionOnly: hasSelection && clipSelectionMode,
+      disableTemplate: hasTemplate && !useTemplate
     });
 
     clipperContent = result;
@@ -181,9 +224,21 @@ async function init(): Promise<void> {
       } else {
         hideSelectionIndicator();
       }
+
+      // Query template info
+      const templateInfo = await tabsSendMessage<TabRequest, TemplateInfo>(tabId, {
+        action: "getTemplateInfo",
+        settings
+      });
+      if (templateInfo.hasTemplate && templateInfo.templateName) {
+        showTemplateIndicator(templateInfo.templateName, templateInfo.templateSource || "built-in");
+      } else {
+        hideTemplateIndicator();
+      }
     } catch {
       // Keep URL-based fallback.
       hideSelectionIndicator();
+      hideTemplateIndicator();
     }
   }
 

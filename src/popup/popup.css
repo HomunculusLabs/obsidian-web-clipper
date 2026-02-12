@@ -53,6 +53,40 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Template indicator styles */
+.template-indicator {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  border-bottom: 1px solid #3b82f6;
+}
+
+.template-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e40af;
+  margin-bottom: 6px;
+}
+
+.template-badge #templateName {
+  font-weight: 500;
+}
+
+.template-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.template-toggle .toggle-switch.template-switch {
+  background: #93c5fd;
+}
+
+.template-toggle .toggle-label input:checked + .toggle-switch.template-switch {
+  background: #3b82f6;
+}
+
 /* Selection indicator styles */
 .selection-indicator {
   padding: 10px 16px;

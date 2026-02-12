@@ -63,10 +63,12 @@ export type TabRequest =
       isSPA?: boolean;
       selectionOnly?: boolean;
       includeTimestamps?: boolean;
+      disableTemplate?: boolean; // Override template matching for this clip
       settings: Settings; // Pass settings to content script for extraction
     }
   | { action: "getPageInfo" }
-  | { action: "getSelectionInfo" };
+  | { action: "getSelectionInfo" }
+  | { action: "getTemplateInfo"; settings: Settings };
 
 /** Selection info returned from content script */
 export type SelectionInfo = {
@@ -85,4 +87,16 @@ export type PageInfo = {
   title: string;
   type: PageType;
   contentType?: string;
+};
+
+/** Template info returned from content script */
+export type TemplateInfo = {
+  /** Whether a template matches the current URL */
+  hasTemplate: boolean;
+  /** Name of the matching template (if any) */
+  templateName?: string;
+  /** Domain of the matching template */
+  templateDomain?: string;
+  /** Whether the template is built-in or custom */
+  templateSource?: "built-in" | "custom";
 };

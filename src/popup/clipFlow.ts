@@ -78,10 +78,12 @@ export type ClipOptions = {
   settings: Settings;
   /** Whether to clip only the selected text */
   selectionOnly?: boolean;
+  /** Whether to disable template matching for this clip */
+  disableTemplate?: boolean;
 };
 
 export async function performClip(options: ClipOptions): Promise<ClipResult> {
-  const { tab, pageType, settings, selectionOnly } = options;
+  const { tab, pageType, settings, selectionOnly, disableTemplate } = options;
 
   if (!tab.id) {
     throw new Error("Active tab has no id (cannot clip)");
@@ -99,6 +101,7 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
     isSPA: isLikelySPA(tab.url),
     selectionOnly,
     includeTimestamps: settings.includeTimestamps,
+    disableTemplate,
     settings
   };
 

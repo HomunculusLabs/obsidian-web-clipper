@@ -1,10 +1,10 @@
 /* eslint-disable */
 import { isTabRequest } from "../shared/guards";
-import { clipPage, getPageInfo } from "./clipper";
+import { clipPage, getPageInfo, getTemplateInfo } from "./clipper";
 import { getSelection } from "./selection";
 import { initChatGPTInjector } from "./chatgpt/injector";
 
-import type { PageInfo, SelectionInfo, TabResponse } from "../shared/messages";
+import type { PageInfo, SelectionInfo, TabResponse, TemplateInfo } from "../shared/messages";
 
 /** Max chars for selection preview */
 const SELECTION_PREVIEW_MAX = 100;
@@ -34,6 +34,12 @@ chrome.runtime.onMessage.addListener(
         hasSelection: sel.hasSelection,
         preview
       };
+      sendResponse(response);
+      return true;
+    }
+
+    if (request.action === "getTemplateInfo") {
+      const response: TemplateInfo = getTemplateInfo(request.settings);
       sendResponse(response);
       return true;
     }

@@ -1,12 +1,13 @@
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage } from "../shared/errors";
+import { getTemplateForUrl } from "./templates";
 
 import { extractWebPageContent } from "./extractors/web";
 import { extractPDFContent } from "./extractors/pdf";
 import { extractYouTubeContent } from "./extractors/youtube";
 
 import type { ClipResult, PageType } from "../shared/types";
-import type { PageInfo, TabRequest, TabResponse } from "../shared/messages";
+import type { PageInfo, TabRequest, TabResponse, TemplateInfo } from "../shared/messages";
 
 type ClipRequest = Extract<TabRequest, { action: "clip" }>;
 
@@ -54,7 +55,8 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
         result = extractWebPageContent({
           result: baseResult,
           settings,
-          selectionOnly: request.selectionOnly
+          selectionOnly: request.selectionOnly,
+          disableTemplate: request.disableTemplate
         });
         break;
     }
@@ -73,5 +75,39 @@ export function getPageInfo(): PageInfo {
     title: document.title || "Untitled",
     type: detectPageType(url, document.contentType),
     contentType: document.contentType || ""
+  };
+}
+
+/**
+ * Get template info for the current URL.
+ * Returns information about which template (if any) matches this page.
+ */
+export function getTemplateInfo(settings: ClipRequest["settings"]): TemplateInfo {
+  const url = window.location.href;
+
+  if (settings.templatesEnabled === false) {
+    return { hasTemplate: false };
+  }
+
+  const template = getTemplateForUrl(url, {
+    customTemplates: settings.customTemplates,
+    disabledBuiltIns: settings.disabledBuiltIns,
+    includeBuiltIns: true
+  });
+
+  if (!template) {
+    return { hasTemplate: false };
+  }
+
+  // Determine if this is a built-in or custom template
+  const isBuiltIn = !settings.customTemplates?.some(
+    (t) => t.domain === template.domain && t.name === template.name
+  );
+
+  return {
+    hasTemplate: true,
+    templateName: template.name,
+    templateDomain: template.domain,
+    templateSource: isBuiltIn ? "built-in" : "custom"
   };
 }
