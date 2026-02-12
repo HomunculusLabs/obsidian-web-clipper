@@ -64,16 +64,13 @@ interface YouTubeMetadata {
   videoId: string;
 }
 
-interface TranscriptOutput extends ToolOutput<TranscriptOutputData> {
-  metadata: YouTubeMetadata;
-  transcript: TranscriptSegment[];
-}
-
 interface TranscriptOutputData {
   transcript: TranscriptSegment[];
   transcriptText: string;
   metadata: YouTubeMetadata;
 }
+
+type TranscriptOutput = ToolOutput<TranscriptOutputData>;
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
@@ -518,20 +515,7 @@ async function extractTranscript(
     title: "",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      channel: "",
-      channelId: "",
-      duration: "",
-      durationSeconds: 0,
-      description: "",
-      publishedDate: "",
-      viewCount: 0,
-      likeCount: 0,
-      videoId: videoId || "",
-    },
-    transcript: [],
+    tags: opts.tags,
     data: {
       transcript: [],
       transcriptText: "",
@@ -570,8 +554,7 @@ async function extractTranscript(
     const videoInfo = await page.evaluate(extractYouTubeInfoInPage);
 
     result.title = videoInfo.title;
-    result.metadata = videoInfo;
-    result.data.metadata = videoInfo;
+    result.data!.metadata = videoInfo;
 
     log(`  → Video: "${videoInfo.title}" by ${videoInfo.channel}`);
 
@@ -604,9 +587,8 @@ async function extractTranscript(
       return result;
     }
 
-    result.transcript = segments;
-    result.data.transcript = segments;
-    result.data.transcriptText = segments.map(s => s.text).join(" ");
+    result.data!.transcript = segments;
+    result.data!.transcriptText = segments.map(s => s.text).join(" ");
     result.success = true;
 
     log(`  ✓ Extracted ${segments.length} transcript segments`);
@@ -647,7 +629,7 @@ function formatDuration(seconds: number): string {
 }
 
 function buildMarkdown(result: TranscriptOutput, opts: CLIOptions): string {
-  const { metadata, transcript } = result;
+  const { metadata, transcript } = result.data!;
 
   let md = `# ${metadata.title || "YouTube Transcript"}\n\n`;
 
@@ -686,21 +668,23 @@ function buildMarkdown(result: TranscriptOutput, opts: CLIOptions): string {
 }
 
 function buildFullMarkdown(result: TranscriptOutput, opts: CLIOptions): string {
+  const metadata = result.data!.metadata;
+
   const frontmatterInput: FrontmatterInput = {
     source: result.url,
     title: result.title || "Untitled",
     type: "video",
     dateClippedISO: new Date().toISOString(),
     tags: opts.tags,
-    channel: result.metadata.channel,
-    duration: result.metadata.duration,
+    channel: metadata.channel,
+    duration: metadata.duration,
     extra: {
-      video_id: result.metadata.videoId,
-      channel_id: result.metadata.channelId,
-      duration_seconds: result.metadata.durationSeconds,
-      view_count: result.metadata.viewCount,
-      like_count: result.metadata.likeCount,
-      published_date: result.metadata.publishedDate,
+      video_id: metadata.videoId,
+      channel_id: metadata.channelId,
+      duration_seconds: metadata.durationSeconds,
+      view_count: metadata.viewCount,
+      like_count: metadata.likeCount,
+      published_date: metadata.publishedDate,
     },
   };
 
@@ -751,14 +735,14 @@ async function main(): Promise<void> {
     // --json mode: output structured JSON to stdout
     if (opts.json) {
       const output: TranscriptOutput = {
-        ...result,
+        success: result.success,
+        url: result.url,
+        title: result.title,
         markdown: result.success ? buildFullMarkdown(result, opts) : "",
         content: result.content,
-        data: {
-          transcript: result.transcript,
-          transcriptText: result.data.transcriptText,
-          metadata: result.metadata,
-        },
+        tags: result.tags,
+        error: result.error,
+        data: result.data,
       };
       console.log(JSON.stringify(output, null, 2));
     } else if (opts.stdout) {

@@ -151,6 +151,8 @@ interface ThreadResult {
   error?: string;
 }
 
+type TwitterOutput = ToolOutput<TwitterOutputData>;
+
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
 function parseArgs(argv: string[], log: Logger): CLIOptions {
@@ -1114,7 +1116,7 @@ async function main(): Promise<void> {
       // For multiple URLs, output array with batch wrapper
       if (allResults.length === 1) {
         const r = allResults[0];
-        const output: ToolOutput<TwitterOutputData> = {
+        const output: TwitterOutput = {
           success: r.success,
           url: r.url,
           title: r.tweet
@@ -1124,19 +1126,7 @@ async function main(): Promise<void> {
             : "",
           markdown: r.markdown || "",
           content: r.tweet?.text || "",
-          metadata: r.tweet
-            ? {
-                tweet_id: r.tweet.tweetId,
-                author_handle: r.tweet.authorHandle,
-                author_name: r.tweet.authorName,
-                is_thread: r.tweet.isThread,
-                thread_length: r.tweet.threadLength,
-                verified: r.tweet.isVerified,
-                engagement: r.tweet.engagement,
-                media_count: r.tweet.media.length,
-                timestamp: r.tweet.timestamp,
-              }
-            : {},
+          tags: opts.tags,
           error: r.error,
           data: r.tweet
             ? {
@@ -1161,7 +1151,7 @@ async function main(): Promise<void> {
           total: urls.length,
           succeeded: successCount,
           failed: failCount,
-          results: allResults.map((r): ToolOutput<TwitterOutputData> => ({
+          results: allResults.map((r): TwitterOutput => ({
             success: r.success,
             url: r.url,
             title: r.tweet
@@ -1171,19 +1161,7 @@ async function main(): Promise<void> {
               : "",
             markdown: r.markdown || "",
             content: r.tweet?.text || "",
-            metadata: r.tweet
-              ? {
-                  tweet_id: r.tweet.tweetId,
-                  author_handle: r.tweet.authorHandle,
-                  author_name: r.tweet.authorName,
-                  is_thread: r.tweet.isThread,
-                  thread_length: r.tweet.threadLength,
-                  verified: r.tweet.isVerified,
-                  engagement: r.tweet.engagement,
-                  media_count: r.tweet.media.length,
-                  timestamp: r.tweet.timestamp,
-                }
-              : {},
+            tags: opts.tags,
             error: r.error,
             data: r.tweet
               ? {

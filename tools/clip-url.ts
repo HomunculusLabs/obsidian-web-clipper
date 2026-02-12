@@ -45,6 +45,7 @@ import {
   type CommonCLIOptions,
   type Logger,
   type ToolOutput,
+  type ToolMetadata,
 } from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -54,25 +55,12 @@ interface CLIOptions extends CommonCLIOptions {
   timestamps: boolean;
 }
 
-interface ClipMetadata {
-  url: string;
-  title: string;
-  type: ClipContentType;
-  author?: string;
-  channel?: string;
-  duration?: string;
-  description?: string;
-  publishedDate?: string;
-}
-
 interface ClipOutputData {
   pageType: PageType;
-  metadata: ClipMetadata;
+  metadata: ToolMetadata;
 }
 
-type ClipOutput = ToolOutput<ClipOutputData> & {
-  pageType: PageType;
-};
+type ClipOutput = ToolOutput<ClipOutputData>;
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
@@ -231,13 +219,16 @@ async function clipUrl(
     success: false,
     url,
     title: "",
-    pageType,
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "article",
+    tags: opts.tags,
+    data: {
+      pageType,
+      metadata: {
+        url,
+        title: "",
+        type: "article",
+      },
     },
   };
 
@@ -272,13 +263,16 @@ async function extractWebPage(
     success: false,
     url,
     title: "",
-    pageType: "web",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "article",
+    tags: opts.tags,
+    data: {
+      pageType: "web",
+      metadata: {
+        url,
+        title: "",
+        type: "article",
+      },
     },
   };
 
@@ -417,10 +411,10 @@ async function extractWebPage(
     );
 
     result.title = pageData.title;
-    result.metadata.title = pageData.title;
-    result.metadata.author = pageData.byline;
-    result.metadata.publishedDate = pageData.publishedTime;
-    result.metadata.description = pageData.excerpt;
+    result.data!.metadata.title = pageData.title;
+    result.data!.metadata.author = pageData.byline;
+    result.data!.metadata.publishedDate = pageData.publishedTime;
+    result.data!.metadata.description = pageData.excerpt;
 
     // Build markdown with title
     let bodyMarkdown = `# ${pageData.title}\n\n`;
@@ -451,13 +445,16 @@ async function extractYouTube(
     success: false,
     url,
     title: "",
-    pageType: "youtube",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "video",
+    tags: opts.tags,
+    data: {
+      pageType: "youtube",
+      metadata: {
+        url,
+        title: "",
+        type: "video",
+      },
     },
   };
 
@@ -468,10 +465,10 @@ async function extractYouTube(
     const videoInfo = await page.evaluate(extractYouTubeInPage);
 
     result.title = videoInfo.title;
-    result.metadata.title = videoInfo.title;
-    result.metadata.channel = videoInfo.channel;
-    result.metadata.duration = videoInfo.duration;
-    result.metadata.description = videoInfo.description;
+    result.data!.metadata.title = videoInfo.title;
+    result.data!.metadata.channel = videoInfo.channel;
+    result.data!.metadata.duration = videoInfo.duration;
+    result.data!.metadata.description = videoInfo.description;
 
     // Try to get transcript
     const transcript = await getYouTubeTranscriptInPage(page, opts.timestamps);
@@ -563,13 +560,16 @@ async function extractPdfFromViewer(
     success: false,
     url,
     title: "",
-    pageType: "pdf",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "document",
+    tags: opts.tags,
+    data: {
+      pageType: "pdf",
+      metadata: {
+        url,
+        title: "",
+        type: "document",
+      },
     },
   };
 
@@ -586,7 +586,7 @@ async function extractPdfFromViewer(
       });
 
       result.title = pdfData.title;
-      result.metadata.title = pdfData.title;
+      result.data!.metadata.title = pdfData.title;
       result.markdown = `# ${pdfData.title}\n\n> PDF content extraction in CLI requires downloading the file. Use the browser extension for full PDF support.\n\n**URL:** ${url}\n`;
       result.success = true;
       return result;
@@ -595,7 +595,7 @@ async function extractPdfFromViewer(
     // For other PDF URLs, note that full extraction needs download
     const filename = url.split("/").pop() || "Document.pdf";
     result.title = filename.replace(/\.pdf$/i, "");
-    result.metadata.title = result.title;
+    result.data!.metadata.title = result.title;
     result.markdown = `# ${result.title}\n\n> PDF content extraction requires downloading the file. Consider using the browser extension for full PDF support.\n\n**URL:** ${url}\n`;
     result.success = true;
 
@@ -611,9 +611,12 @@ async function extractPdfFromViewer(
 // ─── Save Logic ──────────────────────────────────────────────────────────────
 
 function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
+  const pageType = result.data?.pageType || "web";
+  const metadata = result.data?.metadata;
+
   const contentType: ClipContentType =
-    result.pageType === "youtube" ? "video" :
-    result.pageType === "pdf" ? "document" : "article";
+    pageType === "youtube" ? "video" :
+    pageType === "pdf" ? "document" : "article";
 
   const frontmatterInput: FrontmatterInput = {
     source: result.url,
@@ -621,11 +624,11 @@ function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
     type: contentType,
     dateClippedISO: new Date().toISOString(),
     tags: opts.tags,
-    author: result.metadata.author,
-    channel: result.metadata.channel,
-    duration: result.metadata.duration,
+    author: metadata?.author,
+    channel: metadata?.channel,
+    duration: metadata?.duration,
     extra: {
-      page_type: result.pageType,
+      page_type: pageType,
     },
   };
 
@@ -706,13 +709,14 @@ async function main(): Promise<void> {
     // --json mode: output structured JSON to stdout using ToolOutput format
     if (opts.json) {
       const output: ClipOutput = {
-        ...result,
+        success: result.success,
+        url: result.url,
+        title: result.title,
         markdown: result.success ? buildFullMarkdown(result, opts) : "",
         content: result.markdown,
-        data: {
-          pageType: result.pageType,
-          metadata: result.metadata,
-        },
+        tags: result.tags,
+        error: result.error,
+        data: result.data,
       };
       console.log(JSON.stringify(output, null, 2));
     } else {

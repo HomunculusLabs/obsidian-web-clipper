@@ -29,7 +29,7 @@ import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 import { sanitizeFilename } from "../src/shared/sanitize";
 import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
 import type { ClipContentType } from "../src/shared/types";
-import { createLogger, type CommonCLIOptions, type Logger } from "./lib/clipper-core";
+import { createLogger, type CommonCLIOptions, type Logger, type ToolOutput } from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -42,13 +42,7 @@ interface CLIOptions extends CommonCLIOptions {
   author: string;
 }
 
-interface ClipOutput {
-  success: boolean;
-  title: string;
-  filePath: string;
-  markdown: string;
-  error?: string;
-}
+type ClipOutput = ToolOutput;
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
@@ -245,9 +239,14 @@ async function processAndSave(content: string, opts: CLIOptions): Promise<ClipOu
 
   const result: ClipOutput = {
     success: true,
+    url: opts.source,
     title,
-    filePath,
     markdown,
+    content,
+    tags: opts.tags,
+    data: {
+      filePath,
+    },
   };
 
   // --stdout mode: dump markdown to stdout
@@ -323,7 +322,7 @@ async function main(): Promise<void> {
   } else if (opts.cli) {
     // CLI save result
     if (result.success) {
-      log(`  ✅ Saved: ${result.filePath}`);
+      log(`  ✅ Saved: ${result.data?.filePath}`);
     } else {
       log(`  ❌ Failed: ${result.error}`);
     }

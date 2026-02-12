@@ -43,6 +43,8 @@ import {
   resolveUrls,
   type CommonCLIOptions,
   type Logger,
+  type ToolOutput,
+  type ToolMetadata,
   DEFAULT_CLI_OPTIONS,
 } from "./lib/clipper-core";
 
@@ -57,30 +59,15 @@ interface CLIOptions extends CommonCLIOptions {
   progress: boolean;
 }
 
-interface ClipOutput {
-  success: boolean;
-  url: string;
-  title: string;
+interface ClipOutputData {
   pageType: PageType;
-  markdown: string;
-  content: string;
-  metadata: ClipMetadata;
-  tags: string[];
-  error?: string;
+  metadata: ToolMetadata;
 }
 
-interface ClipMetadata {
-  url: string;
-  title: string;
-  type: ClipContentType;
-  author?: string;
-  channel?: string;
-  duration?: string;
-  description?: string;
-  publishedDate?: string;
-}
+type ClipOutput = ToolOutput<ClipOutputData>;
 
 interface BatchResult {
+  success: boolean;
   total: number;
   succeeded: number;
   failed: number;
@@ -445,15 +432,17 @@ async function clipUrl(
     success: false,
     url,
     title: "",
-    pageType,
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "article",
-    },
     tags: opts.tags,
+    data: {
+      pageType,
+      metadata: {
+        url,
+        title: "",
+        type: "article",
+      },
+    },
   };
 
   try {
@@ -484,15 +473,17 @@ async function extractWebPage(
     success: false,
     url,
     title: "",
-    pageType: "web",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "article",
-    },
     tags: opts.tags,
+    data: {
+      pageType: "web",
+      metadata: {
+        url,
+        title: "",
+        type: "article",
+      },
+    },
   };
 
   try {
@@ -500,10 +491,10 @@ async function extractWebPage(
     const markdown = await page.evaluate(htmlToMarkdownInBrowser, pageData.content);
 
     result.title = pageData.title;
-    result.metadata.title = pageData.title;
-    result.metadata.author = pageData.byline;
-    result.metadata.publishedDate = pageData.publishedTime;
-    result.metadata.description = pageData.excerpt;
+    result.data!.metadata.title = pageData.title;
+    result.data!.metadata.author = pageData.byline;
+    result.data!.metadata.publishedDate = pageData.publishedTime;
+    result.data!.metadata.description = pageData.excerpt;
 
     let bodyMarkdown = `# ${pageData.title}\n\n`;
     if (pageData.excerpt) {
@@ -533,15 +524,17 @@ async function extractYouTube(
     success: false,
     url,
     title: "",
-    pageType: "youtube",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "video",
-    },
     tags: opts.tags,
+    data: {
+      pageType: "youtube",
+      metadata: {
+        url,
+        title: "",
+        type: "video",
+      },
+    },
   };
 
   try {
@@ -550,10 +543,10 @@ async function extractYouTube(
     const videoInfo = await page.evaluate(extractYouTubeInPage);
 
     result.title = videoInfo.title;
-    result.metadata.title = videoInfo.title;
-    result.metadata.channel = videoInfo.channel;
-    result.metadata.duration = videoInfo.duration;
-    result.metadata.description = videoInfo.description;
+    result.data!.metadata.title = videoInfo.title;
+    result.data!.metadata.channel = videoInfo.channel;
+    result.data!.metadata.duration = videoInfo.duration;
+    result.data!.metadata.description = videoInfo.description;
 
     const transcript = await getYouTubeTranscriptInPage(page, opts.timestamps);
 
@@ -642,20 +635,22 @@ async function extractPdfFromViewer(
     success: false,
     url,
     title: "",
-    pageType: "pdf",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "document",
-    },
     tags: opts.tags,
+    data: {
+      pageType: "pdf",
+      metadata: {
+        url,
+        title: "",
+        type: "document",
+      },
+    },
   };
 
   const filename = url.split("/").pop() || "Document.pdf";
   result.title = filename.replace(/\.pdf$/i, "");
-  result.metadata.title = result.title;
+  result.data!.metadata.title = result.title;
   result.content = `# ${result.title}\n\n> PDF content extraction requires downloading the file.\n\n**URL:** ${url}\n`;
   result.success = true;
 
@@ -666,9 +661,12 @@ async function extractPdfFromViewer(
 // ─── Save Logic ──────────────────────────────────────────────────────────────
 
 function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
+  const pageType = result.data?.pageType || "web";
+  const metadata = result.data?.metadata;
+
   const contentType: ClipContentType =
-    result.pageType === "youtube" ? "video" :
-    result.pageType === "pdf" ? "document" : "article";
+    pageType === "youtube" ? "video" :
+    pageType === "pdf" ? "document" : "article";
 
   const frontmatterInput: FrontmatterInput = {
     source: result.url,
@@ -676,11 +674,11 @@ function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
     type: contentType,
     dateClippedISO: new Date().toISOString(),
     tags: opts.tags,
-    author: result.metadata.author,
-    channel: result.metadata.channel,
-    duration: result.metadata.duration,
+    author: metadata?.author,
+    channel: metadata?.channel,
+    duration: metadata?.duration,
     extra: {
-      page_type: result.pageType,
+      page_type: pageType,
     },
   };
 
@@ -859,6 +857,8 @@ async function main(): Promise<void> {
 
   // Output results
   if (opts.json) {
+    // Mark overall success based on failures
+    batchResult.success = batchResult.failed === 0;
     console.log(JSON.stringify(batchResult, null, 2));
   } else if (opts.stdout) {
     // Output all markdown separated by ---

@@ -44,6 +44,8 @@ import {
   createLogger,
   type CommonCLIOptions,
   type Logger,
+  type ToolOutput,
+  type ToolMetadata,
   DEFAULT_CLI_OPTIONS,
 } from "./lib/clipper-core";
 
@@ -61,30 +63,14 @@ interface CLIOptions extends CommonCLIOptions {
   userAgent: string;
 }
 
-interface ClipMetadata {
-  url: string;
-  title: string;
-  type: ClipContentType;
-  author?: string;
-  channel?: string;
-  duration?: string;
-  description?: string;
-  publishedDate?: string;
-}
-
-interface ClipOutput {
-  success: boolean;
-  url: string;
-  title: string;
+interface ClipOutputData {
   pageType: PageType;
   depth: number;
-  markdown: string;
-  content: string;
-  metadata: ClipMetadata;
-  tags: string[];
+  metadata: ToolMetadata;
   links: string[];
-  error?: string;
 }
+
+type ClipOutput = ToolOutput<ClipOutputData>;
 
 interface CrawlQueueItem {
   url: string;
@@ -587,16 +573,19 @@ async function clipPage(
     url,
     depth,
     title: "",
-    pageType,
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "article",
-    },
     tags: opts.tags,
-    links: [],
+    data: {
+      pageType,
+      depth,
+      metadata: {
+        url,
+        title: "",
+        type: "article",
+      },
+      links: [],
+    },
   };
 
   try {
@@ -607,7 +596,7 @@ async function clipPage(
     if (pageType === "youtube") {
       // Skip YouTube pages in site scraping - they're not typically part of a site
       result.error = "Skipping YouTube page in site scrape";
-      result.metadata.type = "video";
+      result.data!.metadata.type = "video";
       return result;
     } else if (pageType === "pdf") {
       return await extractPdfFromViewer(page, url, depth, opts, log);
@@ -634,16 +623,19 @@ async function extractWebPage(
     url,
     depth,
     title: "",
-    pageType: "web",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "article",
-    },
     tags: opts.tags,
-    links: [],
+    data: {
+      pageType: "web",
+      depth,
+      metadata: {
+        url,
+        title: "",
+        type: "article",
+      },
+      links: [],
+    },
   };
 
   try {
@@ -651,11 +643,11 @@ async function extractWebPage(
     const markdown = await page.evaluate(htmlToMarkdownInBrowser, pageData.content);
 
     result.title = pageData.title;
-    result.links = pageData.links;
-    result.metadata.title = pageData.title;
-    result.metadata.author = pageData.byline;
-    result.metadata.publishedDate = pageData.publishedTime;
-    result.metadata.description = pageData.excerpt;
+    result.data!.links = pageData.links;
+    result.data!.metadata.title = pageData.title;
+    result.data!.metadata.author = pageData.byline;
+    result.data!.metadata.publishedDate = pageData.publishedTime;
+    result.data!.metadata.description = pageData.excerpt;
 
     let bodyMarkdown = `# ${pageData.title}\n\n`;
     if (pageData.excerpt) {
@@ -687,21 +679,24 @@ async function extractPdfFromViewer(
     url,
     depth,
     title: "",
-    pageType: "pdf",
     markdown: "",
     content: "",
-    metadata: {
-      url,
-      title: "",
-      type: "document",
-    },
     tags: opts.tags,
-    links: [],
+    data: {
+      pageType: "pdf",
+      depth,
+      metadata: {
+        url,
+        title: "",
+        type: "document",
+      },
+      links: [],
+    },
   };
 
   const filename = url.split("/").pop() || "Document.pdf";
   result.title = filename.replace(/\.pdf$/i, "");
-  result.metadata.title = result.title;
+  result.data!.metadata.title = result.title;
   result.content = `# ${result.title}\n\n> PDF content extraction requires downloading.\n\n**URL:** ${url}\n`;
   result.success = true;
 
@@ -712,9 +707,13 @@ async function extractPdfFromViewer(
 // ─── Save Logic ──────────────────────────────────────────────────────────────
 
 function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
+  const pageType = result.data?.pageType || "web";
+  const depth = result.data?.depth || 0;
+  const metadata = result.data?.metadata;
+
   const contentType: ClipContentType =
-    result.pageType === "youtube" ? "video" :
-    result.pageType === "pdf" ? "document" : "article";
+    pageType === "youtube" ? "video" :
+    pageType === "pdf" ? "document" : "article";
 
   const frontmatterInput: FrontmatterInput = {
     source: result.url,
@@ -722,10 +721,10 @@ function buildFullMarkdown(result: ClipOutput, opts: CLIOptions): string {
     type: contentType,
     dateClippedISO: new Date().toISOString(),
     tags: opts.tags,
-    author: result.metadata.author,
+    author: metadata?.author,
     extra: {
-      crawl_depth: result.depth,
-      page_type: result.pageType,
+      crawl_depth: depth,
+      page_type: pageType,
     },
   };
 
@@ -742,7 +741,8 @@ async function saveResult(result: ClipOutput, opts: CLIOptions, log: Logger): Pr
   if (opts.cli) {
     const title = sanitizeFilename(result.title || "Untitled");
     // Create depth-based folder structure
-    const folderPath = opts.folder ? `${opts.folder}/depth-${result.depth}` : `depth-${result.depth}`;
+    const depth = result.data?.depth || 0;
+    const folderPath = opts.folder ? `${opts.folder}/depth-${depth}` : `depth-${depth}`;
     const filePath = `${folderPath}/${title}`;
 
     const saveResult: CliSaveResult = await saveViaCli(
@@ -825,7 +825,8 @@ async function crawlSite(
 
         // Add links to queue if we haven't reached max depth
         if (item.depth < opts.depth) {
-          for (const link of result.links) {
+          const links = result.data?.links || [];
+          for (const link of links) {
             const normalizedLink = normalizeUrl(link);
 
             // Skip if already visited or queued
@@ -874,7 +875,7 @@ async function crawlSite(
     }
 
     // Calculate max depth reached
-    const maxDepthReached = Math.max(...pages.map(p => p.depth), 0);
+    const maxDepthReached = Math.max(...pages.map(p => p.data?.depth || 0), 0);
 
     return {
       success: true,

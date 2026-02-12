@@ -58,7 +58,12 @@ export const DEFAULT_CLI_OPTIONS: Omit<CommonCLIOptions, 'urls' | 'url'> = {
 };
 
 /**
- * Standardized tool output format for LLM agent integration
+ * Standardized tool output format for LLM agent integration.
+ *
+ * All CLI tools should use this format for --json output to ensure
+ * consistency across the tool suite for agentic consumption.
+ *
+ * @template T - Tool-specific additional data (e.g., YouTube transcript segments)
  */
 export interface ToolOutput<T = unknown> {
   /** Whether the operation succeeded */
@@ -69,14 +74,39 @@ export interface ToolOutput<T = unknown> {
   title: string;
   /** Full markdown content with frontmatter */
   markdown: string;
-  /** Content without frontmatter */
+  /** Content without frontmatter (raw body text) */
   content: string;
-  /** Extracted metadata */
-  metadata: Record<string, unknown>;
+  /** Tags applied to this clip */
+  tags: string[];
   /** Error message if not successful */
   error?: string;
   /** Tool-specific additional data */
   data?: T;
+}
+
+/**
+ * Minimal metadata interface for tool output.
+ * Tools that need richer metadata should use the data field.
+ */
+export interface ToolMetadata {
+  /** Content type: article, video, document, tweet */
+  type?: string;
+  /** Page type detected: web, youtube, pdf, twitter */
+  pageType?: string;
+  /** Author name */
+  author?: string;
+  /** Channel name (for YouTube) */
+  channel?: string;
+  /** Duration string (for videos) */
+  duration?: string;
+  /** Description/excerpt */
+  description?: string;
+  /** Publication date ISO string */
+  publishedDate?: string;
+  /** Canonical URL */
+  canonicalUrl?: string;
+  /** Any additional tool-specific metadata */
+  [key: string]: unknown;
 }
 
 /**

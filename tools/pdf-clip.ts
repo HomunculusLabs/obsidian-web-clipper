@@ -31,67 +31,13 @@ import * as pdfjs from "pdfjs-dist";
 import { sanitizeFilename } from "../src/shared/sanitize";
 import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
+import { createLogger, type CommonCLIOptions, type Logger, type ToolOutput } from "./lib/clipper-core";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /**
  * Common CLI options shared across all clipping tools
  */
-interface CommonCLIOptions {
-  /** Use Obsidian CLI directly for file creation */
-  cli: boolean;
-  /** Path to obsidian-cli binary */
-  cliPath: string;
-  /** Obsidian vault name */
-  vault: string;
-  /** Obsidian folder path */
-  folder: string;
-  /** Chrome user data dir (for auth cookies) - not used for PDF */
-  profile: string | null;
-  /** Run in headless mode - not used for PDF */
-  headless: boolean;
-  /** Wait time for page load - not used for PDF */
-  wait: number;
-  /** Tags to add to frontmatter */
-  tags: string[];
-  /** Output structured JSON to stdout */
-  json: boolean;
-  /** Dump raw markdown to stdout */
-  stdout: boolean;
-}
-
-/**
- * Standardized tool output format for LLM agent integration
- */
-interface ToolOutput<T = unknown> {
-  /** Whether the operation succeeded */
-  success: boolean;
-  /** Source URL that was processed */
-  url: string;
-  /** Extracted or generated title */
-  title: string;
-  /** Full markdown content with frontmatter */
-  markdown: string;
-  /** Content without frontmatter */
-  content: string;
-  /** Extracted metadata */
-  metadata: Record<string, unknown>;
-  /** Error message if not successful */
-  error?: string;
-  /** Tool-specific additional data */
-  data?: T;
-}
-
-/**
- * Logger with quiet mode support
- */
-interface Logger {
-  (...args: unknown[]): void;
-  error: (...args: unknown[]) => void;
-  warn: (...args: unknown[]) => void;
-  setQuiet: (quiet: boolean) => void;
-}
-
 interface CLIOptions extends CommonCLIOptions {
   source: string;
   pages: string | null;
@@ -131,38 +77,6 @@ interface PdfOutputData {
 
 type PdfOutput = ToolOutput<PdfOutputData>;
 
-// ─── Logging ────────────────────────────────────────────────────────────────
-
-/**
- * Create a logger that writes to stderr when quiet mode is off.
- */
-function createLogger(prefix = ""): Logger {
-  let _quiet = false;
-
-  const log = (...args: unknown[]): void => {
-    if (_quiet) return;
-    const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
-    console.error(prefix ? `${prefix} ${message}` : message);
-  };
-
-  log.error = (...args: unknown[]): void => {
-    const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
-    console.error(prefix ? `${prefix} ${message}` : message);
-  };
-
-  log.warn = (...args: unknown[]): void => {
-    if (_quiet) return;
-    const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
-    console.error(`⚠️ ${prefix ? `${prefix} ` : ''}${message}`);
-  };
-
-  log.setQuiet = (quiet: boolean): void => {
-    _quiet = quiet;
-  };
-
-  return log;
-}
-
 // ─── PDF.js Setup ────────────────────────────────────────────────────────────
 
 // Note: pdfjs-dist has compatibility issues with Bun's runtime.
@@ -171,10 +85,9 @@ function createLogger(prefix = ""): Logger {
 
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const workerPath = resolve(__dirname, "pdf-extract-worker.js");
+const __pdfDirname = dirname(fileURLToPath(import.meta.url));
+const workerPath = resolve(__pdfDirname, "pdf-extract-worker.js");
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
 
@@ -555,11 +468,8 @@ async function main(): Promise<void> {
       title: metadata.title || "Untitled",
       markdown: buildFullMarkdown(result, metadata, opts, displaySource),
       content: result.text,
-      metadata: {
-        ...metadata,
-        creationDate: metadata.creationDate,
-        modifiedDate: metadata.modifiedDate,
-      },
+      tags: opts.tags,
+      error: result.hasTextLayer ? undefined : "No text layer found. PDF may be scanned/image-based.",
       data: {
         metadata,
         extraction: {
@@ -570,10 +480,6 @@ async function main(): Promise<void> {
         },
       },
     };
-
-    if (!result.hasTextLayer) {
-      output.error = "No text layer found. PDF may be scanned/image-based.";
-    }
 
     // --json mode
     if (opts.json) {
@@ -604,16 +510,8 @@ async function main(): Promise<void> {
         title: "",
         markdown: "",
         content: "",
-        metadata: {
-          title: "",
-          author: "",
-          subject: "",
-          creator: "",
-          producer: "",
-          creationDate: null,
-          modifiedDate: null,
-          pageCount: 0,
-        },
+        tags: opts.tags,
+        error: message,
         data: {
           metadata: {
             title: "",
@@ -632,7 +530,6 @@ async function main(): Promise<void> {
             hasTextLayer: false,
           },
         },
-        error: message,
       };
       console.log(JSON.stringify(output, null, 2));
     } else {
