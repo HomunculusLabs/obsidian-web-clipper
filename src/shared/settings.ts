@@ -3,6 +3,7 @@ import type {
   CodeBlockLanguageMode,
   ImageHandlingMode
 } from "./types";
+import type { ObsidianCliConfig, SaveMethod } from "./obsidianCli";
 
 // Wiki-link injection rule: maps a term to a note name
 export interface WikiLinkRule {
@@ -17,6 +18,10 @@ export interface Settings {
   defaultTags: string;
   includeTimestamps: boolean;
   savedFolders: string[];
+  
+  // --- Save method settings ---
+  saveMethod: SaveMethod;
+  obsidianCli: ObsidianCliConfig;
 
   // --- Metadata settings ---
   includeOGFields: boolean;
@@ -53,6 +58,7 @@ export interface Settings {
     | string[]
     | number
     | WikiLinkRule[]
+    | ObsidianCliConfig
     | undefined;
 }
 
@@ -63,6 +69,14 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultTags: "web-clip",
   includeTimestamps: true,
   savedFolders: ["2 - Source Material/Clips"],
+  
+  // --- Save method settings ---
+  saveMethod: "uri",
+  obsidianCli: {
+    cliPath: "",
+    vault: "",
+    enabled: false
+  },
 
   // --- Metadata settings ---
   includeOGFields: true,
@@ -100,6 +114,9 @@ export const SETTINGS_KEYS = [
   "defaultTags",
   "includeTimestamps",
   "savedFolders",
+  // Save method
+  "saveMethod",
+  "obsidianCli",
   // Metadata
   "includeOGFields",
   "includeTwitterFields",
