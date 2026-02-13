@@ -3,6 +3,7 @@ import type { PageInfo, TabRequest, TabResponse } from "../shared/messages";
 import type { Settings } from "../shared/settings";
 import { tabsSendMessage, scriptingExecuteScript } from "../shared/chromeAsync";
 import { isClipResult, isTabResponse } from "../shared/guards";
+import { TabError, ExtractionError } from "../shared/errors";
 import { sleep } from "./ui";
 
 const SPA_DOMAINS = [
@@ -86,10 +87,10 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
   const { tab, pageType, settings, selectionOnly, disableTemplate } = options;
 
   if (!tab.id) {
-    throw new Error("Active tab has no id (cannot clip)");
+    throw new TabError("Active tab has no id (cannot clip)", "TAB_NO_ID");
   }
   if (!tab.url || !/^https?:\/\//.test(tab.url)) {
-    throw new Error("This page cannot be clipped (unsupported URL)");
+    throw new TabError("This page cannot be clipped (unsupported URL)", "URL_UNSUPPORTED");
   }
 
   await ensureContentScriptLoaded(tab.id);
@@ -113,7 +114,7 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
   const response = normalizeTabResponse(rawResponse);
 
   if (!response.ok) {
-    throw new Error(response.error || "Failed to extract content");
+    throw new ExtractionError(response.error || "Failed to extract content", "EXTRACTION_FAILED");
   }
 
   return response.result;

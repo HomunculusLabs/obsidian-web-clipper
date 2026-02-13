@@ -11,6 +11,7 @@ import { parseTags, addAutoTags } from "../shared/tags";
 import { cleanTitle } from "../shared/titleSuggestion";
 import { applyTitleTemplate } from "../shared/titleTemplate";
 import { recordTagUsage } from "../shared/tagHistory";
+import { SaveError } from "../shared/errors";
 import { showStatus } from "./ui";
 
 const MAX_URI_CONTENT_CHARS = 180000;
@@ -404,5 +405,5 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
   }
 
   // All methods failed
-  throw new Error(lastError || "Failed to save to Obsidian");
+  throw new SaveError(lastError || "Failed to save to Obsidian", "SAVE_ALL_METHODS_FAILED");
 }

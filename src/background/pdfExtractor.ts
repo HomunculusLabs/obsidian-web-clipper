@@ -2,6 +2,7 @@
 // Service workers can't run PDF.js directly (no DOM), so we delegate to offscreen
 
 import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
+import { ExtractionError } from "../shared/errors";
 
 export type PdfExtractResult = {
   text: string;
@@ -61,7 +62,7 @@ export async function extractPdfFromUrl(
   const response = rawResponse as PdfOffscreenResponse;
 
   if (!response.success) {
-    throw new Error(response.error || "PDF extraction failed");
+    throw new ExtractionError(response.error || "PDF extraction failed", "PDF_EXTRACTION_FAILED");
   }
 
   return {

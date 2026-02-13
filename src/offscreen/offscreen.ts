@@ -2,6 +2,7 @@
 // This runs in a hidden document context with DOM access
 import * as pdfjs from "pdfjs-dist";
 import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
+import { NetworkError } from "../shared/errors";
 
 // Set worker path - offscreen documents have document access
 pdfjs.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("pdfjs/pdf.worker.js");
@@ -55,7 +56,7 @@ async function extractPdf(
 
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    throw new NetworkError(`HTTP ${response.status}: ${response.statusText}`, "HTTP_ERROR", { context: { url, status: response.status } });
   }
 
   const buffer = await response.arrayBuffer();

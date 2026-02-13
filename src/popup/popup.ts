@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
 import { loadSettings as loadSettingsFromStorage } from "../shared/settingsService";
 import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
 import { detectPageType } from "../shared/pageType";
-import { toErrorMessage } from "../shared/errors";
+import { toErrorMessage, TabError } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
 import { suggestTitles } from "../shared/titleSuggestion";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
@@ -236,10 +236,10 @@ async function getCurrentTab(): Promise<chrome.tabs.Tab> {
   const tabs = await tabsQuery({ active: true, currentWindow: true });
   const tab = tabs[0];
   if (!tab) {
-    throw new Error("No active tab found");
+    throw new TabError("No active tab found", "TAB_NOT_FOUND");
   }
   if (!tab.id) {
-    throw new Error("Active tab has no id (cannot message/inject)");
+    throw new TabError("Active tab has no id (cannot message/inject)", "TAB_NO_ID");
   }
   return tab;
 }

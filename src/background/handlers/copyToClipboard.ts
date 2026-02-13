@@ -1,4 +1,4 @@
-import { toErrorMessage } from "../../shared/errors";
+import { toErrorMessage, ClipboardError } from "../../shared/errors";
 import type { RuntimeRequest } from "../../shared/messages";
 
 export type CopyToClipboardResponse = { success: boolean; error?: string };
@@ -8,7 +8,7 @@ type CopyRequest = Extract<RuntimeRequest, { action: "copyToClipboard" }>;
 async function bestEffortClipboardWrite(text: string): Promise<void> {
   const clipboard = (typeof navigator !== "undefined" ? navigator.clipboard : undefined) as Clipboard | undefined;
   if (!clipboard) {
-    throw new Error("Clipboard API is unavailable in this service worker context");
+    throw new ClipboardError("Clipboard API is unavailable in this service worker context", "CLIPBOARD_UNAVAILABLE");
   }
   await clipboard.writeText(text);
 }

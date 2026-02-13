@@ -9,6 +9,7 @@ import {
 } from "../web/paywall";
 import { getSelection, type SelectionResult } from "../selection";
 import { getTemplateForUrl, isDedicatedExtractorTemplate } from "../templates";
+import { ExtractionError } from "../../shared/errors";
 
 import type { ClipResult } from "../../shared/types";
 import type { Settings } from "../../shared/settings";
@@ -209,7 +210,7 @@ function extractFullPageContent(
   }
 
   if (!article || !article.content) {
-    throw new Error("Could not extract article content");
+    throw new ExtractionError("Could not extract article content", "ARTICLE_NOT_FOUND");
   }
 
   // Add core metadata from Readability

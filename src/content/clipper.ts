@@ -1,5 +1,5 @@
 import { detectPageType } from "../shared/pageType";
-import { toErrorMessage } from "../shared/errors";
+import { toErrorMessage, RouterError } from "../shared/errors";
 import { getTemplateForUrl, isTwitterTemplate } from "./templates";
 
 import { extractWebPageContent } from "./extractors/web";
@@ -108,7 +108,7 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
       default: {
         // Exhaustive check: this will fail to compile if any PageType case is missing
         const _exhaustive: never = pageType;
-        throw new Error(`Unknown page type: ${_exhaustive}`);
+        throw new RouterError(`Unknown page type: ${_exhaustive}`, "UNKNOWN_PAGE_TYPE");
       }
     }
 

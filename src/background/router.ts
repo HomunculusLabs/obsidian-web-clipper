@@ -1,5 +1,6 @@
 import { isRuntimeRequest } from "../shared/guards";
 import type { RuntimeRequest } from "../shared/messages";
+import { RouterError } from "../shared/errors";
 
 import { handleGetSettings } from "./handlers/getSettings";
 import { handleCopyToClipboard } from "./handlers/copyToClipboard";
@@ -31,7 +32,7 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
     default: {
       // Exhaustive check: this will fail to compile if any case is missing
       const _exhaustive: never = request;
-      throw new Error(`Unknown action: ${(_exhaustive as { action: string }).action}`);
+      throw new RouterError(`Unknown action: ${(_exhaustive as { action: string }).action}`, "UNKNOWN_ACTION");
     }
   }
 }
