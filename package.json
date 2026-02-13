@@ -6,6 +6,10 @@
     "build": "bun run build/build.ts",
     "dev": "bun run build/build.ts --watch",
     "typecheck": "tsc --noEmit",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src tools tests build --ext .ts,.tsx",
+    "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint src tools tests build --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tools/**/*.ts\" \"tests/**/*.ts\" \"build/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tools/**/*.ts\" \"tests/**/*.ts\" \"build/**/*.ts\"",
     "test": "bun test",
     "clip:chatgpt": "bun run tools/chatgpt-clipper.ts",
     "clip:stdin": "bun run tools/clip-stdin.ts",
@@ -29,7 +33,12 @@
     "@types/chrome": "^0.0.260",
     "@types/node": "^25.2.1",
     "@types/turndown": "^5.0.6",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
     "happy-dom": "^15.0.0",
+    "prettier": "^3.2.0",
     "puppeteer": "^24.37.2",
     "typescript": "^5.4.5"
   }
