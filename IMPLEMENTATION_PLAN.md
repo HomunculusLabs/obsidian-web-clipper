@@ -150,7 +150,7 @@ Clean up and strengthen the codebase.
 - [x] **Task 97**: Add ESLint + Prettier config — Add `.eslintrc.json` and `.prettierrc`. Configure for TypeScript. Add `lint` and `format` scripts.
 - [x] **Task 98**: Add test infrastructure — Set up Bun test runner with `tests/` directory. Add `bun test` to package.json. Create test utilities for mocking chrome APIs.
 - [x] **Task 99**: Test shared utilities — Unit tests for `sanitize.ts`, `tags.ts`, `folders.ts`, `pageType.ts`, `markdown.ts`, `guards.ts`.
-- [ ] **Task 100**: Test extractors — Unit tests for web, YouTube, and PDF extractors using fixture HTML/data.
+- [x] **Task 100**: Test extractors — Unit tests for web, YouTube, and PDF extractors using fixture HTML/data.
 - [ ] **Task 101**: Type-check CI — Ensure `bun run typecheck` passes cleanly. Fix any existing type errors. Add to CI/test command.
 - [ ] **Task 102**: Build optimization — Analyze bundle sizes. Consider code splitting for content script (only load YouTube extractor on YouTube, etc.). Tree-shake unused code.
 
