@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta property="og:title" content="Sample Article for Testing">
+    <meta property="og:description" content="This is a sample article used for testing the web clipper.">
+    <meta property="og:type" content="article">
+    <meta name="author" content="Test Author">
+    <meta property="article:published_time" content="2024-01-15T10:00:00Z">
+    <title>Sample Article for Testing - Test Blog</title>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+        </nav>
+    </header>
+
+    <main>
+        <article>
+            <h1>Sample Article for Testing</h1>
+            <p class="byline">By <span rel="author">Test Author</span></p>
+            <time datetime="2024-01-15T10:00:00Z">January 15, 2024</time>
+
+            <p>This is a sample article used for testing the web clipper functionality.
+            It contains various HTML elements that should be properly converted to markdown.</p>
+
+            <h2>Code Example</h2>
+            <p>Here's some code:</p>
+            <pre><code class="language-typescript">
+function hello(name: string): string {
+    return `Hello, ${name}!`;
+}
+            </code></pre>
+
+            <p>You can also use <code>inline code</code> like this.</p>
+
+            <h2>Lists</h2>
+            <h3>Unordered List</h3>
+            <ul>
+                <li>First item</li>
+                <li>Second item</li>
+                <li>Third item with <strong>bold</strong> and <em>italic</em></li>
+            </ul>
+
+            <h3>Ordered List</h3>
+            <ol>
+                <li>Step one</li>
+                <li>Step two</li>
+                <li>Step three</li>
+            </ol>
+
+            <h2>Links and Images</h2>
+            <p>Here's a <a href="https://example.com">link to example.com</a>.</p>
+            <p>And here's an image:</p>
+            <img src="https://example.com/image.png" alt="Sample image">
+
+            <h2>Blockquote</h2>
+            <blockquote>
+                <p>This is a quote from someone important.
+                It should be properly formatted as a blockquote in markdown.</p>
+            </blockquote>
+
+            <h2>Table</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Value</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Item 1</td>
+                        <td>100</td>
+                        <td>First item</td>
+                    </tr>
+                    <tr>
+                        <td>Item 2</td>
+                        <td>200</td>
+                        <td>Second item</td>
+                    </tr>
+                    <tr>
+                        <td>Item 3</td>
+                        <td>300</td>
+                        <td>Third item</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Conclusion</h2>
+            <p>This concludes the sample article. It has covered various HTML elements
+            that are commonly found in blog posts and articles.</p>
+        </article>
+    </main>
+
+    <aside class="sidebar">
+        <h3>Related Posts</h3>
+        <ul>
+            <li><a href="/post1">Another Post</a></li>
+        </ul>
+    </aside>
+
+    <footer>
+        <p>&copy; 2024 Test Blog</p>
+    </footer>
+
+    <script>
+        // This should be removed during extraction
+        console.log("Script content");
+    </script>
+</body>
+</html>
