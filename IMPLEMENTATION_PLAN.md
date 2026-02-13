@@ -152,7 +152,7 @@ Clean up and strengthen the codebase.
 - [x] **Task 99**: Test shared utilities — Unit tests for `sanitize.ts`, `tags.ts`, `folders.ts`, `pageType.ts`, `markdown.ts`, `guards.ts`.
 - [x] **Task 100**: Test extractors — Unit tests for web, YouTube, and PDF extractors using fixture HTML/data.
 - [x] **Task 101**: Type-check CI — Ensure `bun run typecheck` passes cleanly. Fix any existing type errors. Add to CI/test command.
-- [ ] **Task 102**: Build optimization — Analyze bundle sizes. Consider code splitting for content script (only load YouTube extractor on YouTube, etc.). Tree-shake unused code.
+- [x] **Task 102**: Build optimization — Analyze bundle sizes. Consider code splitting for content script (only load YouTube extractor on YouTube, etc.). Tree-shake unused code.
 
 ---
 
