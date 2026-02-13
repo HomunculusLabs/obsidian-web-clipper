@@ -78,6 +78,9 @@ export interface Settings {
   // --- Debug settings ---
   debug: boolean; // Enable debug logging to console
 
+  // --- Schema versioning ---
+  settingsVersion?: number; // Internal schema version for migrations
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -163,7 +166,10 @@ export const DEFAULT_SETTINGS: Settings = {
   },
 
   // --- Debug settings ---
-  debug: false // Disabled by default
+  debug: false, // Disabled by default
+
+  // --- Schema versioning ---
+  settingsVersion: 1
 };
 
 export const SETTINGS_KEYS = [
@@ -215,7 +221,9 @@ export const SETTINGS_KEYS = [
   // Title templates
   "titleTemplates",
   // Debug
-  "debug"
+  "debug",
+  // Schema version
+  "settingsVersion"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];
