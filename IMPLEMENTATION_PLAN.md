@@ -146,7 +146,7 @@ Clean up and strengthen the codebase.
 - [x] **Task 93**: Error handling standardization — Create `src/shared/errors.ts` AppError class hierarchy. Replace string errors with typed errors throughout.
 - [x] **Task 94**: Remove console.log statements — Clean up debug logging in `clipper.ts`, `popup.ts`, etc. Replace with a `debug()` utility that only logs when `settings.debug` is true.
 - [x] **Task 95**: Settings validation — Add Zod schema for Settings. Validate on load, migrate on version change. Handle corrupt storage gracefully.
-- [ ] **Task 96**: Extract save pipeline — `save.ts` is 150 lines of frontmatter building. Extract field mapping to a separate `buildFrontmatter.ts` function.
+- [x] **Task 96**: Extract save pipeline — `save.ts` is 150 lines of frontmatter building. Extract field mapping to a separate `buildFrontmatter.ts` function.
 - [ ] **Task 97**: Add ESLint + Prettier config — Add `.eslintrc.json` and `.prettierrc`. Configure for TypeScript. Add `lint` and `format` scripts.
 - [ ] **Task 98**: Add test infrastructure — Set up Bun test runner with `tests/` directory. Add `bun test` to package.json. Create test utilities for mocking chrome APIs.
 - [ ] **Task 99**: Test shared utilities — Unit tests for `sanitize.ts`, `tags.ts`, `folders.ts`, `pageType.ts`, `markdown.ts`, `guards.ts`.
