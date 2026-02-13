@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Article Title - Example Site</title>
+  <meta property="og:title" content="Test Article Title">
+  <meta property="og:description" content="A test article for web extraction testing.">
+  <meta property="og:type" content="article">
+  <meta property="article:author" content="Test Author">
+  <meta property="article:published_time" content="2024-01-15T10:00:00Z">
+  <meta name="author" content="Test Author">
+  <meta name="description" content="A test article for web extraction testing.">
+  <meta name="keywords" content="testing, web, extraction">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+  <main>
+    <article>
+      <h1>Test Article Title</h1>
+      <p class="byline">By <span class="author">Test Author</span> | January 15, 2024</p>
+      
+      <p>This is the first paragraph of the test article. It contains some <strong>bold text</strong> and <em>italic text</em> for testing inline formatting.</p>
+      
+      <p>The second paragraph discusses <a href="https://example.com">an important link</a> that should be preserved in the markdown output.</p>
+      
+      <h2>A Subheading</h2>
+      
+      <p>This section is under a subheading and contains a list:</p>
+      
+      <ul>
+        <li>First item in the list</li>
+        <li>Second item with <code>inline code</code></li>
+        <li>Third item</li>
+      </ul>
+      
+      <h3>Code Example</h3>
+      
+      <pre><code class="language-javascript">function greet(name) {
+  console.log(`Hello, ${name}!`);
+}</code></pre>
+      
+      <h2>Conclusion</h2>
+      
+      <p>This concludes the test article. It provides enough content to verify the Readability extraction and Turndown conversion work correctly.</p>
+    </article>
+  </main>
+  <footer>
+    <p>&copy; 2024 Example Site</p>
+  </footer>
+</body>
+</html>
