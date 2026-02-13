@@ -12,6 +12,9 @@ import { join } from "path";
 // happy-dom for DOM parsing
 import { Window } from "happy-dom";
 
+// Import default settings for tests
+import { DEFAULT_SETTINGS } from "../../src/shared/settings";
+
 // Import from index to trigger template registration side effects
 import {
   getTemplateForUrl,
@@ -693,13 +696,13 @@ describe("Template registry integration", () => {
   });
 
   test("built-in templates are all enabled by default", () => {
-    const templates = getBuiltInTemplates();
+    const templates = getBuiltInTemplates(DEFAULT_SETTINGS);
     const disabled = templates.filter(t => !t.enabled);
     expect(disabled).toHaveLength(0);
   });
 
   test("templates have valid domain patterns", () => {
-    const templates = getBuiltInTemplates();
+    const templates = getBuiltInTemplates(DEFAULT_SETTINGS);
 
     for (const template of templates) {
       expect(template.domain).toBeTruthy();
