@@ -42,7 +42,7 @@ import { join, resolve } from "node:path";
 import TurndownService from "turndown";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 import { sanitizeFilename } from "../src/shared/sanitize";
-import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
+import { buildClipMarkdown, type FrontmatterInput } from "../src/shared/markdown";
 import {
   launchBrowser,
   createPage,
@@ -323,21 +323,23 @@ async function extractConversation(
 
 // ─── Save Logic ──────────────────────────────────────────────────────────────
 
-function buildFrontmatter(opts: {
-  title: string;
-  source: string;
-  tags: string[];
-  extra?: Record<string, string | undefined>;
-}): string {
-  const input: FrontmatterInput = {
-    source: opts.source,
-    title: opts.title,
+/**
+ * Helper to create FrontmatterInput for ChatGPT content.
+ */
+function createChatGptFrontmatter(
+  title: string,
+  source: string,
+  tags: string[],
+  extra?: Record<string, string | undefined>
+): FrontmatterInput {
+  return {
+    source,
+    title,
     type: "article",
     dateClippedISO: new Date().toISOString(),
-    tags: opts.tags,
-    extra: opts.extra,
+    tags,
+    extra,
   };
-  return buildFrontmatterYaml(input);
 }
 
 async function saveConversation(
@@ -379,13 +381,13 @@ async function saveConversation(
     for (const resp of conv.responses) {
       const title = sanitizeFilename(`${conv.title} - Response ${resp.index}`);
       const body = `# ${resp.preview}\n\n${resp.markdown}`;
-      const fm = buildFrontmatter({
-        title,
-        source: conv.url,
-        tags: opts.tags,
-        extra: { page_type: "chatgpt", conversation_title: conv.title },
-      });
-      const content = fm + body + "\n";
+      const content = buildClipMarkdown(
+        createChatGptFrontmatter(title, conv.url, opts.tags, {
+          page_type: "chatgpt",
+          conversation_title: conv.title,
+        }),
+        body
+      );
       const filePath = opts.folder ? `${opts.folder}/${title}` : title;
       const uri = `obsidian://new?vault=${encodeURIComponent(opts.vault)}&file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`;
 
@@ -405,13 +407,13 @@ async function saveConversation(
     for (const resp of conv.responses) {
       const title = sanitizeFilename(`${conv.title} - Response ${resp.index}`);
       const body = `# ${resp.preview}\n\n${resp.markdown}`;
-      const fm = buildFrontmatter({
-        title,
-        source: conv.url,
-        tags: opts.tags,
-        extra: { page_type: "chatgpt", conversation_title: conv.title },
-      });
-      const content = fm + body + "\n";
+      const content = buildClipMarkdown(
+        createChatGptFrontmatter(title, conv.url, opts.tags, {
+          page_type: "chatgpt",
+          conversation_title: conv.title,
+        }),
+        body
+      );
       const filePath = opts.folder ? `${opts.folder}/${title}` : title;
 
       const result: CliSaveResult = await saveViaCli(
@@ -432,23 +434,22 @@ async function saveConversation(
 
   if (!opts.perResponse) {
     const title = sanitizeFilename(conv.title);
-    const fm = buildFrontmatter({
-      title,
-      source: conv.url,
-      tags: opts.tags,
-      extra: {
-        page_type: "chatgpt",
-        response_count: String(conv.responses.length),
-      },
-    });
 
     let body = `# ${conv.title}\n\n`;
     for (const resp of conv.responses) {
       body += `---\n\n## Response ${resp.index}\n\n${resp.markdown}\n\n`;
     }
 
+    const content = buildClipMarkdown(
+      createChatGptFrontmatter(title, conv.url, opts.tags, {
+        page_type: "chatgpt",
+        response_count: String(conv.responses.length),
+      }),
+      body
+    );
+
     const filePath = join(outdir, `${title}.md`);
-    await writeFile(filePath, fm + body, "utf-8");
+    await writeFile(filePath, content, "utf-8");
     log(`  💾 Saved: ${filePath}`);
     return;
   }
@@ -457,20 +458,17 @@ async function saveConversation(
     const title = sanitizeFilename(
       `${conv.title} - Response ${resp.index} - ${resp.preview}`
     );
-    const fm = buildFrontmatter({
-      title,
-      source: conv.url,
-      tags: opts.tags,
-      extra: {
+    const body = `# ${resp.preview}\n\n${resp.markdown}\n`;
+    const content = buildClipMarkdown(
+      createChatGptFrontmatter(title, conv.url, opts.tags, {
         page_type: "chatgpt",
         conversation_title: conv.title,
         response_index: String(resp.index),
-      },
-    });
-
-    const body = `# ${resp.preview}\n\n${resp.markdown}\n`;
+      }),
+      body
+    );
     const filePath = join(outdir, `${title}.md`);
-    await writeFile(filePath, fm + body, "utf-8");
+    await writeFile(filePath, content, "utf-8");
     log(`  💾 Saved: ${filePath}`);
   }
 }
