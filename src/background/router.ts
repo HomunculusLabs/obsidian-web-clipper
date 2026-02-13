@@ -28,8 +28,11 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleSaveToCli(request);
     case "saveContent":
       return handleSaveContent(request);
-    default:
-      throw new Error(`Unknown action: ${(request as any).action}`);
+    default: {
+      // Exhaustive check: this will fail to compile if any case is missing
+      const _exhaustive: never = request;
+      throw new Error(`Unknown action: ${(_exhaustive as { action: string }).action}`);
+    }
   }
 }
 

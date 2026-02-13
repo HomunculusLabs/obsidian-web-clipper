@@ -9,8 +9,11 @@ export function storageGet<T extends Record<string, unknown>>(
   keys: readonly (keyof T)[] | null
 ): Promise<Partial<T>> {
   return new Promise((resolve, reject) => {
-    const chromeKeys = keys === null ? null : (keys as readonly string[]);
-    chrome.storage.local.get(chromeKeys as any, (items) => {
+    // Chrome API accepts string[] or null, not readonly arrays
+    const chromeKeys: string[] | null = keys === null 
+      ? null 
+      : (keys as readonly string[]) as string[];
+    chrome.storage.local.get(chromeKeys, (items) => {
       if (rejectOnLastError(reject)) return;
       resolve(items as Partial<T>);
     });
@@ -21,7 +24,8 @@ export function storageSet<T extends Record<string, unknown>>(
   items: Partial<T>
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set(items as any, () => {
+    // Cast to satisfy Chrome API - the types are compatible at runtime
+    chrome.storage.local.set(items as Record<string, unknown>, () => {
       if (rejectOnLastError(reject)) return;
       resolve();
     });
@@ -44,9 +48,10 @@ export function tabsSendMessage<TReq, TRes>(
   message: TReq
 ): Promise<TRes> {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, message as any, (response) => {
+    // Chrome messaging API accepts any serializable message
+    chrome.tabs.sendMessage(tabId, message, (response: TRes) => {
       if (rejectOnLastError(reject)) return;
-      resolve(response as TRes);
+      resolve(response);
     });
   });
 }
@@ -55,9 +60,10 @@ export function runtimeSendMessage<TReq, TRes>(
   message: TReq
 ): Promise<TRes> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message as any, (response) => {
+    // Chrome messaging API accepts any serializable message
+    chrome.runtime.sendMessage(message, (response: TRes) => {
       if (rejectOnLastError(reject)) return;
-      resolve(response as TRes);
+      resolve(response);
     });
   });
 }

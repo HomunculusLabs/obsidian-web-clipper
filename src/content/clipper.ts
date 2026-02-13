@@ -98,7 +98,6 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
         result = await extractPDFContent(baseResult);
         break;
       case "web":
-      default:
         result = extractWebPageContent({
           result: baseResult,
           settings,
@@ -106,6 +105,11 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
           disableTemplate: request.disableTemplate
         });
         break;
+      default: {
+        // Exhaustive check: this will fail to compile if any PageType case is missing
+        const _exhaustive: never = pageType;
+        throw new Error(`Unknown page type: ${_exhaustive}`);
+      }
     }
 
     return { ok: true, result };
