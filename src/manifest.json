@@ -22,7 +22,8 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content/content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "type": "module"
     }
   ],
   "action": {
@@ -58,6 +59,10 @@
   "web_accessible_resources": [
     {
       "resources": ["pdfjs/pdf.worker.js"],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": ["content/*.js"],
       "matches": ["<all_urls>"]
     }
   ]

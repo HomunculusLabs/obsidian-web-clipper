@@ -39,16 +39,23 @@ function printBuildLogs(logs: any[]) {
   }
 }
 
-async function bundleEntrypoint(inputFile: string, outSubdir: string, watchMode: boolean) {
+async function bundleEntrypoint(inputFile: string, outSubdir: string, watchMode: boolean, options?: {
+  /** Use ESM format with code splitting for lazy loading */
+  esm?: boolean;
+}) {
   const outdir = join(DIST_DIR, outSubdir);
   await ensureDir(outdir);
+
+  // ESM format enables code splitting for lazy-loaded modules
+  const format = options?.esm ? "esm" : "iife";
+  const splitting = options?.esm ? true : false;
 
   const result = await Bun.build({
     entrypoints: [inputFile],
     outdir,
     target: "browser",
-    format: "iife",
-    splitting: false,
+    format,
+    splitting,
     minify: !watchMode,
     sourcemap: watchMode ? "external" : "none",
     define: {
@@ -60,6 +67,15 @@ async function bundleEntrypoint(inputFile: string, outSubdir: string, watchMode:
   if (!result.success) {
     printBuildLogs(result.logs || []);
     throw new Error("Build failed");
+  }
+
+  // Report chunk sizes for code-split builds
+  if (splitting && result.outputs) {
+    const chunks = result.outputs
+      .filter(o => o.path.endsWith('.js'))
+      .map(o => `${o.path.split('/').pop()}: ${(o.size / 1024).toFixed(1)}KB`)
+      .join(', ');
+    console.log(`  Chunks: ${chunks}`);
   }
 }
 
@@ -142,7 +158,9 @@ async function buildAll(watchMode: boolean) {
   await ensureDir(DIST_DIR);
 
   await bundleEntrypoint(backgroundEntrypoint!, "background", watchMode);
-  await bundleEntrypoint(contentEntrypoint!, "content", watchMode);
+  // Use ESM with code splitting for content script to enable lazy loading of extractors
+  // This reduces initial bundle size by ~75KB (Twitter extractor alone is ~60KB)
+  await bundleEntrypoint(contentEntrypoint!, "content", watchMode, { esm: true });
   await bundleEntrypoint(popupEntrypoint!, "popup", watchMode);
   await bundleEntrypoint(optionsEntrypoint!, "options", watchMode);
   if (offscreenEntrypoint) {

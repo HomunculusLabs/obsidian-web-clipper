@@ -3,10 +3,52 @@ import { toErrorMessage, RouterError } from "../shared/errors";
 import { getTemplateForUrl, isTwitterTemplate } from "./templates";
 import { debug } from "../shared/debug";
 
+// Import web extractor statically (always needed as fallback)
 import { extractWebPageContent } from "./extractors/web";
-import { extractPDFContent } from "./extractors/pdf";
-import { extractYouTubeContent } from "./extractors/youtube";
-import { extractTwitterContent } from "./extractors/twitter";
+
+// Lazy-load heavy extractors for code splitting
+// These will be loaded only when needed, reducing initial bundle size
+
+// Cache for loaded extractors
+let _extractYouTubeContent: ((result: ClipResult, includeTimestamps: boolean) => Promise<ClipResult>) | null = null;
+let _extractTwitterContent: ((result: ClipResult) => Promise<ClipResult>) | null = null;
+let _extractPDFContent: ((result: ClipResult) => Promise<ClipResult>) | null = null;
+
+/**
+ * Lazy-load the YouTube extractor.
+ * This reduces initial bundle size by ~15KB (minified).
+ */
+async function getYouTubeExtractor(): Promise<(result: ClipResult, includeTimestamps: boolean) => Promise<ClipResult>> {
+  if (!_extractYouTubeContent) {
+    const module = await import("./extractors/youtube");
+    _extractYouTubeContent = module.extractYouTubeContent;
+  }
+  return _extractYouTubeContent;
+}
+
+/**
+ * Lazy-load the Twitter extractor.
+ * This reduces initial bundle size by ~60KB (minified) - the largest extractor.
+ */
+async function getTwitterExtractor(): Promise<(result: ClipResult) => Promise<ClipResult>> {
+  if (!_extractTwitterContent) {
+    const module = await import("./extractors/twitter");
+    _extractTwitterContent = module.extractTwitterContent;
+  }
+  return _extractTwitterContent;
+}
+
+/**
+ * Lazy-load the PDF extractor.
+ * This reduces initial bundle size slightly.
+ */
+async function getPDFExtractor(): Promise<(result: ClipResult) => Promise<ClipResult>> {
+  if (!_extractPDFContent) {
+    const module = await import("./extractors/pdf");
+    _extractPDFContent = module.extractPDFContent;
+  }
+  return _extractPDFContent;
+}
 
 import type { ClipResult, PageType } from "../shared/types";
 import type { PageInfo, TabRequest, TabResponse, TemplateInfo } from "../shared/messages";
@@ -74,17 +116,22 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
     let result: ClipResult;
 
     switch (pageType) {
-      case "youtube":
-        result = await extractYouTubeContent(
+      case "youtube": {
+        // Lazy-load YouTube extractor (~15KB)
+        const extractYouTube = await getYouTubeExtractor();
+        result = await extractYouTube(
           baseResult,
           request.includeTimestamps !== false
         );
         break;
-      case "twitter":
+      }
+      case "twitter": {
         // Check if Twitter template is enabled
         // If disabled via template settings, fall back to web extractor
         if (isTwitterTemplateEnabled(url, settings)) {
-          result = await extractTwitterContent(baseResult);
+          // Lazy-load Twitter extractor (~60KB - largest extractor)
+          const extractTwitter = await getTwitterExtractor();
+          result = await extractTwitter(baseResult);
         } else {
           debug("Clip", "Twitter template disabled, falling back to web extractor");
           result = extractWebPageContent({
@@ -95,9 +142,13 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
           });
         }
         break;
-      case "pdf":
-        result = await extractPDFContent(baseResult);
+      }
+      case "pdf": {
+        // Lazy-load PDF extractor
+        const extractPDF = await getPDFExtractor();
+        result = await extractPDF(baseResult);
         break;
+      }
       case "web":
         result = extractWebPageContent({
           result: baseResult,
