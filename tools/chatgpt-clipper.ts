@@ -39,6 +39,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import TurndownService from "turndown";
 import { saveViaCli, type CliSaveResult } from "../src/shared/obsidianCliSave";
 import { sanitizeFilename } from "../src/shared/sanitize";
 import { buildFrontmatterYaml, type FrontmatterInput } from "../src/shared/markdown";
@@ -62,6 +63,7 @@ interface CLIOptions extends CommonCLIOptions {
 
 interface ExtractedResponse {
   index: number;
+  html: string;
   markdown: string;
   preview: string;
 }
@@ -71,6 +73,41 @@ interface ConversationResult {
   title: string;
   responses: ExtractedResponse[];
   error?: string;
+}
+
+// ─── HTML to Markdown Converter (Node.js) ────────────────────────────────────
+
+/**
+ * Create a Turndown service configured for ChatGPT content.
+ * This is the shared converter used by chatgpt-clipper.ts.
+ * The content script uses htmlToMarkdownLite from src/shared/htmlToMarkdown.ts.
+ */
+function createChatGptTurndown(): TurndownService {
+  const service = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+    bulletListMarker: "-",
+    emDelimiter: "*"
+  });
+
+  // Add strikethrough support
+  service.addRule("strikethrough", {
+    filter: ["del", "s", "strike"],
+    replacement: (content: string) => `~~${content}~~`
+  });
+
+  return service;
+}
+
+/**
+ * Convert HTML to Markdown using Turndown (Node.js context).
+ * This is the shared conversion logic - the same conversion is available
+ * in browser context via src/shared/htmlToMarkdown.ts.
+ */
+const turndown = createChatGptTurndown();
+
+function htmlToMarkdown(html: string): string {
+  return turndown.turndown(html);
 }
 
 // ─── CLI Argument Parsing ────────────────────────────────────────────────────
@@ -210,14 +247,15 @@ EXAMPLES:
 
 /**
  * This function runs inside the browser page context to extract all
- * assistant responses and convert them to markdown.
+ * assistant responses as HTML. The HTML→Markdown conversion happens
+ * in Node.js context using the shared htmlToMarkdown function (via Turndown).
  */
-function extractResponsesInPage(): { title: string; responses: { index: number; markdown: string; preview: string }[] } {
+function extractResponsesInPage(): { title: string; responses: { index: number; html: string; preview: string }[] } {
   const title = document.title.replace(/ \| ChatGPT$/, "").trim() || "ChatGPT Conversation";
 
   // Find all assistant message containers
   const messageDivs = document.querySelectorAll('[data-message-author-role="assistant"]');
-  const responses: { index: number; markdown: string; preview: string }[] = [];
+  const responses: { index: number; html: string; preview: string }[] = [];
 
   messageDivs.forEach((msgDiv, idx) => {
     const contentEl =
@@ -227,93 +265,12 @@ function extractResponsesInPage(): { title: string; responses: { index: number; 
 
     const html = (contentEl as HTMLElement).innerHTML;
 
-    // Lightweight HTML→Markdown conversion (runs in browser context)
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const body = doc.body;
-
-    // Code blocks
-    body.querySelectorAll("pre").forEach((pre) => {
-      const code = pre.querySelector("code");
-      const lang = code?.className?.match(/language-(\w+)/)?.[1] || "";
-      const text = code?.textContent || pre.textContent || "";
-      const ph = document.createElement("p");
-      ph.textContent = `\n\`\`\`${lang}\n${text}\n\`\`\`\n`;
-      pre.replaceWith(ph);
-    });
-
-    body.querySelectorAll("code").forEach((el) => {
-      el.textContent = `\`${el.textContent}\``;
-    });
-
-    for (let i = 1; i <= 6; i++) {
-      body.querySelectorAll(`h${i}`).forEach((el) => {
-        el.textContent = `${"#".repeat(i)} ${el.textContent}\n\n`;
-      });
-    }
-
-    body.querySelectorAll("strong, b").forEach((el) => {
-      el.textContent = `**${el.textContent}**`;
-    });
-
-    body.querySelectorAll("em, i").forEach((el) => {
-      el.textContent = `*${el.textContent}*`;
-    });
-
-    body.querySelectorAll("a").forEach((el) => {
-      const href = el.getAttribute("href") || "";
-      el.textContent = `[${el.textContent}](${href})`;
-    });
-
-    body.querySelectorAll("ul").forEach((ul) => {
-      const items = ul.querySelectorAll(":scope > li");
-      let text = "\n";
-      items.forEach((li) => { text += `- ${li.textContent?.trim()}\n`; });
-      text += "\n";
-      const ph = document.createElement("p");
-      ph.textContent = text;
-      ul.replaceWith(ph);
-    });
-
-    body.querySelectorAll("ol").forEach((ol) => {
-      const items = ol.querySelectorAll(":scope > li");
-      let text = "\n";
-      items.forEach((li, i) => { text += `${i + 1}. ${li.textContent?.trim()}\n`; });
-      text += "\n";
-      const ph = document.createElement("p");
-      ph.textContent = text;
-      ol.replaceWith(ph);
-    });
-
-    body.querySelectorAll("blockquote").forEach((bq) => {
-      const lines = (bq.textContent || "").split("\n");
-      bq.textContent = lines.map((l) => `> ${l}`).join("\n") + "\n\n";
-    });
-
-    body.querySelectorAll("table").forEach((table) => {
-      const rows = table.querySelectorAll("tr");
-      let md = "\n";
-      rows.forEach((row, rowIdx) => {
-        const cells = row.querySelectorAll("th, td");
-        const cellTexts: string[] = [];
-        cells.forEach((cell) => cellTexts.push((cell.textContent || "").trim()));
-        md += `| ${cellTexts.join(" | ")} |\n`;
-        if (rowIdx === 0) {
-          md += `| ${cellTexts.map(() => "---").join(" | ")} |\n`;
-        }
-      });
-      md += "\n";
-      const ph = document.createElement("p");
-      ph.textContent = md;
-      table.replaceWith(ph);
-    });
-
-    let text = body.textContent || "";
-    text = text.replace(/\n{3,}/g, "\n\n").trim();
-
+    // Get preview from first text content
+    const text = (contentEl as HTMLElement).textContent || "";
     const firstLine = text.split("\n").find((l) => l.trim().length > 0) || "Response";
     const preview = firstLine.replace(/^#+\s*/, "").trim().slice(0, 80);
 
-    responses.push({ index: idx + 1, markdown: text, preview });
+    responses.push({ index: idx + 1, html, preview });
   });
 
   return { title, responses };
@@ -348,8 +305,16 @@ async function extractConversation(
       return { url, title: result.title, responses: [], error: "No assistant responses found — you may need to log in (use --profile or --no-headless)" };
     }
 
-    log(`  ✓ Found ${result.responses.length} response(s) in "${result.title}"`);
-    return { url, title: result.title, responses: result.responses };
+    // Convert HTML to Markdown using the shared converter (Turndown-based)
+    const responses: ExtractedResponse[] = result.responses.map((r) => ({
+      index: r.index,
+      html: r.html,
+      markdown: htmlToMarkdown(r.html),
+      preview: r.preview
+    }));
+
+    log(`  ✓ Found ${responses.length} response(s) in "${result.title}"`);
+    return { url, title: result.title, responses };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { url, title: "Unknown", responses: [], error: message };

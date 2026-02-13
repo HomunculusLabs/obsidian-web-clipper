@@ -139,7 +139,7 @@ Headless Puppeteer tools for research pipeline automation.
 
 Clean up and strengthen the codebase.
 
-- [ ] **Task 89**: Extract HTML-to-markdown converter — The ChatGPT injector and chatgpt-clipper.ts both have inline HTML→markdown converters. Extract to `src/shared/htmlToMarkdown.ts` and reuse Turndown.
+- [x] **Task 89**: Extract HTML-to-markdown converter — The ChatGPT injector and chatgpt-clipper.ts both have inline HTML→markdown converters. Extract to `src/shared/htmlToMarkdown.ts` and reuse Turndown.
 - [ ] **Task 90**: Consolidate frontmatter building — `buildClipMarkdown` in `shared/markdown.ts` and `buildFrontmatter` in `chatgpt-clipper.ts` are duplicated. Unify into one shared function.
 - [ ] **Task 91**: Extract sanitization utilities — `sanitizeFilename` exists in both `shared/sanitize.ts` and `chatgpt-clipper.ts`. Remove the duplicate, import from shared.
 - [ ] **Task 92**: Message type safety — Add exhaustive switch checks to `router.ts` and `clipper.ts`. Add `satisfies` checks for message types. Remove `any` casts.
