@@ -10,6 +10,7 @@ import {
 import { getSelection, type SelectionResult } from "../selection";
 import { getTemplateForUrl, isDedicatedExtractorTemplate } from "../templates";
 import { ExtractionError } from "../../shared/errors";
+import { debug } from "../../shared/debug";
 
 import type { ClipResult } from "../../shared/types";
 import type { Settings } from "../../shared/settings";
@@ -49,11 +50,11 @@ function extractSelectionContent(
 
   // No selection - fall back to full page extraction
   if (!selection.hasSelection) {
-    console.log("[Web Extractor] No selection found, falling back to full page");
+    debug("Web", "No selection found, falling back to full page");
     return extractFullPageContent(result, settings, pageUrl);
   }
 
-  console.log("[Web Extractor] Extracting selection:", {
+  debug("Web", "Extracting selection:", {
     rangeCount: selection.rangeCount,
     isMultiSelection: selection.isMultiSelection,
     textLength: selection.text.length
@@ -169,9 +170,9 @@ function extractFullPageContent(
     // Skip templates that use dedicated extractors (e.g., Twitter)
     // These are handled by their own extractors, not the web extractor
     if (template && isDedicatedExtractorTemplate(template)) {
-      console.log("[Web Extractor] Template uses dedicated extractor, skipping:", template.name);
+      debug("Web", "Template uses dedicated extractor, skipping:", template.name);
     } else if (template?.selectors.content) {
-      console.log("[Web Extractor] Using template:", template.name, "for", pageUrl);
+      debug("Web", "Using template:", template.name, "for", pageUrl);
       try {
         const templateResult = extractWithTemplate(documentClone, template, settings, pageUrl);
         if (templateResult) {

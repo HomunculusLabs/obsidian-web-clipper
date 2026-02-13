@@ -75,6 +75,9 @@ export interface Settings {
   // --- Title template settings ---
   titleTemplates: TitleTemplateSettings;
 
+  // --- Debug settings ---
+  debug: boolean; // Enable debug logging to console
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -157,7 +160,10 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: false,
     selectedTemplate: "default",
     customTemplates: []
-  }
+  },
+
+  // --- Debug settings ---
+  debug: false // Disabled by default
 };
 
 export const SETTINGS_KEYS = [
@@ -207,7 +213,9 @@ export const SETTINGS_KEYS = [
   "cleanTitles",
   "preferTitleCase",
   // Title templates
-  "titleTemplates"
+  "titleTemplates",
+  // Debug
+  "debug"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];

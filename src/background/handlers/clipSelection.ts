@@ -18,6 +18,7 @@ import { buildClipMarkdown, type FrontmatterInput } from "../../shared/markdown"
 import { sanitizeFilename } from "../../shared/sanitize";
 import { parseTags, addAutoTags } from "../../shared/tags";
 import { injectWikiLinks } from "../../content/web/wikiLinks";
+import { debug } from "../../shared/debug";
 import { toErrorMessage } from "../../shared/errors";
 import type { TabRequest, TabResponse } from "../../shared/messages";
 import type { PageType, ClipResult } from "../../shared/types";
@@ -251,7 +252,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
       // If URI failed and we're using CLI, CLI would need Native Messaging bridge
       // For now, fall back to clipboard
       if (saveMethod === "cli") {
-        console.log("CLI save not available in service worker, falling back to clipboard");
+        debug("ClipSelection", "CLI save not available in service worker, falling back to clipboard");
       }
     }
 
@@ -259,7 +260,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
     if (saveMethod === "clipboard" || saveMethod === "uri" || saveMethod === "cli") {
       const clipboardResult = await saveViaClipboard(markdown);
       if (clipboardResult.success) {
-        console.log("Selection clip saved to clipboard (paste into Obsidian)");
+        debug("ClipSelection", "Selection clip saved to clipboard (paste into Obsidian)");
         return { success: true };
       }
       return { success: false, error: clipboardResult.error || "Failed to save to clipboard" };

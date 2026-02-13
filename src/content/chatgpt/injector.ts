@@ -14,6 +14,7 @@ import { parseTags, addAutoTags } from "../../shared/tags";
 import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
 import { getSelection } from "../selection";
 import { htmlToMarkdownLite } from "../../shared/htmlToMarkdown";
+import { debug } from "../../shared/debug";
 
 const CLIP_BUTTON_ATTR = "data-obsidian-clip-injected";
 
@@ -384,7 +385,7 @@ export function initChatGPTInjector(): void {
     return;
   }
 
-  console.log("[Obsidian Clipper] ChatGPT detected, initializing injector...");
+  debug("ChatGPT", "ChatGPT detected, initializing injector...");
 
   // Initial scan
   injectButtons();

@@ -3,6 +3,7 @@
 import * as pdfjs from "pdfjs-dist";
 import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
 import { NetworkError } from "../shared/errors";
+import { debug } from "../shared/debug";
 
 // Set worker path - offscreen documents have document access
 pdfjs.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("pdfjs/pdf.worker.js");
@@ -52,7 +53,7 @@ async function extractPdf(
   maxPages: number,
   maxChars: number
 ): Promise<PdfExtractResult> {
-  console.log("[PDF Offscreen] Fetching PDF:", url);
+  debug("PDF Offscreen", "Fetching PDF:", url);
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -61,7 +62,7 @@ async function extractPdf(
 
   const buffer = await response.arrayBuffer();
   const data = new Uint8Array(buffer);
-  console.log("[PDF Offscreen] Got", data.length, "bytes");
+  debug("PDF Offscreen", "Got", data.length, "bytes");
 
   const loadingTask = pdfjs.getDocument({
     data,
@@ -70,11 +71,11 @@ async function extractPdf(
   });
 
   try {
-    console.log("[PDF Offscreen] Parsing PDF...");
+    debug("PDF Offscreen", "Parsing PDF...");
     const pdf = await loadingTask.promise;
     const pageCount: number = pdf.numPages || 0;
     const pageLimit = Math.min(pageCount, maxPages);
-    console.log("[PDF Offscreen] PDF has", pageCount, "pages");
+    debug("PDF Offscreen", "PDF has", pageCount, "pages");
 
     let text = "";
     let truncated = false;
@@ -124,7 +125,7 @@ async function extractPdf(
       truncated = true;
     }
 
-    console.log("[PDF Offscreen] Extraction complete. hasTextLayer:", hasTextLayer);
+    debug("PDF Offscreen", "Extraction complete. hasTextLayer:", hasTextLayer);
     return {
       text: text.trimEnd(),
       pageCount,

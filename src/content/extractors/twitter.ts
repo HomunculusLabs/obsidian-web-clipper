@@ -1,4 +1,5 @@
 import type { ClipResult } from "../../shared/types";
+import { debug } from "../../shared/debug";
 
 // ============================================================================
 // Task 54: Twitter API Fallback System
@@ -238,14 +239,14 @@ async function tryFallbacks(tweetUrl: string): Promise<FallbackResult | null> {
   // Try oEmbed first (most reliable, official API)
   let result = await fetchFromOEmbed(tweetUrl);
   if (result && result.text) {
-    console.log("[Twitter] Successfully used oEmbed fallback");
+    debug("Twitter", "Successfully used oEmbed fallback");
     return result;
   }
 
   // Try nitter instances
   result = await fetchFromNitter(tweetUrl);
   if (result && result.text) {
-    console.log("[Twitter] Successfully used nitter fallback");
+    debug("Twitter", "Successfully used nitter fallback");
     return result;
   }
 
@@ -1554,8 +1555,8 @@ export async function extractTwitterContent(
   const extractionFailed = isExtractionEmpty(tweetInfo);
 
   if (hasAuthWall || extractionFailed) {
-    console.log("[Twitter] DOM extraction issue detected, trying fallbacks...");
-    console.log(`[Twitter] Auth wall: ${hasAuthWall}, Extraction empty: ${extractionFailed}`);
+    debug("Twitter", "DOM extraction issue detected, trying fallbacks...");
+    debug("Twitter", `Auth wall: ${hasAuthWall}, Extraction empty: ${extractionFailed}`);
 
     // Try fallback methods
     fallbackResult = await tryFallbacks(result.url);

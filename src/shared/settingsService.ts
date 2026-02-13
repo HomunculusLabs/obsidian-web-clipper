@@ -7,6 +7,7 @@ import {
   type Settings
 } from "./settings";
 import { storageGet, storageSet } from "./chromeAsync";
+import { initDebug } from "./debug";
 import type {
   TableHandlingMode,
   CodeBlockLanguageMode,
@@ -104,7 +105,10 @@ export function mergeSettings(stored: Partial<Settings> | undefined): Settings {
 // Async load from chrome.storage.local
 export async function loadSettings(): Promise<Settings> {
   const stored = await storageGet<Settings>(SETTINGS_KEYS);
-  return mergeSettings(stored);
+  const settings = mergeSettings(stored);
+  // Initialize debug logging based on settings
+  initDebug(settings.debug ?? false);
+  return settings;
 }
 
 // Async save to chrome.storage.local

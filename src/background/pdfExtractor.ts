@@ -3,6 +3,7 @@
 
 import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
 import { ExtractionError } from "../shared/errors";
+import { debug } from "../shared/debug";
 
 export type PdfExtractResult = {
   text: string;
@@ -47,7 +48,7 @@ export async function extractPdfFromUrl(
   maxPages = 200,
   maxChars = 120000
 ): Promise<PdfExtractResult> {
-  console.log("[PDF Background] Delegating to offscreen document:", url);
+  debug("PDF Background", "Delegating to offscreen document:", url);
 
   await ensureOffscreenDocument();
 

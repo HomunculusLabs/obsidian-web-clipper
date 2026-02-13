@@ -1,5 +1,6 @@
 // PDF extraction - delegates to background service worker
 import type { ExtractPdfResponse } from "./messages";
+import { debug } from "./debug";
 
 export type PdfExtractOptions = {
   maxPages?: number;
@@ -18,7 +19,7 @@ export async function extractPdfTextFromUrl(
   url: string,
   options?: PdfExtractOptions
 ): Promise<PdfExtractResult> {
-  console.log("[PDF] Requesting extraction from background:", url);
+  debug("PDF", "Requesting extraction from background:", url);
 
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
@@ -30,21 +31,21 @@ export async function extractPdfTextFromUrl(
       },
       (response: ExtractPdfResponse) => {
         if (chrome.runtime.lastError) {
-          console.error("[PDF] chrome.runtime.lastError:", chrome.runtime.lastError);
+          debug("PDF", "chrome.runtime.lastError:", chrome.runtime.lastError);
           reject(new Error(chrome.runtime.lastError.message || "Failed to extract PDF"));
           return;
         }
         if (!response) {
-          console.error("[PDF] No response from background");
+          debug("PDF", "No response from background");
           reject(new Error("No response from background worker"));
           return;
         }
         if (!response.success) {
-          console.error("[PDF] Extraction failed:", response.error);
+          debug("PDF", "Extraction failed:", response.error);
           reject(new Error(response.error || "Failed to extract PDF"));
           return;
         }
-        console.log("[PDF] Extraction complete. Pages:", response.pageCount);
+        debug("PDF", "Extraction complete. Pages:", response.pageCount);
         resolve({
           text: response.text,
           pageCount: response.pageCount,

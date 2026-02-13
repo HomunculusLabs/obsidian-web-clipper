@@ -5,6 +5,7 @@ import { tabsSendMessage, scriptingExecuteScript } from "../shared/chromeAsync";
 import { isClipResult, isTabResponse } from "../shared/guards";
 import { TabError, ExtractionError } from "../shared/errors";
 import { sleep } from "./ui";
+import { debug } from "../shared/debug";
 
 const SPA_DOMAINS = [
   "react.dev",
@@ -106,11 +107,11 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
     settings
   };
 
-  console.log("[Popup] Sending clip request:", request);
-  console.log("[Popup] Tab URL:", tab.url);
+  debug("Popup", "Sending clip request:", request);
+  debug("Popup", "Tab URL:", tab.url);
 
   const rawResponse = await tabsSendMessage<TabRequest, unknown>(tab.id, request);
-  console.log("[Popup] Got response:", rawResponse);
+  debug("Popup", "Got response:", rawResponse);
   const response = normalizeTabResponse(rawResponse);
 
   if (!response.ok) {

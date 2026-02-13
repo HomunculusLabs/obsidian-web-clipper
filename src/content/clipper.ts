@@ -1,6 +1,7 @@
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage, RouterError } from "../shared/errors";
 import { getTemplateForUrl, isTwitterTemplate } from "./templates";
+import { debug } from "../shared/debug";
 
 import { extractWebPageContent } from "./extractors/web";
 import { extractPDFContent } from "./extractors/pdf";
@@ -49,12 +50,12 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
   const pageType: PageType = request.pageType ?? detectedType;
   const settings = request.settings;
 
-  console.log("[Clip] handleClip called");
-  console.log("[Clip] URL:", url);
-  console.log("[Clip] detectedType:", detectedType);
-  console.log("[Clip] request.pageType:", request.pageType);
-  console.log("[Clip] final pageType:", pageType);
-  console.log("[Clip] document.contentType:", document.contentType);
+  debug("Clip", "handleClip called");
+  debug("Clip", "URL:", url);
+  debug("Clip", "detectedType:", detectedType);
+  debug("Clip", "request.pageType:", request.pageType);
+  debug("Clip", "final pageType:", pageType);
+  debug("Clip", "document.contentType:", document.contentType);
 
   const title = document.title || "Untitled";
 
@@ -85,7 +86,7 @@ export async function clipPage(request: ClipRequest): Promise<TabResponse> {
         if (isTwitterTemplateEnabled(url, settings)) {
           result = await extractTwitterContent(baseResult);
         } else {
-          console.log("[Clip] Twitter template disabled, falling back to web extractor");
+          debug("Clip", "Twitter template disabled, falling back to web extractor");
           result = extractWebPageContent({
             result: baseResult,
             settings,
