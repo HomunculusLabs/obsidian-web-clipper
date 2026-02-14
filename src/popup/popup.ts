@@ -32,6 +32,7 @@ let currentTagSuggestions: TagSuggestion[] = []; // Current tag suggestions with
 let currentTitleSuggestions: string[] = []; // Current title suggestions
 let clipHistoryEntries: ClipHistoryEntry[] = [];
 let historyFilters: ClipHistoryFilters = {};
+let batchClipInProgress = false;
 
 const PREVIEW_IDLE_TEXT = "Open Preview to generate a cleaned markdown preview";
 const PREVIEW_IDLE_HINT = "Content is extracted without saving to Obsidian.";
@@ -502,6 +503,13 @@ function setupEventListeners(): void {
     });
   }
 
+  const clipAllTabsBtn = getEl<HTMLButtonElement>("clipAllTabsBtn");
+  if (clipAllTabsBtn) {
+    clipAllTabsBtn.addEventListener("click", () => {
+      void handleClipAllTabs();
+    });
+  }
+
   const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => {
@@ -738,6 +746,109 @@ function hideTemplateIndicator(): void {
   }
   hasTemplate = false;
   useTemplate = true;
+}
+
+function isClippableUrl(url: string | undefined): boolean {
+  return Boolean(url && /^https?:\/\//i.test(url));
+}
+
+function setBatchClipUiState(isBusy: boolean): void {
+  const clipBtn = getEl<HTMLButtonElement>("clipBtn");
+  const clipFromPreviewBtn = getEl<HTMLButtonElement>("clipFromPreviewBtn");
+  const clipAllTabsBtn = getEl<HTMLButtonElement>("clipAllTabsBtn");
+
+  if (clipBtn) clipBtn.disabled = isBusy;
+  if (clipFromPreviewBtn) clipFromPreviewBtn.disabled = isBusy;
+  if (clipAllTabsBtn) {
+    clipAllTabsBtn.disabled = isBusy;
+    clipAllTabsBtn.textContent = isBusy ? "Clipping Tabs..." : "Clip All Tabs";
+  }
+}
+
+async function handleClipAllTabs(): Promise<void> {
+  if (batchClipInProgress) return;
+
+  const clipAllTabsBtn = getEl<HTMLButtonElement>("clipAllTabsBtn");
+  const folderInput = getEl<HTMLSelectElement>("folderInput");
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+
+  try {
+    batchClipInProgress = true;
+    setBatchClipUiState(true);
+
+    const allTabs = await tabsQuery({ currentWindow: true });
+    const tabsToClip = allTabs.filter((tab) => tab.id && isClippableUrl(tab.url));
+
+    if (tabsToClip.length === 0) {
+      showStatus("error", "No clippable tabs in this window");
+      return;
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let index = 0; index < tabsToClip.length; index += 1) {
+      const tab = tabsToClip[index]!;
+      const progress = `Clipping ${index + 1}/${tabsToClip.length}...`;
+      showStatus("loading", progress);
+
+      try {
+        const tabPageType = detectPageType(tab.url || "");
+        const result = await performClip({
+          tab,
+          pageType: tabPageType,
+          settings,
+          selectionOnly: false,
+          disableTemplate: false
+        });
+
+        await saveToObsidian({
+          result,
+          settings,
+          pageType: tabPageType,
+          currentTabUrl: tab.url || "",
+          overrideFolder: folderInput?.value,
+          overrideTags: tagsInput?.value
+        });
+
+        await recordHistoryEntry(
+          buildHistoryEntry(true, {
+            title: result.title,
+            url: tab.url || "",
+            folder: folderInput?.value,
+            tags: (tagsInput?.value || "")
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean)
+          })
+        );
+
+        successCount += 1;
+      } catch {
+        failureCount += 1;
+        await recordHistoryEntry(
+          buildHistoryEntry(false, {
+            title: tab.title || "Untitled",
+            url: tab.url || ""
+          })
+        );
+      }
+    }
+
+    if (failureCount === 0) {
+      showStatus("success", `Clipped ${successCount}/${tabsToClip.length} tabs`);
+    } else {
+      showStatus("error", `Clipped ${successCount}/${tabsToClip.length} tabs (${failureCount} failed)`);
+    }
+  } catch (err) {
+    showStatus("error", toErrorMessage(err, "Batch tab clipping failed"));
+  } finally {
+    batchClipInProgress = false;
+    setBatchClipUiState(false);
+    if (clipAllTabsBtn) {
+      clipAllTabsBtn.blur();
+    }
+  }
 }
 
 async function handleReclip(entry: ClipHistoryEntry, button: HTMLButtonElement): Promise<void> {

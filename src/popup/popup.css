@@ -468,6 +468,28 @@ body {
   width: calc(100% - 32px);
 }
 
+.batch-clip-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  background: #f5f3ff;
+  color: #5b21b6;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.batch-clip-btn:hover:not(:disabled) {
+  background: #ede9fe;
+}
+
+.batch-clip-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* History tab */
 .history-container {
   padding: 12px 16px 16px;
