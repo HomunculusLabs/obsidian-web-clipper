@@ -8,7 +8,13 @@ import { toErrorMessage, TabError } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
 import { suggestTitles } from "../shared/titleSuggestion";
 import { markdownToHtml } from "../shared/markdownToHtml";
-import { addClipHistoryEntry, getClipHistory, type ClipHistoryEntry } from "../shared/clipHistory";
+import {
+  addClipHistoryEntry,
+  filterClipHistory,
+  getClipHistory,
+  type ClipHistoryEntry,
+  type ClipHistoryFilters
+} from "../shared/clipHistory";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
@@ -25,6 +31,7 @@ let dismissedTagSuggestions: string[] = []; // Dismissed tag suggestions (lowerc
 let currentTagSuggestions: TagSuggestion[] = []; // Current tag suggestions with source info
 let currentTitleSuggestions: string[] = []; // Current title suggestions
 let clipHistoryEntries: ClipHistoryEntry[] = [];
+let historyFilters: ClipHistoryFilters = {};
 
 const PREVIEW_IDLE_TEXT = "Open Preview to generate a cleaned markdown preview";
 const PREVIEW_IDLE_HINT = "Content is extracted without saving to Obsidian.";
@@ -246,23 +253,64 @@ function formatHistoryDate(iso: string): string {
   return date.toLocaleString();
 }
 
+function readHistoryFiltersFromInputs(): ClipHistoryFilters {
+  const searchInput = getEl<HTMLInputElement>("historySearch");
+  const fromInput = getEl<HTMLInputElement>("historyDateFrom");
+  const toInput = getEl<HTMLInputElement>("historyDateTo");
+
+  return {
+    query: (searchInput?.value || "").trim(),
+    startDate: (fromInput?.value || "").trim(),
+    endDate: (toInput?.value || "").trim()
+  };
+}
+
+function applyHistoryFilters(): void {
+  historyFilters = readHistoryFiltersFromInputs();
+  renderHistoryView();
+}
+
+function clearHistoryFilters(): void {
+  const searchInput = getEl<HTMLInputElement>("historySearch");
+  const fromInput = getEl<HTMLInputElement>("historyDateFrom");
+  const toInput = getEl<HTMLInputElement>("historyDateTo");
+
+  if (searchInput) searchInput.value = "";
+  if (fromInput) fromInput.value = "";
+  if (toInput) toInput.value = "";
+
+  historyFilters = {};
+  renderHistoryView();
+}
+
 function renderHistoryView(): void {
   const list = getEl<HTMLDivElement>("historyList");
   const empty = getEl<HTMLDivElement>("historyEmpty");
-  if (!list || !empty) return;
+  const noResults = getEl<HTMLDivElement>("historyNoResults");
+  if (!list || !empty || !noResults) return;
 
   list.innerHTML = "";
 
   if (clipHistoryEntries.length === 0) {
     empty.style.display = "block";
+    noResults.style.display = "none";
+    list.style.display = "none";
+    return;
+  }
+
+  const filteredEntries = filterClipHistory(clipHistoryEntries, historyFilters);
+  if (filteredEntries.length === 0) {
+    empty.style.display = "none";
+    noResults.style.display = "block";
     list.style.display = "none";
     return;
   }
 
   empty.style.display = "none";
+  noResults.style.display = "none";
   list.style.display = "flex";
 
-  for (const entry of clipHistoryEntries) {
+  for (const entry of filteredEntries) {
     const item = document.createElement("div");
     item.className = `history-item ${entry.success ? "success" : "error"}`;
 
@@ -397,6 +445,26 @@ function setupEventListeners(): void {
     historyBtn.addEventListener("click", () => {
       activateTab("history");
     });
+  }
+
+  const historySearch = getEl<HTMLInputElement>("historySearch");
+  if (historySearch) {
+    historySearch.addEventListener("input", applyHistoryFilters);
+  }
+
+  const historyDateFrom = getEl<HTMLInputElement>("historyDateFrom");
+  if (historyDateFrom) {
+    historyDateFrom.addEventListener("change", applyHistoryFilters);
+  }
+
+  const historyDateTo = getEl<HTMLInputElement>("historyDateTo");
+  if (historyDateTo) {
+    historyDateTo.addEventListener("change", applyHistoryFilters);
+  }
+
+  const historyClearFilters = getEl<HTMLButtonElement>("historyClearFilters");
+  if (historyClearFilters) {
+    historyClearFilters.addEventListener("click", clearHistoryFilters);
   }
 
   const titleInput = getEl<HTMLInputElement>("titleInput");

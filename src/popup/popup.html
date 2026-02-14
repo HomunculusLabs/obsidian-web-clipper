@@ -101,7 +101,17 @@
 
     <div class="tab-content" id="tabHistory">
       <div class="history-container">
+        <div class="history-filters">
+          <input type="search" id="historySearch" class="history-search" placeholder="Search title, URL, or tags">
+          <div class="history-date-range">
+            <input type="date" id="historyDateFrom" class="history-date-input" aria-label="Filter history from date">
+            <span class="history-date-separator">→</span>
+            <input type="date" id="historyDateTo" class="history-date-input" aria-label="Filter history to date">
+            <button type="button" id="historyClearFilters" class="history-clear-btn">Clear</button>
+          </div>
+        </div>
         <div class="history-empty" id="historyEmpty">No clips yet. Your last 50 clips will appear here.</div>
+        <div class="history-empty" id="historyNoResults" style="display: none;">No clips match the current filters.</div>
         <div class="history-list" id="historyList"></div>
       </div>
     </div>

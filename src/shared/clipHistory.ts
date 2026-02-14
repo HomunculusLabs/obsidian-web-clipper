@@ -9,6 +9,12 @@ export interface ClipHistoryEntry {
   success: boolean;
 }
 
+export interface ClipHistoryFilters {
+  query?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 interface ClipHistoryStorage extends Record<string, unknown> {
   clipHistory: ClipHistoryEntry[];
 }
@@ -51,4 +57,42 @@ export async function addClipHistoryEntry(entry: ClipHistoryEntry): Promise<void
   } catch {
     // Non-fatal: history should never break clipping flow.
   }
+}
+
+function parseDateInput(value: string, endOfDay: boolean): number | null {
+  if (!value) return null;
+
+  const isoCandidate = endOfDay ? `${value}T23:59:59.999` : `${value}T00:00:00.000`;
+  const parsed = Date.parse(isoCandidate);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+export function filterClipHistory(entries: ClipHistoryEntry[], filters: ClipHistoryFilters): ClipHistoryEntry[] {
+  const normalizedQuery = (filters.query || "").trim().toLowerCase();
+  const startTime = parseDateInput(filters.startDate || "", false);
+  const endTime = parseDateInput(filters.endDate || "", true);
+
+  return entries.filter((entry) => {
+    if (normalizedQuery) {
+      const searchable = [entry.title, entry.url, ...entry.tags].join(" ").toLowerCase();
+      if (!searchable.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+
+    if (startTime !== null || endTime !== null) {
+      const entryTime = Date.parse(entry.date);
+      if (Number.isNaN(entryTime)) {
+        return false;
+      }
+      if (startTime !== null && entryTime < startTime) {
+        return false;
+      }
+      if (endTime !== null && entryTime > endTime) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 }
