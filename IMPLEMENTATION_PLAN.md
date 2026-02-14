@@ -161,7 +161,7 @@ Clean up and strengthen the codebase.
 User-facing improvements and additional features.
 
 - [x] **Task 103**: Reader mode preview — Add "Preview" tab in popup that shows cleaned markdown rendering before clipping. Use a simple markdown→HTML renderer.
-- [ ] **Task 104**: Clip history — Store last 50 clips in chrome.storage.local with title, URL, date, tags. Add "History" view in popup.
+- [x] **Task 104**: Clip history — Store last 50 clips in chrome.storage.local with title, URL, date, tags. Add "History" view in popup.
 - [ ] **Task 105**: History search — Add search/filter to clip history by title, URL, tags, date range.
 - [ ] **Task 106**: Re-clip from history — "Re-clip" button in history to re-clip a previously saved URL with current settings.
 - [ ] **Task 107**: Batch tab clipping — Add "Clip All Tabs" button in popup. Iterate through tabs in current window, clip each, save with progress indicator.
