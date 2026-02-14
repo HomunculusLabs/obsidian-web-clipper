@@ -1,4 +1,5 @@
 import type { CreateVaultFolderResponse } from "../../shared/messages";
+import { sendNativeBridgeMessage } from "../nativeMessaging";
 
 type CreateVaultFolderRequest = {
   action: "createVaultFolder";
@@ -26,10 +27,24 @@ export async function handleCreateVaultFolder(
     return { success: false, error: "Folder path is required" };
   }
 
+  const bridgeResponse = await sendNativeBridgeMessage<unknown>({
+    action: "createVaultFolder",
+    payload: {
+      cliPath,
+      vault,
+      folderPath
+    }
+  });
+
+  if (!bridgeResponse.success) {
+    return {
+      success: false,
+      error: bridgeResponse.error,
+      requiresBridge: true
+    };
+  }
+
   return {
-    success: false,
-    error:
-      "Creating folders via CLI requires a Native Messaging bridge. Add the folder in Obsidian or settings for now.",
-    requiresBridge: true
+    success: true
   };
 }
