@@ -21,6 +21,7 @@ const RUNTIME_REQUEST_ACTIONS = [
   "testCliConnection",
   "detectCli",
   "saveToCli",
+  "saveAttachmentToCli",
   "listVaultFolders",
   "createVaultFolder",
   "saveContent"

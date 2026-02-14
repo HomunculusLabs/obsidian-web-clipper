@@ -12,6 +12,14 @@ export type RuntimeRequest =
   | { action: "testCliConnection"; cliPath: string; vault: string }
   | { action: "detectCli" }
   | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string }
+  | {
+      action: "saveAttachmentToCli";
+      filePath: string;
+      base64Data: string;
+      vault: string;
+      cliPath: string;
+      mimeType?: string;
+    }
   | { action: "listVaultFolders"; vault: string; cliPath: string }
   | { action: "createVaultFolder"; vault: string; cliPath: string; folderPath: string }
   | {
@@ -32,6 +40,10 @@ export type SaveContentResponse =
 
 export type SaveToCliResponse =
   | { success: true }
+  | { success: false; error: string; requiresBridge?: boolean };
+
+export type SaveAttachmentToCliResponse =
+  | { success: true; filePath: string }
   | { success: false; error: string; requiresBridge?: boolean };
 
 export type TestCliConnectionResponse =
