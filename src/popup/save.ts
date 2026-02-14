@@ -9,6 +9,7 @@ import { injectWikiLinks } from "../content/web/wikiLinks";
 import { buildFrontmatterFromClip } from "../shared/buildFrontmatter";
 import { recordTagUsage } from "../shared/tagHistory";
 import { SaveError } from "../shared/errors";
+import { showClipSavedNotification } from "../shared/notifications";
 import { showStatus } from "./ui";
 
 const MAX_URI_CONTENT_CHARS = 180000;
@@ -41,6 +42,12 @@ interface PreparedSave {
   baseObsidianUri: string;
   contentTooLargeForUri: boolean;
   tags: string[];
+}
+
+function getNoteTitleFromFilePath(filePath: string): string {
+  const parts = filePath.split("/").filter(Boolean);
+  const lastPart = parts[parts.length - 1] || "Untitled";
+  return lastPart.trim() || "Untitled";
 }
 
 /**
@@ -233,6 +240,12 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
         if (prepared.tags.length > 0) {
           void recordTagUsage(prepared.tags);
         }
+
+        void showClipSavedNotification(
+          settings,
+          getNoteTitleFromFilePath(prepared.filePath),
+          prepared.vault
+        );
 
         return { usedClipboardFallback, usedMethod: method };
       }

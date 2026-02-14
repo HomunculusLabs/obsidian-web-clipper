@@ -39,11 +39,15 @@ export function populateForm(settings: Settings): void {
   const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
+  const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
 
   if (vaultName) vaultName.value = settings.vaultName || "";
   if (defaultFolder) defaultFolder.value = settings.defaultFolder || "";
   if (defaultTags) defaultTags.value = settings.defaultTags || "";
   if (includeTimestamps) includeTimestamps.checked = settings.includeTimestamps !== false;
+  if (enableClipNotifications) {
+    enableClipNotifications.checked = settings.enableClipNotifications !== false;
+  }
 
   // Metadata settings
   const includeOGFields = getEl<HTMLInputElement>("includeOGFields");

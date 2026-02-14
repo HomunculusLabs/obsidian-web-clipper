@@ -14,6 +14,7 @@ describe("SettingsSchema", () => {
     expect(settings.vaultName).toBe("Main Vault");
     expect(settings.defaultFolder).toBe("2 - Source Material/Clips");
     expect(settings.saveMethod).toBe("uri");
+    expect(settings.enableClipNotifications).toBe(true);
     expect(settings.settingsVersion).toBeUndefined();
   });
 

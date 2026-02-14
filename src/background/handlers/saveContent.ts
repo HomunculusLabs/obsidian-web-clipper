@@ -7,11 +7,19 @@
 
 import { tabsCreate } from "../../shared/chromeAsync";
 import { toErrorMessage } from "../../shared/errors";
+import { loadSettings } from "../../shared/settingsService";
+import { showClipSavedNotification } from "../../shared/notifications";
 import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
 
 type SaveContentRequest = Extract<RuntimeRequest, { action: "saveContent" }>;
 
 const MAX_URI_CONTENT_CHARS = 180_000;
+
+function getNoteTitleFromFilePath(filePath: string): string {
+  const segments = filePath.split("/").filter(Boolean);
+  const value = segments[segments.length - 1] || "Untitled";
+  return value.trim() || "Untitled";
+}
 
 /**
  * Save content via Obsidian URI scheme
@@ -78,6 +86,8 @@ export async function handleSaveContent(request: SaveContentRequest): Promise<Sa
   // Try URI first
   const uriResult = await saveViaUri(vault, filePath, markdown);
   if (uriResult.success) {
+    const settings = await loadSettings();
+    void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), vault);
     return { success: true, usedMethod: "uri" };
   }
 
@@ -85,6 +95,8 @@ export async function handleSaveContent(request: SaveContentRequest): Promise<Sa
   if (fallbackToClipboard) {
     const clipboardResult = await saveViaClipboard(markdown);
     if (clipboardResult.success) {
+      const settings = await loadSettings();
+      void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), vault);
       return { success: true, usedMethod: "clipboard" };
     }
 

@@ -174,6 +174,7 @@ export const SettingsSchema = z.object({
   defaultTags: z.string().default("web-clip"),
   includeTimestamps: z.boolean().default(true),
   savedFolders: z.array(z.string()).default(["2 - Source Material/Clips"]),
+  enableClipNotifications: z.boolean().default(true),
 
   // --- Save method settings ---
   saveMethod: SaveMethodSchema.default("uri"),

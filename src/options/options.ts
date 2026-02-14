@@ -257,6 +257,7 @@ async function saveCurrentSettings(): Promise<void> {
   const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
+  const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
 
   // Metadata settings
   const includeOGFields = getEl<HTMLInputElement>("includeOGFields");
@@ -318,6 +319,8 @@ async function saveCurrentSettings(): Promise<void> {
     savedFolders: Array.isArray(settings.savedFolders)
       ? settings.savedFolders
       : [...DEFAULT_SETTINGS.savedFolders],
+    enableClipNotifications:
+      enableClipNotifications?.checked ?? DEFAULT_SETTINGS.enableClipNotifications,
 
     // Metadata
     includeOGFields: includeOGFields?.checked ?? DEFAULT_SETTINGS.includeOGFields,

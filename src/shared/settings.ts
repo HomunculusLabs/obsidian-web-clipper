@@ -22,6 +22,7 @@ export interface Settings {
   defaultTags: string;
   includeTimestamps: boolean;
   savedFolders: string[];
+  enableClipNotifications: boolean;
   
   // --- Save method settings ---
   saveMethod: SaveMethod;
@@ -104,6 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultTags: "web-clip",
   includeTimestamps: true,
   savedFolders: ["2 - Source Material/Clips"],
+  enableClipNotifications: true,
   
   // --- Save method settings ---
   saveMethod: "uri",
@@ -179,6 +181,7 @@ export const SETTINGS_KEYS = [
   "defaultTags",
   "includeTimestamps",
   "savedFolders",
+  "enableClipNotifications",
   // Save method
   "saveMethod",
   "obsidianCli",

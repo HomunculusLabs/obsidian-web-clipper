@@ -20,6 +20,7 @@ import { parseTags, addAutoTags } from "../../shared/tags";
 import { injectWikiLinks } from "../../content/web/wikiLinks";
 import { debug } from "../../shared/debug";
 import { toErrorMessage } from "../../shared/errors";
+import { showClipSavedNotification } from "../../shared/notifications";
 import type { TabRequest, TabResponse } from "../../shared/messages";
 import type { PageType, ClipResult } from "../../shared/types";
 
@@ -237,6 +238,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
     const finalTitle = sanitizeFilename(result.title || "Untitled");
     const folder = (settings.defaultFolder || DEFAULT_SETTINGS.defaultFolder || "").trim();
     const filePath = folder ? `${folder}/${finalTitle}` : finalTitle;
+    const noteTitle = finalTitle.trim() || "Untitled";
     const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName || "Main Vault").trim();
 
     // Try to save using the configured method with fallback
@@ -246,6 +248,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
     if (saveMethod === "uri" || saveMethod === "cli") {
       const uriResult = await saveViaUri(vault, filePath, markdown);
       if (uriResult.success) {
+        void showClipSavedNotification(settings, noteTitle, vault);
         return { success: true };
       }
 
@@ -261,6 +264,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
       const clipboardResult = await saveViaClipboard(markdown);
       if (clipboardResult.success) {
         debug("ClipSelection", "Selection clip saved to clipboard (paste into Obsidian)");
+        void showClipSavedNotification(settings, noteTitle, vault);
         return { success: true };
       }
       return { success: false, error: clipboardResult.error || "Failed to save to clipboard" };

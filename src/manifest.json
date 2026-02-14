@@ -9,7 +9,8 @@
     "clipboardWrite",
     "scripting",
     "contextMenus",
-    "offscreen"
+    "offscreen",
+    "notifications"
   ],
   "host_permissions": [
     "https://*/*",
