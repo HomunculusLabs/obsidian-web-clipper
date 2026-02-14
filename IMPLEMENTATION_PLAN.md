@@ -174,7 +174,7 @@ User-facing improvements and additional features.
 - [x] **Task 114**: Clip formatting options — Add popup toggle for: include images, include links, include metadata, clean formatting. Quick presets.
 - [x] **Task 115**: Export settings — Add import/export buttons in options for all settings (templates, rules, folders, etc.) as JSON.
 - [x] **Task 116**: Onboarding flow — First-run wizard: detect Obsidian installation, set vault name, choose default folder, test connection.
-- [ ] **Task 117**: Badge counter — Show clip count on extension badge icon. Reset daily or weekly (configurable).
+- [x] **Task 117**: Badge counter — Show clip count on extension badge icon. Reset daily or weekly (configurable).
 - [ ] **Task 118**: Right-click "Clip Link" — Context menu on links: clip the linked page without navigating to it. Open in background tab, clip, close.
 - [ ] **Task 119**: Image downloading — When `imageHandling: "download-api"`, download images and save to attachments folder via Obsidian CLI. Rewrite markdown image URLs.
 - [ ] **Task 120**: Popup redesign — Modernize popup with better layout: collapsible sections, tag chips, template indicator, save method indicator.
