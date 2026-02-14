@@ -59,6 +59,16 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.tab-btn:focus-visible,
+.title-option:focus-within,
+.tag-chip:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+
 /* Template indicator styles */
 .template-indicator {
   padding: 10px 16px;

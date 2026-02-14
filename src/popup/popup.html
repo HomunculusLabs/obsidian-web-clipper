@@ -47,7 +47,7 @@
 
     <nav class="tabs" aria-label="Popup tabs">
       <button class="tab-btn active" data-tab="clip" type="button">Clip</button>
-      <button class="tab-btn" data-tab="preview" type="button">Preview</button>
+      <button class="tab-btn" data-tab="preview" type="button" aria-keyshortcuts="Control+P Meta+P">Preview</button>
       <button class="tab-btn" data-tab="history" type="button">History</button>
     </nav>
 
@@ -78,7 +78,7 @@
           </div>
         </div>
 
-        <button class="clip-btn" id="clipBtn">
+        <button class="clip-btn" id="clipBtn" aria-keyshortcuts="Enter">
           <span class="btn-text">Clip to Obsidian</span>
         </button>
 
@@ -103,7 +103,7 @@
         <div class="preview-content" id="previewContent"></div>
       </div>
 
-      <button class="clip-btn clip-btn-secondary" id="clipFromPreviewBtn">
+      <button class="clip-btn clip-btn-secondary" id="clipFromPreviewBtn" aria-keyshortcuts="Enter">
         <span class="btn-text">Clip to Obsidian</span>
       </button>
     </div>

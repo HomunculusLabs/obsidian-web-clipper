@@ -546,6 +546,109 @@ function activateTab(targetTab: "clip" | "preview" | "history"): void {
   }
 }
 
+function getActiveTabName(): "clip" | "preview" | "history" {
+  const activeTabBtn = document.querySelector<HTMLButtonElement>(".tab-btn.active");
+  const tab = activeTabBtn?.getAttribute("data-tab");
+  return tab === "preview" || tab === "history" ? tab : "clip";
+}
+
+function isVisible(el: HTMLElement): boolean {
+  return !!(el.offsetParent || el.getClientRects().length);
+}
+
+function getFocusableElements(): HTMLElement[] {
+  const selectors = [
+    "button:not([disabled])",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "a[href]",
+    "[tabindex]:not([tabindex='-1'])"
+  ].join(",");
+
+  return Array.from(document.querySelectorAll<HTMLElement>(selectors)).filter((el) => isVisible(el));
+}
+
+function handleTabFocusNavigation(event: KeyboardEvent): void {
+  const focusable = getFocusableElements();
+  if (focusable.length === 0) return;
+
+  const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+
+  if (event.shiftKey) {
+    if (currentIndex <= 0) {
+      focusable[focusable.length - 1]?.focus();
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (currentIndex === focusable.length - 1) {
+    focusable[0]?.focus();
+    event.preventDefault();
+  }
+}
+
+function isTypingField(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
+  if (!el) return false;
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
+  return !["button", "checkbox", "radio", "submit"].includes(el.type);
+}
+
+function handlePopupKeyboardShortcuts(event: KeyboardEvent): void {
+  const activeElement = document.activeElement;
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    window.close();
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+    event.preventDefault();
+    const activeTab = getActiveTabName();
+    activateTab(activeTab === "preview" ? "clip" : "preview");
+    return;
+  }
+
+  if (event.key === "Tab") {
+    handleTabFocusNavigation(event);
+    return;
+  }
+
+  if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+    return;
+  }
+
+  if (activeElement instanceof HTMLButtonElement || activeElement instanceof HTMLAnchorElement) {
+    return;
+  }
+
+  const activeTab = getActiveTabName();
+
+  if (activeTab === "history") {
+    return;
+  }
+
+  const shouldSubmit =
+    !activeElement ||
+    activeElement === document.body ||
+    activeElement instanceof HTMLSelectElement ||
+    isTypingField(activeElement);
+
+  if (!shouldSubmit) {
+    return;
+  }
+
+  event.preventDefault();
+  if (activeTab === "preview") {
+    void handleClipFromPreview();
+    return;
+  }
+
+  void handleClip();
+}
+
 async function getCurrentTab(): Promise<chrome.tabs.Tab> {
   const tabs = await tabsQuery({ active: true, currentWindow: true });
   const tab = tabs[0];
@@ -655,6 +758,8 @@ function setupEventListeners(): void {
 
   // Tab switching
   setupTabSwitching();
+
+  document.addEventListener("keydown", handlePopupKeyboardShortcuts);
 }
 
 /** Reset cached preview state so the next preview reflects current clip options. */
