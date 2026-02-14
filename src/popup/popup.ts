@@ -7,6 +7,7 @@ import { detectPageType } from "../shared/pageType";
 import { toErrorMessage, TabError } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
 import { suggestTitles } from "../shared/titleSuggestion";
+import { markdownToHtml } from "../shared/markdownToHtml";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
@@ -22,6 +23,11 @@ let useTemplate = true; // Default to using template when available
 let dismissedTagSuggestions: string[] = []; // Dismissed tag suggestions (lowercase)
 let currentTagSuggestions: TagSuggestion[] = []; // Current tag suggestions with source info
 let currentTitleSuggestions: string[] = []; // Current title suggestions
+
+const PREVIEW_IDLE_TEXT = "Open Preview to generate a cleaned markdown preview";
+const PREVIEW_IDLE_HINT = "Content is extracted without saving to Obsidian.";
+const PREVIEW_LOADING_TEXT = "Generating preview...";
+const PREVIEW_LOADING_HINT = "Extracting cleaned markdown from the current page.";
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
@@ -252,6 +258,13 @@ function setupEventListeners(): void {
     });
   }
 
+  const clipFromPreviewBtn = getEl<HTMLButtonElement>("clipFromPreviewBtn");
+  if (clipFromPreviewBtn) {
+    clipFromPreviewBtn.addEventListener("click", () => {
+      void handleClipFromPreview();
+    });
+  }
+
   const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => {
@@ -272,6 +285,7 @@ function setupEventListeners(): void {
     selectionToggle.addEventListener("change", () => {
       clipSelectionMode = selectionToggle.checked;
       updateClipButtonText();
+      invalidatePreviewContent();
     });
   }
 
@@ -279,7 +293,128 @@ function setupEventListeners(): void {
   if (templateToggle) {
     templateToggle.addEventListener("change", () => {
       useTemplate = templateToggle.checked;
+      invalidatePreviewContent();
     });
+  }
+
+  // Tab switching
+  setupTabSwitching();
+}
+
+/** Reset cached preview state so the next preview reflects current clip options. */
+function invalidatePreviewContent(): void {
+  clipperContent = null;
+
+  const previewContent = getEl<HTMLDivElement>("previewContent");
+  if (previewContent) {
+    previewContent.innerHTML = "";
+  }
+
+  setPreviewLoadingState(PREVIEW_IDLE_TEXT, PREVIEW_IDLE_HINT, true);
+}
+
+function setPreviewLoadingState(text: string, hint: string, visible: boolean): void {
+  const previewLoading = getEl<HTMLDivElement>("previewLoading");
+  if (!previewLoading) return;
+
+  previewLoading.style.display = visible ? "flex" : "none";
+
+  const loadingText = previewLoading.querySelector(".preview-loading-text");
+  if (loadingText) {
+    loadingText.textContent = text;
+  }
+
+  const loadingHint = previewLoading.querySelector(".preview-loading-hint");
+  if (loadingHint) {
+    loadingHint.textContent = hint;
+  }
+}
+
+function showPreviewNotice(message: string, type: "success" | "error"): HTMLDivElement | null {
+  const previewContent = getEl<HTMLDivElement>("previewContent");
+  if (!previewContent) return null;
+
+  const notice = document.createElement("div");
+  notice.className = `preview-notice preview-notice-${type}`;
+  notice.textContent = message;
+  previewContent.insertBefore(notice, previewContent.firstChild);
+
+  return notice;
+}
+
+function renderPreviewContent(): void {
+  const previewLoading = getEl<HTMLDivElement>("previewLoading");
+  const previewContent = getEl<HTMLDivElement>("previewContent");
+
+  if (!previewLoading || !previewContent || !clipperContent) return;
+
+  previewContent.innerHTML = markdownToHtml(clipperContent.markdown);
+  previewLoading.style.display = "none";
+}
+
+/** Setup tab switching functionality */
+function setupTabSwitching(): void {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabContents = document.querySelectorAll(".tab-content");
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetTab = btn.getAttribute("data-tab");
+      if (!targetTab) return;
+
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      tabContents.forEach((content) => {
+        if (content.id === `tab${targetTab.charAt(0).toUpperCase() + targetTab.slice(1)}`) {
+          content.classList.add("active");
+        } else {
+          content.classList.remove("active");
+        }
+      });
+
+      if (targetTab === "preview") {
+        void updatePreview();
+      }
+    });
+  });
+}
+
+/** Update preview content; extracts markdown first if needed (without saving). */
+async function updatePreview(forceRefresh = false): Promise<void> {
+  const previewLoading = getEl<HTMLDivElement>("previewLoading");
+  const previewContent = getEl<HTMLDivElement>("previewContent");
+
+  if (!previewLoading || !previewContent) return;
+
+  if (clipperContent && !forceRefresh) {
+    renderPreviewContent();
+    return;
+  }
+
+  setPreviewLoadingState(PREVIEW_LOADING_TEXT, PREVIEW_LOADING_HINT, true);
+  previewContent.innerHTML = "";
+
+  try {
+    if (!currentTab) {
+      currentTab = await getCurrentTab();
+    }
+
+    clipperContent = await performClip({
+      tab: currentTab,
+      pageType,
+      settings,
+      selectionOnly: hasSelection && clipSelectionMode,
+      disableTemplate: hasTemplate && !useTemplate
+    });
+
+    renderPreviewContent();
+  } catch (err) {
+    clipperContent = null;
+    previewLoading.style.display = "none";
+    previewContent.innerHTML = "";
+    const message = toErrorMessage(err, "Failed to load preview");
+    showPreviewNotice(message, "error");
   }
 }
 
@@ -375,6 +510,7 @@ async function handleClip(): Promise<void> {
     });
 
     clipperContent = result;
+    void updatePreview();
 
     // Generate and display tag suggestions based on clipped content
     // Uses suggestTagsWithHistory to include frequently used tags from history (Task 65)
@@ -424,6 +560,56 @@ async function handleClip(): Promise<void> {
     const message = toErrorMessage(err, "Failed to clip page");
     console.error("Clip error:", err);
     showStatus("error", message);
+  } finally {
+    if (clipBtn) clipBtn.disabled = false;
+  }
+}
+
+/** Handle clip from preview tab - saves cached preview content (or loads preview first). */
+async function handleClipFromPreview(): Promise<void> {
+  const clipBtn = getEl<HTMLButtonElement>("clipFromPreviewBtn");
+
+  try {
+    if (clipBtn) clipBtn.disabled = true;
+
+    if (!clipperContent) {
+      await updatePreview();
+    }
+    if (!clipperContent) {
+      throw new Error("Preview content is unavailable.");
+    }
+
+    if (!currentTab) {
+      currentTab = await getCurrentTab();
+    }
+
+    const titleInput = getEl<HTMLInputElement>("titleInput");
+    const folderInput = getEl<HTMLSelectElement>("folderInput");
+    const tagsInput = getEl<HTMLInputElement>("tagsInput");
+
+    const saveResult = await saveToObsidian({
+      result: clipperContent,
+      settings,
+      pageType,
+      currentTabUrl: currentTab.url || "",
+      overrideTitle: titleInput?.value,
+      overrideFolder: folderInput?.value,
+      overrideTags: tagsInput?.value
+    });
+
+    if (!saveResult.usedClipboardFallback) {
+      const successNotice = showPreviewNotice("✓ Sent to Obsidian", "success");
+      if (successNotice) {
+        setTimeout(() => successNotice.remove(), 3000);
+      }
+    }
+  } catch (err) {
+    const message = toErrorMessage(err, "Failed to clip page");
+    console.error("Clip from preview error:", err);
+    const errorNotice = showPreviewNotice(message, "error");
+    if (errorNotice) {
+      setTimeout(() => errorNotice.remove(), 5000);
+    }
   } finally {
     if (clipBtn) clipBtn.disabled = false;
   }

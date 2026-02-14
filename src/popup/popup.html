@@ -41,37 +41,58 @@
       <div class="selection-preview" id="selectionPreview"></div>
     </div>
 
-    <div class="content">
-      <div class="field">
-        <label for="titleInput">Title</label>
-        <input type="text" id="titleInput" placeholder="Page title will appear here">
-        <div class="title-suggestions" id="titleSuggestions" style="display: none;">
-          <span class="title-suggestions-label">Suggestions:</span>
-          <div class="title-options" id="titleOptions"></div>
+    <nav class="tabs" aria-label="Popup tabs">
+      <button class="tab-btn active" data-tab="clip" type="button">Clip</button>
+      <button class="tab-btn" data-tab="preview" type="button">Preview</button>
+    </nav>
+
+    <div class="tab-content active" id="tabClip">
+      <div class="content">
+        <div class="field">
+          <label for="titleInput">Title</label>
+          <input type="text" id="titleInput" placeholder="Page title will appear here">
+          <div class="title-suggestions" id="titleSuggestions" style="display: none;">
+            <span class="title-suggestions-label">Suggestions:</span>
+            <div class="title-options" id="titleOptions"></div>
+          </div>
         </div>
-      </div>
 
-      <div class="field">
-        <label for="folderInput">Save Folder</label>
-        <select id="folderInput">
-          <option value="2 - Source Material/Clips">2 - Source Material/Clips</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="tagsInput">Tags</label>
-        <input type="text" id="tagsInput" placeholder="web-clip">
-        <div class="tag-suggestions" id="tagSuggestions" style="display: none;">
-          <span class="tag-suggestions-label">Suggested:</span>
-          <div class="tag-chips" id="tagChips"></div>
+        <div class="field">
+          <label for="folderInput">Save Folder</label>
+          <select id="folderInput">
+            <option value="2 - Source Material/Clips">2 - Source Material/Clips</option>
+          </select>
         </div>
+
+        <div class="field">
+          <label for="tagsInput">Tags</label>
+          <input type="text" id="tagsInput" placeholder="web-clip">
+          <div class="tag-suggestions" id="tagSuggestions" style="display: none;">
+            <span class="tag-suggestions-label">Suggested:</span>
+            <div class="tag-chips" id="tagChips"></div>
+          </div>
+        </div>
+
+        <button class="clip-btn" id="clipBtn">
+          <span class="btn-text">Clip to Obsidian</span>
+        </button>
+
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tabPreview">
+      <div class="preview-container">
+        <div class="preview-loading" id="previewLoading">
+          <span class="preview-loading-text">Open Preview to generate a cleaned markdown preview</span>
+          <span class="preview-loading-hint">Content is extracted without saving to Obsidian.</span>
+        </div>
+        <div class="preview-content" id="previewContent"></div>
       </div>
 
-      <button class="clip-btn" id="clipBtn">
+      <button class="clip-btn clip-btn-secondary" id="clipFromPreviewBtn">
         <span class="btn-text">Clip to Obsidian</span>
       </button>
-
-      <div class="status" id="status"></div>
     </div>
   </div>
 
