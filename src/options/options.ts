@@ -533,6 +533,7 @@ async function saveCurrentSettings(): Promise<void> {
   // Core settings
   const vaultNameEl = getEl<HTMLInputElement>("vaultName");
   const defaultFolderEl = getEl<HTMLInputElement>("defaultFolder");
+  const defaultTagsEl = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
   const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
   const badgeCounterEnabled = getEl<HTMLInputElement>("badgeCounterEnabled");
@@ -604,9 +605,11 @@ async function saveCurrentSettings(): Promise<void> {
 
   const hasProfileVaultFields =
     !!getEl<HTMLInputElement>("vaultProfileVaultName") &&
-    !!getEl<HTMLInputElement>("vaultProfileDefaultFolder");
+    !!getEl<HTMLInputElement>("vaultProfileDefaultFolder") &&
+    !!getEl<HTMLInputElement>("vaultProfileDefaultTags");
   const topLevelVaultName = (vaultNameEl?.value || "").trim();
   const topLevelDefaultFolder = (defaultFolderEl?.value || "").trim();
+  const topLevelDefaultTags = (defaultTagsEl?.value || "").trim();
 
   const effectiveVaultProfiles = hasProfileVaultFields
     ? normalizedVaultProfiles
@@ -615,12 +618,14 @@ async function saveCurrentSettings(): Promise<void> {
 
         const nextVaultName = topLevelVaultName || profile.vaultName;
         const nextDefaultFolder = topLevelDefaultFolder || profile.defaultFolder;
+        const nextDefaultTags = topLevelDefaultTags || profile.defaultTags;
 
         return {
           ...profile,
           vaultName: nextVaultName,
           name: nextVaultName,
-          defaultFolder: nextDefaultFolder
+          defaultFolder: nextDefaultFolder,
+          defaultTags: nextDefaultTags
         };
       });
 
