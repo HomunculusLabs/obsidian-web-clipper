@@ -209,6 +209,6 @@ Tasks added during implementation that don't fit an existing phase.
 - [x] **Task E5**: Restore top-level options persistence for `vaultName` and `defaultFolder` when multi-vault profile editor fields are absent, so edits in the visible Vault Configuration section are not dropped on save.
 - [x] **Task E6**: Implement Native Messaging bridge binary attachment writes for `saveAttachmentToCli`, so `imageHandling: "download-api"` can persist downloaded image bytes to the vault attachments folder.
 - [x] **Task E7**: Wire `testCliConnection` through the Native Messaging bridge for real CLI binary/vault validation instead of path-shape-only checks.
-- [ ] **Task E8**: Restore top-level options persistence for `defaultTags` when vault profile editor fields are absent, so edits in the visible Content Options section are not dropped on save.
+- [x] **Task E8**: Restore top-level options persistence for `defaultTags` when vault profile editor fields are absent, so edits in the visible Content Options section are not dropped on save.
 
 <!-- New tasks will be added here by the Ralph loop as they are discovered -->
