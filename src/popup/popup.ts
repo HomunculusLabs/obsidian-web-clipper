@@ -2,7 +2,7 @@ import type { ClipResult, PageType } from "../shared/types";
 import type { PageInfo, SelectionInfo, TabRequest, TemplateInfo } from "../shared/messages";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
 import { loadSettings as loadSettingsFromStorage } from "../shared/settingsService";
-import { tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
+import { tabsCreate, tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage, TabError } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
@@ -283,6 +283,56 @@ function clearHistoryFilters(): void {
   renderHistoryView();
 }
 
+async function waitForTabComplete(tabId: number, timeoutMs = 30000): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = (): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+    };
+
+    const onUpdated = (updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo): void => {
+      if (updatedTabId !== tabId) return;
+      if (changeInfo.status === "complete") {
+        cleanup();
+        resolve();
+      }
+    };
+
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for re-clip tab to load"));
+    }, timeoutMs);
+
+    chrome.tabs.onUpdated.addListener(onUpdated);
+
+    chrome.tabs.get(tabId, (tab) => {
+      const lastError = chrome.runtime?.lastError;
+      if (lastError) {
+        cleanup();
+        reject(new Error(lastError.message || "Failed to inspect re-clip tab"));
+        return;
+      }
+
+      if (tab?.status === "complete") {
+        cleanup();
+        resolve();
+      }
+    });
+  });
+}
+
+async function closeTabQuietly(tabId: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    chrome.tabs.remove(tabId, () => {
+      resolve();
+    });
+  });
+}
+
 function renderHistoryView(): void {
   const list = getEl<HTMLDivElement>("historyList");
   const empty = getEl<HTMLDivElement>("historyEmpty");
@@ -334,9 +384,23 @@ function renderHistoryView(): void {
     status.textContent = entry.success ? "Saved" : "Failed";
     meta.appendChild(status);
 
+    const actions = document.createElement("div");
+    actions.className = "history-item-actions";
+
+    const reclipButton = document.createElement("button");
+    reclipButton.type = "button";
+    reclipButton.className = "history-reclip-btn";
+    reclipButton.textContent = "Re-clip";
+    reclipButton.addEventListener("click", () => {
+      void handleReclip(entry, reclipButton);
+    });
+
+    actions.appendChild(reclipButton);
+
     item.appendChild(title);
     item.appendChild(url);
     item.appendChild(meta);
+    item.appendChild(actions);
 
     if (entry.tags.length > 0) {
       const tags = document.createElement("div");
@@ -364,7 +428,10 @@ async function recordHistoryEntry(entry: ClipHistoryEntry): Promise<void> {
   await refreshHistoryView();
 }
 
-function buildHistoryEntry(success: boolean): ClipHistoryEntry {
+function buildHistoryEntry(
+  success: boolean,
+  overrides?: Partial<Pick<ClipHistoryEntry, "title" | "url" | "tags" | "folder">>
+): ClipHistoryEntry {
   const titleInput = getEl<HTMLInputElement>("titleInput");
   const folderInput = getEl<HTMLSelectElement>("folderInput");
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
@@ -375,11 +442,13 @@ function buildHistoryEntry(success: boolean): ClipHistoryEntry {
     .filter(Boolean);
 
   return {
-    title: (titleInput?.value || clipperContent?.title || currentTab?.title || "Untitled").trim() || "Untitled",
-    url: currentTab?.url || "",
+    title:
+      (overrides?.title || titleInput?.value || clipperContent?.title || currentTab?.title || "Untitled").trim() ||
+      "Untitled",
+    url: (overrides?.url || currentTab?.url || "").trim(),
     date: new Date().toISOString(),
-    tags,
-    folder: (folderInput?.value || settings.defaultFolder || "").trim(),
+    tags: overrides?.tags || tags,
+    folder: (overrides?.folder || folderInput?.value || settings.defaultFolder || "").trim(),
     success
   };
 }
@@ -669,6 +738,72 @@ function hideTemplateIndicator(): void {
   }
   hasTemplate = false;
   useTemplate = true;
+}
+
+async function handleReclip(entry: ClipHistoryEntry, button: HTMLButtonElement): Promise<void> {
+  const url = (entry.url || "").trim();
+  if (!/^https?:\/\//i.test(url)) {
+    showStatus("error", "Cannot re-clip non-web URLs");
+    return;
+  }
+
+  let tempTabId: number | null = null;
+
+  try {
+    button.disabled = true;
+    button.textContent = "Re-clipping...";
+    showStatus("loading", "Re-clipping saved URL...");
+
+    const tempTab = await tabsCreate({ url, active: false });
+    if (!tempTab.id) {
+      throw new Error("Failed to create a tab for re-clipping");
+    }
+
+    tempTabId = tempTab.id;
+    await waitForTabComplete(tempTabId);
+
+    const reclipPageType = detectPageType(url);
+    const result = await performClip({
+      tab: { ...tempTab, url },
+      pageType: reclipPageType,
+      settings,
+      selectionOnly: false,
+      disableTemplate: false
+    });
+
+    await saveToObsidian({
+      result,
+      settings,
+      pageType: reclipPageType,
+      currentTabUrl: url
+    });
+
+    await recordHistoryEntry(
+      buildHistoryEntry(true, {
+        title: result.title,
+        url
+      })
+    );
+
+    showStatus("success", "Re-clipped and sent to Obsidian");
+  } catch (err) {
+    await recordHistoryEntry(
+      buildHistoryEntry(false, {
+        title: entry.title,
+        url
+      })
+    );
+
+    const message = toErrorMessage(err, "Failed to re-clip URL");
+    showStatus("error", message);
+  } finally {
+    if (tempTabId !== null) {
+      await closeTabQuietly(tempTabId);
+    }
+
+    button.disabled = false;
+    button.textContent = "Re-clip";
+  }
 }
 
 async function handleClip(): Promise<void> {
