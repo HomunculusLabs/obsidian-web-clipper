@@ -94,6 +94,39 @@
           </div>
         </div>
 
+        <div class="formatting-options" id="formattingOptions">
+          <div class="formatting-header">
+            <span class="formatting-title">Formatting</span>
+            <div class="formatting-presets" role="group" aria-label="Formatting presets">
+              <button type="button" class="format-preset-btn" id="presetBalancedBtn">Balanced</button>
+              <button type="button" class="format-preset-btn" id="presetTextOnlyBtn">Text-only</button>
+              <button type="button" class="format-preset-btn" id="presetFullFidelityBtn">Full</button>
+            </div>
+          </div>
+          <div class="formatting-grid">
+            <label class="toggle-label">
+              <input type="checkbox" id="formatIncludeImages" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Include images</span>
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="formatIncludeLinks" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Include links</span>
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="formatIncludeMetadata" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Include metadata</span>
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="formatCleanFormatting" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Clean formatting</span>
+            </label>
+          </div>
+        </div>
+
         <button class="clip-btn" id="clipBtn" aria-keyshortcuts="Enter">
           <span class="btn-text">Clip to Obsidian</span>
         </button>

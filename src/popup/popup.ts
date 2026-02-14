@@ -65,6 +65,36 @@ type PopupTheme = "light" | "dark";
 const POPUP_THEME_KEY = "popupTheme";
 let popupThemePreference: PopupTheme | null = null;
 
+type ClipFormattingOptions = {
+  includeImages: boolean;
+  includeLinks: boolean;
+  includeMetadata: boolean;
+  cleanFormatting: boolean;
+};
+
+const FULL_FIDELITY_FORMATTING: ClipFormattingOptions = {
+  includeImages: true,
+  includeLinks: true,
+  includeMetadata: true,
+  cleanFormatting: false
+};
+
+const BALANCED_FORMATTING: ClipFormattingOptions = {
+  includeImages: true,
+  includeLinks: true,
+  includeMetadata: true,
+  cleanFormatting: true
+};
+
+const TEXT_ONLY_FORMATTING: ClipFormattingOptions = {
+  includeImages: false,
+  includeLinks: false,
+  includeMetadata: false,
+  cleanFormatting: true
+};
+
+let clipFormattingOptions: ClipFormattingOptions = { ...BALANCED_FORMATTING };
+
 function getSystemTheme(): PopupTheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
@@ -118,6 +148,133 @@ async function togglePopupTheme(): Promise<void> {
   } catch {
     // ignore persistence errors; theme still applies for current session
   }
+}
+
+function getClipFormattingFromSettings(baseSettings: Settings): ClipFormattingOptions {
+  const metadataEnabled =
+    baseSettings.includeOGFields ||
+    baseSettings.includeTwitterFields ||
+    baseSettings.parseJsonLd ||
+    baseSettings.includeKeywords ||
+    baseSettings.computeReadingStats;
+
+  return {
+    includeImages: baseSettings.imageHandling !== "remove",
+    includeLinks: true,
+    includeMetadata: metadataEnabled,
+    cleanFormatting: true
+  };
+}
+
+function setClipFormattingToggleState(id: string, checked: boolean): void {
+  const input = getEl<HTMLInputElement>(id);
+  if (input) {
+    input.checked = checked;
+  }
+}
+
+function applyClipFormattingOptionsToUi(options: ClipFormattingOptions): void {
+  setClipFormattingToggleState("formatIncludeImages", options.includeImages);
+  setClipFormattingToggleState("formatIncludeLinks", options.includeLinks);
+  setClipFormattingToggleState("formatIncludeMetadata", options.includeMetadata);
+  setClipFormattingToggleState("formatCleanFormatting", options.cleanFormatting);
+}
+
+function readClipFormattingOptionsFromUi(): ClipFormattingOptions {
+  const includeImages = getEl<HTMLInputElement>("formatIncludeImages")?.checked ?? clipFormattingOptions.includeImages;
+  const includeLinks = getEl<HTMLInputElement>("formatIncludeLinks")?.checked ?? clipFormattingOptions.includeLinks;
+  const includeMetadata =
+    getEl<HTMLInputElement>("formatIncludeMetadata")?.checked ?? clipFormattingOptions.includeMetadata;
+  const cleanFormatting =
+    getEl<HTMLInputElement>("formatCleanFormatting")?.checked ?? clipFormattingOptions.cleanFormatting;
+
+  return {
+    includeImages,
+    includeLinks,
+    includeMetadata,
+    cleanFormatting
+  };
+}
+
+function updateClipFormattingOptionsFromUi(): void {
+  clipFormattingOptions = readClipFormattingOptionsFromUi();
+}
+
+function applyFormattingPreset(preset: ClipFormattingOptions): void {
+  clipFormattingOptions = { ...preset };
+  applyClipFormattingOptionsToUi(clipFormattingOptions);
+  invalidatePreviewContent();
+}
+
+function getExtractionSettingsWithFormatting(baseSettings: Settings): Settings {
+  updateClipFormattingOptionsFromUi();
+
+  return {
+    ...baseSettings,
+    imageHandling: clipFormattingOptions.includeImages ? baseSettings.imageHandling : "remove"
+  };
+}
+
+function getSaveSettingsWithFormatting(baseSettings: Settings): Settings {
+  if (clipFormattingOptions.includeMetadata) {
+    return baseSettings;
+  }
+
+  return {
+    ...baseSettings,
+    includeOGFields: false,
+    includeTwitterFields: false,
+    parseJsonLd: false,
+    includeKeywords: false,
+    computeReadingStats: false
+  };
+}
+
+function stripMarkdownLinks(markdown: string): string {
+  return markdown
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+    .replace(/<https?:\/\/([^>]+)>/g, "https://$1");
+}
+
+function stripMarkdownImages(markdown: string): string {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^\)]*\)/g, "")
+    .replace(/^\s*\n/gm, "");
+}
+
+function cleanMarkdownFormatting(markdown: string): string {
+  return markdown
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t ]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function applyFormattingToClipResult(result: ClipResult): ClipResult {
+  let markdown = result.markdown || "";
+
+  if (!clipFormattingOptions.includeImages) {
+    markdown = stripMarkdownImages(markdown);
+  }
+
+  if (!clipFormattingOptions.includeLinks) {
+    markdown = stripMarkdownLinks(markdown);
+  }
+
+  if (clipFormattingOptions.cleanFormatting) {
+    markdown = cleanMarkdownFormatting(markdown);
+  }
+
+  return {
+    ...result,
+    markdown
+  };
+}
+
+function normalizeClipResultForCurrentFormatting(result: ClipResult): ClipResult {
+  updateClipFormattingOptionsFromUi();
+  return applyFormattingToClipResult(result);
 }
 
 function normalizeFolderPath(folderPath: string): string {
@@ -341,6 +498,9 @@ async function loadSettings(): Promise<void> {
 
   // Load dismissed tag suggestions
   await loadDismissedTagSuggestions();
+
+  clipFormattingOptions = getClipFormattingFromSettings(settings);
+  applyClipFormattingOptionsToUi(clipFormattingOptions);
 }
 
 /** Storage key for dismissed tag suggestions */
@@ -1024,6 +1184,43 @@ function setupEventListeners(): void {
     });
   }
 
+  const formattingToggleIds = [
+    "formatIncludeImages",
+    "formatIncludeLinks",
+    "formatIncludeMetadata",
+    "formatCleanFormatting"
+  ] as const;
+
+  for (const toggleId of formattingToggleIds) {
+    const toggle = getEl<HTMLInputElement>(toggleId);
+    if (!toggle) continue;
+    toggle.addEventListener("change", () => {
+      updateClipFormattingOptionsFromUi();
+      invalidatePreviewContent();
+    });
+  }
+
+  const presetBalancedBtn = getEl<HTMLButtonElement>("presetBalancedBtn");
+  if (presetBalancedBtn) {
+    presetBalancedBtn.addEventListener("click", () => {
+      applyFormattingPreset(BALANCED_FORMATTING);
+    });
+  }
+
+  const presetTextOnlyBtn = getEl<HTMLButtonElement>("presetTextOnlyBtn");
+  if (presetTextOnlyBtn) {
+    presetTextOnlyBtn.addEventListener("click", () => {
+      applyFormattingPreset(TEXT_ONLY_FORMATTING);
+    });
+  }
+
+  const presetFullFidelityBtn = getEl<HTMLButtonElement>("presetFullFidelityBtn");
+  if (presetFullFidelityBtn) {
+    presetFullFidelityBtn.addEventListener("click", () => {
+      applyFormattingPreset(FULL_FIDELITY_FORMATTING);
+    });
+  }
+
   // Tab switching
   setupTabSwitching();
 
@@ -1115,13 +1312,17 @@ async function updatePreview(forceRefresh = false): Promise<void> {
       currentTab = await getCurrentTab();
     }
 
-    clipperContent = await performClip({
+    const extractionSettings = getExtractionSettingsWithFormatting(settings);
+
+    const extracted = await performClip({
       tab: currentTab,
       pageType,
-      settings,
+      settings: extractionSettings,
       selectionOnly: hasSelection && clipSelectionMode,
       disableTemplate: hasTemplate && !useTemplate
     });
+
+    clipperContent = normalizeClipResultForCurrentFormatting(extracted);
 
     renderPreviewContent();
   } catch (err) {
@@ -1294,6 +1495,9 @@ async function handleBatchClip(mode: BatchClipMode): Promise<void> {
     batchClipInProgress = true;
     setBatchClipUiState(true);
 
+    const extractionSettings = getExtractionSettingsWithFormatting(settings);
+    const saveSettings = getSaveSettingsWithFormatting(extractionSettings);
+
     const tabsToClip = await getTabsForBatchClip(mode);
 
     if (tabsToClip.length === 0) {
@@ -1314,13 +1518,15 @@ async function handleBatchClip(mode: BatchClipMode): Promise<void> {
 
       try {
         const tabPageType = detectPageType(tab.url || "");
-        const result = await performClip({
+        const extracted = await performClip({
           tab,
           pageType: tabPageType,
-          settings,
+          settings: extractionSettings,
           selectionOnly: false,
           disableTemplate: false
         });
+
+        const result = normalizeClipResultForCurrentFormatting(extracted);
 
         const { finalTitle } = buildFrontmatterFromClip({
           result,
@@ -1363,8 +1569,8 @@ async function handleBatchClip(mode: BatchClipMode): Promise<void> {
             : pendingClip.result;
 
         await saveToObsidian({
-          result: resultWithBacklinks,
-          settings,
+          result: normalizeClipResultForCurrentFormatting(resultWithBacklinks),
+          settings: saveSettings,
           pageType: pendingClip.pageType,
           currentTabUrl: pendingClip.tab.url || "",
           overrideFolder: folderInput?.value,
@@ -1447,17 +1653,22 @@ async function handleReclip(entry: ClipHistoryEntry, button: HTMLButtonElement):
     await waitForTabComplete(tempTabId);
 
     const reclipPageType = detectPageType(url);
-    const result = await performClip({
+    const extractionSettings = getExtractionSettingsWithFormatting(settings);
+    const saveSettings = getSaveSettingsWithFormatting(extractionSettings);
+
+    const extracted = await performClip({
       tab: { ...tempTab, url },
       pageType: reclipPageType,
-      settings,
+      settings: extractionSettings,
       selectionOnly: false,
       disableTemplate: false
     });
 
+    const result = normalizeClipResultForCurrentFormatting(extracted);
+
     await saveToObsidian({
       result,
-      settings,
+      settings: saveSettings,
       pageType: reclipPageType,
       currentTabUrl: url
     });
@@ -1501,13 +1712,17 @@ async function handleClip(): Promise<void> {
       currentTab = await getCurrentTab();
     }
 
-    const result = await performClip({
+    const extractionSettings = getExtractionSettingsWithFormatting(settings);
+
+    const extracted = await performClip({
       tab: currentTab,
       pageType,
-      settings,
+      settings: extractionSettings,
       selectionOnly: hasSelection && clipSelectionMode,
       disableTemplate: hasTemplate && !useTemplate
     });
+
+    const result = normalizeClipResultForCurrentFormatting(extracted);
 
     clipperContent = result;
     void updatePreview();
@@ -1543,9 +1758,11 @@ async function handleClip(): Promise<void> {
     const folderInput = getEl<HTMLSelectElement>("folderInput");
     const tagsInput = getEl<HTMLInputElement>("tagsInput");
 
+    const saveSettings = getSaveSettingsWithFormatting(extractionSettings);
+
     const saveResult = await saveToObsidian({
       result,
-      settings,
+      settings: saveSettings,
       pageType,
       currentTabUrl: currentTab.url || "",
       overrideTitle: titleInput?.value,
@@ -1590,9 +1807,11 @@ async function handleClipFromPreview(): Promise<void> {
     const folderInput = getEl<HTMLSelectElement>("folderInput");
     const tagsInput = getEl<HTMLInputElement>("tagsInput");
 
+    const saveSettings = getSaveSettingsWithFormatting(getExtractionSettingsWithFormatting(settings));
+
     const saveResult = await saveToObsidian({
-      result: clipperContent,
-      settings,
+      result: normalizeClipResultForCurrentFormatting(clipperContent),
+      settings: saveSettings,
       pageType,
       currentTabUrl: currentTab.url || "",
       overrideTitle: titleInput?.value,
