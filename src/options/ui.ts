@@ -40,6 +40,8 @@ export function populateForm(settings: Settings): void {
   const defaultTags = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
   const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
+  const badgeCounterEnabled = getEl<HTMLInputElement>("badgeCounterEnabled");
+  const badgeCounterResetInterval = getEl<HTMLSelectElement>("badgeCounterResetInterval");
 
   if (vaultName) vaultName.value = settings.vaultName || "";
   if (defaultFolder) defaultFolder.value = settings.defaultFolder || "";
@@ -47,6 +49,12 @@ export function populateForm(settings: Settings): void {
   if (includeTimestamps) includeTimestamps.checked = settings.includeTimestamps !== false;
   if (enableClipNotifications) {
     enableClipNotifications.checked = settings.enableClipNotifications !== false;
+  }
+  if (badgeCounterEnabled) {
+    badgeCounterEnabled.checked = settings.badgeCounterEnabled !== false;
+  }
+  if (badgeCounterResetInterval) {
+    badgeCounterResetInterval.value = settings.badgeCounterResetInterval || "daily";
   }
 
   // Metadata settings

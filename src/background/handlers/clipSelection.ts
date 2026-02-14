@@ -21,6 +21,7 @@ import { injectWikiLinks } from "../../content/web/wikiLinks";
 import { debug } from "../../shared/debug";
 import { toErrorMessage } from "../../shared/errors";
 import { showClipSavedNotification } from "../../shared/notifications";
+import { incrementBadgeCounter } from "../../shared/badgeCounter";
 import type { TabRequest, TabResponse } from "../../shared/messages";
 import type { PageType, ClipResult } from "../../shared/types";
 
@@ -249,6 +250,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
       const uriResult = await saveViaUri(vault, filePath, markdown);
       if (uriResult.success) {
         void showClipSavedNotification(settings, noteTitle, vault);
+        void incrementBadgeCounter(settings);
         return { success: true };
       }
 
@@ -265,6 +267,7 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
       if (clipboardResult.success) {
         debug("ClipSelection", "Selection clip saved to clipboard (paste into Obsidian)");
         void showClipSavedNotification(settings, noteTitle, vault);
+        void incrementBadgeCounter(settings);
         return { success: true };
       }
       return { success: false, error: clipboardResult.error || "Failed to save to clipboard" };

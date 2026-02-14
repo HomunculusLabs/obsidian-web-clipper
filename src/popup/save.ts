@@ -10,6 +10,7 @@ import { buildFrontmatterFromClip } from "../shared/buildFrontmatter";
 import { recordTagUsage } from "../shared/tagHistory";
 import { SaveError } from "../shared/errors";
 import { showClipSavedNotification } from "../shared/notifications";
+import { incrementBadgeCounter } from "../shared/badgeCounter";
 import { showStatus } from "./ui";
 
 const MAX_URI_CONTENT_CHARS = 180000;
@@ -246,6 +247,7 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
           getNoteTitleFromFilePath(prepared.filePath),
           prepared.vault
         );
+        void incrementBadgeCounter(settings);
 
         return { usedClipboardFallback, usedMethod: method };
       }

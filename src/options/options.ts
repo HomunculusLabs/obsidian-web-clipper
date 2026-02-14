@@ -533,6 +533,8 @@ async function saveCurrentSettings(): Promise<void> {
   // Core settings
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
   const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
+  const badgeCounterEnabled = getEl<HTMLInputElement>("badgeCounterEnabled");
+  const badgeCounterResetInterval = getEl<HTMLSelectElement>("badgeCounterResetInterval");
 
   // Metadata settings
   const includeOGFields = getEl<HTMLInputElement>("includeOGFields");
@@ -614,6 +616,10 @@ async function saveCurrentSettings(): Promise<void> {
       : [...DEFAULT_SETTINGS.savedFolders],
     enableClipNotifications:
       enableClipNotifications?.checked ?? DEFAULT_SETTINGS.enableClipNotifications,
+    badgeCounterEnabled:
+      badgeCounterEnabled?.checked ?? DEFAULT_SETTINGS.badgeCounterEnabled,
+    badgeCounterResetInterval:
+      badgeCounterResetInterval?.value === "weekly" ? "weekly" : "daily",
 
     // Metadata
     includeOGFields: includeOGFields?.checked ?? DEFAULT_SETTINGS.includeOGFields,

@@ -24,6 +24,8 @@ export interface VaultProfile {
   obsidianCli?: ObsidianCliConfig;
 }
 
+export type BadgeCounterResetInterval = "daily" | "weekly";
+
 export interface Settings {
   // --- Core settings ---
   vaultName: string;
@@ -34,7 +36,9 @@ export interface Settings {
   includeTimestamps: boolean;
   savedFolders: string[];
   enableClipNotifications: boolean;
-  
+  badgeCounterEnabled: boolean;
+  badgeCounterResetInterval: BadgeCounterResetInterval;
+
   // --- Save method settings ---
   saveMethod: SaveMethod;
   obsidianCli: ObsidianCliConfig;
@@ -135,7 +139,9 @@ export const DEFAULT_SETTINGS: Settings = {
   includeTimestamps: true,
   savedFolders: ["2 - Source Material/Clips"],
   enableClipNotifications: true,
-  
+  badgeCounterEnabled: true,
+  badgeCounterResetInterval: "daily",
+
   // --- Save method settings ---
   saveMethod: "uri",
   obsidianCli: {
@@ -213,6 +219,8 @@ export const SETTINGS_KEYS = [
   "includeTimestamps",
   "savedFolders",
   "enableClipNotifications",
+  "badgeCounterEnabled",
+  "badgeCounterResetInterval",
   // Save method
   "saveMethod",
   "obsidianCli",
@@ -274,4 +282,9 @@ export const VALID_IMAGE_HANDLING: ImageHandlingMode[] = [
   "remove",
   "data-uri",
   "download-api"
+];
+
+export const VALID_BADGE_COUNTER_RESET_INTERVALS: BadgeCounterResetInterval[] = [
+  "daily",
+  "weekly"
 ];

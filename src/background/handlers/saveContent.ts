@@ -9,6 +9,7 @@ import { tabsCreate } from "../../shared/chromeAsync";
 import { toErrorMessage } from "../../shared/errors";
 import { loadSettings } from "../../shared/settingsService";
 import { showClipSavedNotification } from "../../shared/notifications";
+import { incrementBadgeCounter } from "../../shared/badgeCounter";
 import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
 
 type SaveContentRequest = Extract<RuntimeRequest, { action: "saveContent" }>;
@@ -88,6 +89,7 @@ export async function handleSaveContent(request: SaveContentRequest): Promise<Sa
   if (uriResult.success) {
     const settings = await loadSettings();
     void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), vault);
+    void incrementBadgeCounter(settings);
     return { success: true, usedMethod: "uri" };
   }
 
@@ -97,6 +99,7 @@ export async function handleSaveContent(request: SaveContentRequest): Promise<Sa
     if (clipboardResult.success) {
       const settings = await loadSettings();
       void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), vault);
+      void incrementBadgeCounter(settings);
       return { success: true, usedMethod: "clipboard" };
     }
 

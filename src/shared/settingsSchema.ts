@@ -174,6 +174,9 @@ export type CodeBlockLanguageModeZod = z.infer<typeof CodeBlockLanguageModeSchem
 export const ImageHandlingModeSchema = z.enum(["keep", "remove", "data-uri", "download-api"]);
 export type ImageHandlingModeZod = z.infer<typeof ImageHandlingModeSchema>;
 
+export const BadgeCounterResetIntervalSchema = z.enum(["daily", "weekly"]);
+export type BadgeCounterResetIntervalZod = z.infer<typeof BadgeCounterResetIntervalSchema>;
+
 // ============================================================================
 // Main Settings schema
 // ============================================================================
@@ -200,6 +203,8 @@ export const SettingsSchema = z.object({
   includeTimestamps: z.boolean().default(true),
   savedFolders: z.array(z.string()).default(["2 - Source Material/Clips"]),
   enableClipNotifications: z.boolean().default(true),
+  badgeCounterEnabled: z.boolean().default(true),
+  badgeCounterResetInterval: BadgeCounterResetIntervalSchema.default("daily"),
 
   // --- Save method settings ---
   saveMethod: SaveMethodSchema.default("uri"),

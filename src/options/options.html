@@ -84,6 +84,21 @@
           <label for="enableClipNotifications">Show Chrome notification after successful clip</label>
           <small>Notification includes note title and target vault</small>
         </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="badgeCounterEnabled" checked>
+          <label for="badgeCounterEnabled">Show clip counter on extension badge</label>
+          <small>Displays the number of successful clips in the current period</small>
+        </div>
+
+        <div class="field">
+          <label for="badgeCounterResetInterval">Badge counter reset interval</label>
+          <select id="badgeCounterResetInterval">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+          <small>Choose when the badge counter resets</small>
+        </div>
       </section>
 
       <section class="section">

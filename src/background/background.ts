@@ -2,6 +2,30 @@ import { handleRuntimeMessage } from "./router";
 import { ensureDefaultsOnInstall } from "./install";
 import { createContextMenu, handleContextMenuClick } from "./contextMenus";
 import { handleClipSelection } from "./handlers/clipSelection";
+import { loadSettings } from "../shared/settingsService";
+import { refreshBadgeCounter } from "../shared/badgeCounter";
+
+async function syncBadgeCounter(): Promise<void> {
+  try {
+    const settings = await loadSettings();
+    await refreshBadgeCounter(settings);
+  } catch (err) {
+    console.error("Failed to sync badge counter:", err);
+  }
+}
+
+void syncBadgeCounter();
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+
+  if (
+    "badgeCounterEnabled" in changes ||
+    "badgeCounterResetInterval" in changes
+  ) {
+    void syncBadgeCounter();
+  }
+});
 
 // Keyboard shortcut handler
 chrome.commands.onCommand.addListener((command: string) => {
@@ -31,6 +55,7 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
   void (async () => {
     await ensureDefaultsOnInstall(details);
     await createContextMenu();
+    await syncBadgeCounter();
   })().catch((err: unknown) => {
     console.error("onInstalled handler failed:", err);
   });
