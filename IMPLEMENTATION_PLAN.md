@@ -169,7 +169,7 @@ User-facing improvements and additional features.
 - [x] **Task 109**: Notification system — Show Chrome notification on successful clip (optional, settings toggle). Include note title and vault.
 - [x] **Task 110**: Dark mode popup — Add dark mode support to popup CSS. Detect system preference or add toggle.
 - [x] **Task 111**: Popup keyboard shortcuts — Add keyboard navigation in popup: Enter to clip, Tab between fields, Escape to close.
-- [ ] **Task 112**: Folder creation — If target folder doesn't exist in Obsidian, offer to create it (via CLI). Show folder tree from vault.
+- [x] **Task 112**: Folder creation — If target folder doesn't exist in Obsidian, offer to create it (via CLI). Show folder tree from vault.
 - [ ] **Task 113**: Multi-vault support — Add vault selector to settings and popup. Store multiple vault configs. Switch between them.
 - [ ] **Task 114**: Clip formatting options — Add popup toggle for: include images, include links, include metadata, clean formatting. Quick presets.
 - [ ] **Task 115**: Export settings — Add import/export buttons in options for all settings (templates, rules, folders, etc.) as JSON.
@@ -205,5 +205,6 @@ Tasks added during implementation that don't fit an existing phase.
 - [ ] **Task E1**: Validate which CLI is the Phase 1 target (`obsidian` app binary vs `obsidian-cli` package), and document whether it performs direct filesystem writes or wraps `obsidian://` URIs.
 - [ ] **Task E2**: Define an extension-compatible local execution bridge for CLI saves (Native Messaging host or local companion service), since MV3 service workers cannot spawn local processes.
 - [ ] **Task E3**: Fix template registry integration test failures by making `getBuiltInTemplates` resilient when called without an explicit `Settings` object (currently throws on `settings.disabledBuiltIns`).
+- [ ] **Task E4**: Implement Native Messaging bridge support for vault folder operations (`listVaultFolders` + `createVaultFolder`) so popup folder tree and creation actions can execute real CLI commands instead of local fallbacks.
 
 <!-- New tasks will be added here by the Ralph loop as they are discovered -->
