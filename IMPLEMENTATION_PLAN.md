@@ -165,7 +165,7 @@ User-facing improvements and additional features.
 - [x] **Task 105**: History search — Add search/filter to clip history by title, URL, tags, date range.
 - [x] **Task 106**: Re-clip from history — "Re-clip" button in history to re-clip a previously saved URL with current settings.
 - [x] **Task 107**: Batch tab clipping — Add "Clip All Tabs" button in popup. Iterate through tabs in current window, clip each, save with progress indicator.
-- [ ] **Task 108**: Tab group clipping — Detect Chrome tab groups. Allow clipping all tabs in a group as related notes with backlinks.
+- [x] **Task 108**: Tab group clipping — Detect Chrome tab groups. Allow clipping all tabs in a group as related notes with backlinks.
 - [ ] **Task 109**: Notification system — Show Chrome notification on successful clip (optional, settings toggle). Include note title and vault.
 - [ ] **Task 110**: Dark mode popup — Add dark mode support to popup CSS. Detect system preference or add toggle.
 - [ ] **Task 111**: Popup keyboard shortcuts — Add keyboard navigation in popup: Enter to clip, Tab between fields, Escape to close.
