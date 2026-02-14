@@ -12,6 +12,8 @@ export type RuntimeRequest =
   | { action: "testCliConnection"; cliPath: string; vault: string }
   | { action: "detectCli" }
   | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string }
+  | { action: "listVaultFolders"; vault: string; cliPath: string }
+  | { action: "createVaultFolder"; vault: string; cliPath: string; folderPath: string }
   | {
       action: "saveContent";
       /** Full markdown content with frontmatter */
@@ -48,6 +50,14 @@ export type DetectCliResponse = {
   /** Note about detection limitations */
   note: string;
 };
+
+export type ListVaultFoldersResponse =
+  | { success: true; folders: string[] }
+  | { success: false; error: string; requiresBridge?: boolean };
+
+export type CreateVaultFolderResponse =
+  | { success: true }
+  | { success: false; error: string; requiresBridge?: boolean };
 
 export type ExtractPdfResponse =
   | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }

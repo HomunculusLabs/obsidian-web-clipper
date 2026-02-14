@@ -1,8 +1,16 @@
 import type { ClipResult, PageType } from "../shared/types";
-import type { PageInfo, SelectionInfo, TabRequest, TemplateInfo } from "../shared/messages";
+import type {
+  CreateVaultFolderResponse,
+  ListVaultFoldersResponse,
+  PageInfo,
+  RuntimeRequest,
+  SelectionInfo,
+  TabRequest,
+  TemplateInfo
+} from "../shared/messages";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
-import { loadSettings as loadSettingsFromStorage } from "../shared/settingsService";
-import { tabsCreate, tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
+import { loadSettings as loadSettingsFromStorage, saveSettings } from "../shared/settingsService";
+import { runtimeSendMessage, tabsCreate, tabsQuery, tabsSendMessage } from "../shared/chromeAsync";
 import { detectPageType } from "../shared/pageType";
 import { toErrorMessage, TabError } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
@@ -34,6 +42,8 @@ let currentTitleSuggestions: string[] = []; // Current title suggestions
 let clipHistoryEntries: ClipHistoryEntry[] = [];
 let historyFilters: ClipHistoryFilters = {};
 let batchClipInProgress = false;
+
+const MIN_CREATE_FOLDER_PATH_LENGTH = 1;
 
 type BatchClipMode = "all" | "group";
 
@@ -109,17 +119,175 @@ async function togglePopupTheme(): Promise<void> {
   }
 }
 
-async function loadSettings(): Promise<void> {
-  settings = await loadSettingsFromStorage();
+function normalizeFolderPath(folderPath: string): string {
+  return folderPath
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/")
+    .replace(/\/+$/, "");
+}
+
+function mergeFolderLists(...folderLists: readonly string[][]): string[] {
+  const merged = new Set<string>();
+  for (const list of folderLists) {
+    for (const rawFolder of list) {
+      const normalized = normalizeFolderPath(rawFolder);
+      if (!normalized) continue;
+      merged.add(normalized);
+    }
+  }
+  return Array.from(merged).sort((a, b) => a.localeCompare(b));
+}
+
+function isCliFolderSyncConfigured(): boolean {
+  return Boolean(settings.obsidianCli?.enabled && settings.obsidianCli.cliPath && settings.obsidianCli.vault);
+}
+
+function renderFolderSelect(folders?: string[]): void {
+  const folderInput = getEl<HTMLSelectElement>("folderInput");
+  if (!folderInput) return;
+  populateFolderSelect(folderInput, settings, folders);
+}
+
+async function persistFolderList(nextFolders: string[], preferredFolder?: string): Promise<void> {
+  const normalized = mergeFolderLists(nextFolders);
+  if (normalized.length === 0) return;
+
+  const priorFolder = settings.defaultFolder;
+  const preferred = normalizeFolderPath(preferredFolder || "") || priorFolder;
+  const defaultFolder = normalized.includes(preferred) ? preferred : normalized[0] || DEFAULT_SETTINGS.defaultFolder;
+
+  settings = {
+    ...settings,
+    savedFolders: normalized,
+    defaultFolder
+  };
+
+  await saveSettings({
+    savedFolders: normalized,
+    defaultFolder
+  });
+
+  renderFolderSelect(normalized);
+}
+
+async function refreshFolderTreeFromVault(
+  showSuccess = false,
+  showUnavailableMessage = false,
+  showErrors = true
+): Promise<boolean> {
+  if (!isCliFolderSyncConfigured()) {
+    if (showUnavailableMessage && showErrors) {
+      showStatus("error", "Enable Obsidian CLI + vault in settings to refresh vault folders");
+    }
+    return false;
+  }
+
+  const response = await runtimeSendMessage<RuntimeRequest, ListVaultFoldersResponse>({
+    action: "listVaultFolders",
+    vault: settings.obsidianCli.vault,
+    cliPath: settings.obsidianCli.cliPath
+  });
+
+  if (!response.success) {
+    if (showErrors) {
+      showStatus("error", response.error || "Unable to load vault folders");
+    }
+    return false;
+  }
+
+  const mergedFolders = mergeFolderLists(response.folders, settings.savedFolders, [settings.defaultFolder]);
+  await persistFolderList(mergedFolders, settings.defaultFolder);
+
+  if (showSuccess) {
+    showStatus("success", `Loaded ${response.folders.length} folders from vault`);
+  }
+  return true;
+}
+
+async function addFolderLocally(folderPath: string): Promise<void> {
+  const normalizedFolder = normalizeFolderPath(folderPath);
+  if (!normalizedFolder) return;
+
+  const mergedFolders = mergeFolderLists(settings.savedFolders, [settings.defaultFolder], [normalizedFolder]);
+  await persistFolderList(mergedFolders, normalizedFolder);
 
   const folderInput = getEl<HTMLSelectElement>("folderInput");
   if (folderInput) {
-    populateFolderSelect(folderInput, settings);
+    folderInput.value = normalizedFolder;
   }
+}
+
+function hideCreateFolderRow(): void {
+  const row = getEl<HTMLDivElement>("folderCreateRow");
+  const input = getEl<HTMLInputElement>("newFolderInput");
+  if (row) row.style.display = "none";
+  if (input) input.value = "";
+}
+
+function showCreateFolderRow(): void {
+  const row = getEl<HTMLDivElement>("folderCreateRow");
+  const input = getEl<HTMLInputElement>("newFolderInput");
+  if (row) row.style.display = "flex";
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+}
+
+async function createFolderFromPopup(): Promise<void> {
+  const newFolderInput = getEl<HTMLInputElement>("newFolderInput");
+  if (!newFolderInput) return;
+
+  const folderPath = normalizeFolderPath(newFolderInput.value || "");
+  if (folderPath.length < MIN_CREATE_FOLDER_PATH_LENGTH) {
+    showStatus("error", "Please enter a folder path");
+    return;
+  }
+
+  if (!isCliFolderSyncConfigured()) {
+    await addFolderLocally(folderPath);
+    hideCreateFolderRow();
+    showStatus("success", "Folder added locally. Configure CLI bridge for vault creation.");
+    return;
+  }
+
+  const response = await runtimeSendMessage<RuntimeRequest, CreateVaultFolderResponse>({
+    action: "createVaultFolder",
+    vault: settings.obsidianCli.vault,
+    cliPath: settings.obsidianCli.cliPath,
+    folderPath
+  });
+
+  if (!response.success) {
+    await addFolderLocally(folderPath);
+    hideCreateFolderRow();
+    showStatus("error", `${response.error} Added folder locally for now.`);
+    return;
+  }
+
+  await addFolderLocally(folderPath);
+  hideCreateFolderRow();
+  showStatus("success", `Created folder: ${folderPath}`);
+}
+
+async function loadSettings(): Promise<void> {
+  settings = await loadSettingsFromStorage();
+
+  const mergedFolders = mergeFolderLists(settings.savedFolders, [settings.defaultFolder]);
+  renderFolderSelect(mergedFolders);
 
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
   if (tagsInput) {
     tagsInput.value = (settings.defaultTags || DEFAULT_SETTINGS.defaultTags || "").trim();
+  }
+
+  // Best effort: try to show actual vault tree if CLI sync is configured.
+  try {
+    await refreshFolderTreeFromVault(false, false, false);
+  } catch {
+    // ignore and keep local folder list
   }
 
   // Load dismissed tag suggestions
@@ -630,6 +798,12 @@ function handlePopupKeyboardShortcuts(event: KeyboardEvent): void {
     return;
   }
 
+  if (activeElement instanceof HTMLInputElement && activeElement.id === "newFolderInput") {
+    event.preventDefault();
+    void createFolderFromPopup();
+    return;
+  }
+
   const shouldSubmit =
     !activeElement ||
     activeElement === document.body ||
@@ -687,6 +861,44 @@ function setupEventListeners(): void {
   if (clipTabGroupBtn) {
     clipTabGroupBtn.addEventListener("click", () => {
       void handleClipCurrentGroup();
+    });
+  }
+
+  const refreshFoldersBtn = getEl<HTMLButtonElement>("refreshFoldersBtn");
+  if (refreshFoldersBtn) {
+    refreshFoldersBtn.addEventListener("click", () => {
+      void refreshFolderTreeFromVault(true, true);
+    });
+  }
+
+  const createFolderBtn = getEl<HTMLButtonElement>("createFolderBtn");
+  if (createFolderBtn) {
+    createFolderBtn.addEventListener("click", () => {
+      showCreateFolderRow();
+    });
+  }
+
+  const confirmCreateFolderBtn = getEl<HTMLButtonElement>("confirmCreateFolderBtn");
+  if (confirmCreateFolderBtn) {
+    confirmCreateFolderBtn.addEventListener("click", () => {
+      void createFolderFromPopup();
+    });
+  }
+
+  const cancelCreateFolderBtn = getEl<HTMLButtonElement>("cancelCreateFolderBtn");
+  if (cancelCreateFolderBtn) {
+    cancelCreateFolderBtn.addEventListener("click", () => {
+      hideCreateFolderRow();
+    });
+  }
+
+  const newFolderInput = getEl<HTMLInputElement>("newFolderInput");
+  if (newFolderInput) {
+    newFolderInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void createFolderFromPopup();
+      }
     });
   }
 

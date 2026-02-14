@@ -9,6 +9,8 @@ import { handleExtractPdf } from "./handlers/extractPdf";
 import { handleTestCliConnection } from "./handlers/testCliConnection";
 import { handleDetectCli } from "./handlers/detectCli";
 import { handleSaveToCli } from "./handlers/saveToCli";
+import { handleListVaultFolders } from "./handlers/listVaultFolders";
+import { handleCreateVaultFolder } from "./handlers/createVaultFolder";
 import { handleSaveContent } from "./handlers/saveContent";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
@@ -27,6 +29,10 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleDetectCli(request);
     case "saveToCli":
       return handleSaveToCli(request);
+    case "listVaultFolders":
+      return handleListVaultFolders(request);
+    case "createVaultFolder":
+      return handleCreateVaultFolder(request);
     case "saveContent":
       return handleSaveContent(request);
     default: {

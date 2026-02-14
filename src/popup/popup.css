@@ -221,6 +221,46 @@ select:focus-visible,
   border-color: #7c3aed;
 }
 
+.folder-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.folder-action-btn {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.folder-action-btn:hover {
+  border-color: #a78bfa;
+}
+
+.folder-action-btn-primary {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.folder-create {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.folder-create-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .clip-btn {
   width: 100%;
   padding: 12px;
@@ -992,10 +1032,17 @@ body.theme-dark .preview-content blockquote {
 }
 
 body.theme-dark .history-reclip-btn,
-body.theme-dark .title-option {
+body.theme-dark .title-option,
+body.theme-dark .folder-action-btn {
   background: #111827;
   border-color: #374151;
   color: #e5e7eb;
+}
+
+body.theme-dark .folder-action-btn-primary {
+  background: #312e81;
+  border-color: #4338ca;
+  color: #e0e7ff;
 }
 
 body.theme-dark .history-reclip-btn:hover:not(:disabled),

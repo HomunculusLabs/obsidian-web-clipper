@@ -76,14 +76,29 @@ export function setPageTypeDisplay(type: PageType, threadLength?: number): void 
   }
 }
 
-export function populateFolderSelect(select: HTMLSelectElement, settings: Settings): void {
-  const folders = getFolderCandidates(settings);
+function toFolderTreeLabel(folder: string): string {
+  const segments = folder.split("/").filter(Boolean);
+  const depth = Math.max(0, segments.length - 1);
+  const leaf = segments[segments.length - 1] || folder;
+  const indent = depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}↳ ` : "";
+  return `${indent}${leaf}`;
+}
+
+export function populateFolderSelect(
+  select: HTMLSelectElement,
+  settings: Settings,
+  foldersOverride?: string[]
+): void {
+  const folders = (foldersOverride && foldersOverride.length > 0 ? foldersOverride : getFolderCandidates(settings))
+    .slice()
+    .sort((a, b) => a.localeCompare(b));
 
   select.innerHTML = "";
   for (const folder of folders) {
     const opt = document.createElement("option");
     opt.value = folder;
-    opt.textContent = folder;
+    opt.textContent = toFolderTreeLabel(folder);
+    opt.title = folder;
     select.appendChild(opt);
   }
 
@@ -96,7 +111,8 @@ export function populateFolderSelect(select: HTMLSelectElement, settings: Settin
     const fallback = DEFAULT_SETTINGS.defaultFolder;
     const opt = document.createElement("option");
     opt.value = fallback;
-    opt.textContent = fallback;
+    opt.textContent = toFolderTreeLabel(fallback);
+    opt.title = fallback;
     select.appendChild(opt);
     select.value = fallback;
   }

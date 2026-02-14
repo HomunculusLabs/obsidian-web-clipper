@@ -67,6 +67,17 @@
           <select id="folderInput">
             <option value="2 - Source Material/Clips">2 - Source Material/Clips</option>
           </select>
+          <div class="folder-actions">
+            <button type="button" id="refreshFoldersBtn" class="folder-action-btn">Refresh Vault Folders</button>
+            <button type="button" id="createFolderBtn" class="folder-action-btn folder-action-btn-primary">Create Folder</button>
+          </div>
+          <div class="folder-create" id="folderCreateRow" style="display: none;">
+            <input type="text" id="newFolderInput" placeholder="Folder path (e.g. Research/Articles)">
+            <div class="folder-create-actions">
+              <button type="button" id="confirmCreateFolderBtn" class="folder-action-btn folder-action-btn-primary">Create</button>
+              <button type="button" id="cancelCreateFolderBtn" class="folder-action-btn">Cancel</button>
+            </div>
+          </div>
         </div>
 
         <div class="field">
