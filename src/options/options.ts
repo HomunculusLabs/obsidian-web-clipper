@@ -10,6 +10,7 @@ import type { CodeBlockLanguageMode, TableHandlingMode } from "../shared/types";
 import type { SaveMethod } from "../shared/obsidianCli";
 import {
   loadSettings as loadSettingsFromStorage,
+  mergeSettings,
   saveSettings as saveSettingsToStorage
 } from "../shared/settingsService";
 import { getEl, showStatus, populateForm } from "./ui";
@@ -180,6 +181,86 @@ function buildCustomTemplates(
   return customTemplates;
 }
 
+interface SettingsExportFile {
+  format: "obsidian-web-clipper-settings";
+  exportedAt: string;
+  settings: Settings;
+}
+
+function triggerJsonDownload(filename: string, json: string): void {
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function exportCurrentSettings(): void {
+  const payload: SettingsExportFile = {
+    format: "obsidian-web-clipper-settings",
+    exportedAt: new Date().toISOString(),
+    settings
+  };
+
+  const datePart = payload.exportedAt.slice(0, 10);
+  const json = JSON.stringify(payload, null, 2);
+  triggerJsonDownload(`obsidian-web-clipper-settings-${datePart}.json`, json);
+  showStatus("success", "Settings exported");
+}
+
+async function importSettingsFromFile(): Promise<void> {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    void (async () => {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text) as unknown;
+
+        const maybeWrapped =
+          typeof parsed === "object" && parsed !== null && "settings" in parsed
+            ? (parsed as { settings?: unknown }).settings
+            : parsed;
+
+        if (typeof maybeWrapped !== "object" || maybeWrapped === null) {
+          showStatus("error", "Invalid settings JSON format");
+          return;
+        }
+
+        const confirmed = window.confirm(
+          "Import settings and replace current values? This will overwrite your existing settings."
+        );
+        if (!confirmed) return;
+
+        const merged = mergeSettings(maybeWrapped as Record<string, unknown>);
+        await saveSettingsToStorage(merged);
+
+        settings = applyVaultProfileToSettings(merged, getActiveVaultProfile(merged));
+        populateForm(settings);
+        loadVaultProfilesDraft(settings);
+        renderSavedFolders(settings);
+        renderCustomTemplates(settings.customTemplates || []);
+
+        showStatus("success", "Settings imported");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to import settings";
+        showStatus("error", message);
+      }
+    })();
+  });
+
+  input.click();
+}
+
 // --- Lifecycle ---
 
 async function loadSettings(): Promise<void> {
@@ -229,6 +310,20 @@ function setupEventListeners(): void {
   if (resetBtn) {
     resetBtn.addEventListener("click", () => {
       void resetSettings();
+    });
+  }
+
+  const exportSettingsBtn = getEl<HTMLButtonElement>("exportSettingsBtn");
+  if (exportSettingsBtn) {
+    exportSettingsBtn.addEventListener("click", () => {
+      exportCurrentSettings();
+    });
+  }
+
+  const importSettingsBtn = getEl<HTMLButtonElement>("importSettingsBtn");
+  if (importSettingsBtn) {
+    importSettingsBtn.addEventListener("click", () => {
+      void importSettingsFromFile();
     });
   }
 
