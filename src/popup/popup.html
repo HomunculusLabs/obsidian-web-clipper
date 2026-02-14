@@ -20,31 +20,6 @@
       </div>
     </header>
 
-    <!-- Template indicator -->
-    <div class="template-indicator" id="templateIndicator" style="display: none;">
-      <span class="template-badge" id="templateBadge">📋 Template: <span id="templateName"></span></span>
-      <div class="template-toggle">
-        <label class="toggle-label">
-          <input type="checkbox" id="templateToggle" checked>
-          <span class="toggle-switch template-switch"></span>
-          <span class="toggle-text">Use Template</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Selection indicator -->
-    <div class="selection-indicator" id="selectionIndicator" style="display: none;">
-      <span class="selection-badge">📝 Selection detected</span>
-      <div class="selection-toggle">
-        <label class="toggle-label">
-          <input type="checkbox" id="selectionToggle" checked>
-          <span class="toggle-switch"></span>
-          <span class="toggle-text">Clip Selection</span>
-        </label>
-      </div>
-      <div class="selection-preview" id="selectionPreview"></div>
-    </div>
-
     <nav class="tabs" aria-label="Popup tabs">
       <button class="tab-btn active" data-tab="clip" type="button">Clip</button>
       <button class="tab-btn" data-tab="preview" type="button" aria-keyshortcuts="Control+P Meta+P">Preview</button>
@@ -52,80 +27,130 @@
     </nav>
 
     <div class="tab-content active" id="tabClip">
-      <div class="content">
-        <div class="field">
-          <label for="titleInput">Title</label>
-          <input type="text" id="titleInput" placeholder="Page title will appear here">
-          <div class="title-suggestions" id="titleSuggestions" style="display: none;">
-            <span class="title-suggestions-label">Suggestions:</span>
-            <div class="title-options" id="titleOptions"></div>
-          </div>
-        </div>
+      <div class="content clip-layout">
+        <details class="popup-section" open>
+          <summary class="section-summary">Basic</summary>
+          <div class="section-body">
+            <div class="field">
+              <label for="titleInput">Title</label>
+              <input type="text" id="titleInput" placeholder="Page title will appear here">
+              <div class="title-suggestions" id="titleSuggestions" style="display: none;">
+                <span class="title-suggestions-label">Suggestions:</span>
+                <div class="title-options" id="titleOptions"></div>
+              </div>
+            </div>
 
-        <div class="field">
-          <label for="vaultSelect">Vault</label>
-          <select id="vaultSelect"></select>
-        </div>
+            <div class="field">
+              <label for="vaultSelect">Vault</label>
+              <select id="vaultSelect"></select>
+            </div>
 
-        <div class="field">
-          <label for="folderInput">Save Folder</label>
-          <select id="folderInput">
-            <option value="2 - Source Material/Clips">2 - Source Material/Clips</option>
-          </select>
-          <div class="folder-actions">
-            <button type="button" id="refreshFoldersBtn" class="folder-action-btn">Refresh Vault Folders</button>
-            <button type="button" id="createFolderBtn" class="folder-action-btn folder-action-btn-primary">Create Folder</button>
-          </div>
-          <div class="folder-create" id="folderCreateRow" style="display: none;">
-            <input type="text" id="newFolderInput" placeholder="Folder path (e.g. Research/Articles)">
-            <div class="folder-create-actions">
-              <button type="button" id="confirmCreateFolderBtn" class="folder-action-btn folder-action-btn-primary">Create</button>
-              <button type="button" id="cancelCreateFolderBtn" class="folder-action-btn">Cancel</button>
+            <div class="field">
+              <label for="folderInput">Save Folder</label>
+              <select id="folderInput">
+                <option value="2 - Source Material/Clips">2 - Source Material/Clips</option>
+              </select>
+              <div class="folder-actions">
+                <button type="button" id="refreshFoldersBtn" class="folder-action-btn">Refresh Vault Folders</button>
+                <button type="button" id="createFolderBtn" class="folder-action-btn folder-action-btn-primary">Create Folder</button>
+              </div>
+              <div class="folder-create" id="folderCreateRow" style="display: none;">
+                <input type="text" id="newFolderInput" placeholder="Folder path (e.g. Research/Articles)">
+                <div class="folder-create-actions">
+                  <button type="button" id="confirmCreateFolderBtn" class="folder-action-btn folder-action-btn-primary">Create</button>
+                  <button type="button" id="cancelCreateFolderBtn" class="folder-action-btn">Cancel</button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </details>
 
-        <div class="field">
-          <label for="tagsInput">Tags</label>
-          <input type="text" id="tagsInput" placeholder="web-clip">
-          <div class="tag-suggestions" id="tagSuggestions" style="display: none;">
-            <span class="tag-suggestions-label">Suggested:</span>
-            <div class="tag-chips" id="tagChips"></div>
-          </div>
-        </div>
-
-        <div class="formatting-options" id="formattingOptions">
-          <div class="formatting-header">
-            <span class="formatting-title">Formatting</span>
-            <div class="formatting-presets" role="group" aria-label="Formatting presets">
-              <button type="button" class="format-preset-btn" id="presetBalancedBtn">Balanced</button>
-              <button type="button" class="format-preset-btn" id="presetTextOnlyBtn">Text-only</button>
-              <button type="button" class="format-preset-btn" id="presetFullFidelityBtn">Full</button>
+        <details class="popup-section" open>
+          <summary class="section-summary">Tags</summary>
+          <div class="section-body">
+            <div class="field">
+              <label for="tagsInput">Tags</label>
+              <div class="selected-tag-chips" id="selectedTagChips"></div>
+              <input type="text" id="tagsInput" placeholder="web-clip">
+              <div class="tag-suggestions" id="tagSuggestions" style="display: none;">
+                <span class="tag-suggestions-label">Suggested:</span>
+                <div class="tag-chips" id="tagChips"></div>
+              </div>
             </div>
           </div>
-          <div class="formatting-grid">
-            <label class="toggle-label">
-              <input type="checkbox" id="formatIncludeImages" checked>
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Include images</span>
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" id="formatIncludeLinks" checked>
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Include links</span>
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" id="formatIncludeMetadata" checked>
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Include metadata</span>
-            </label>
-            <label class="toggle-label">
-              <input type="checkbox" id="formatCleanFormatting" checked>
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Clean formatting</span>
-            </label>
+        </details>
+
+        <details class="popup-section" open>
+          <summary class="section-summary">Template</summary>
+          <div class="section-body">
+            <div class="template-indicator" id="templateIndicator" style="display: none;">
+              <span class="template-badge" id="templateBadge">📋 Using: <span id="templateName"></span></span>
+              <div class="template-toggle">
+                <label class="toggle-label">
+                  <input type="checkbox" id="templateToggle" checked>
+                  <span class="toggle-switch template-switch"></span>
+                  <span class="toggle-text">Use Template</span>
+                </label>
+              </div>
+            </div>
+            <div class="template-empty" id="templateEmpty">No template matched for this page.</div>
           </div>
-        </div>
+        </details>
+
+        <details class="popup-section" open>
+          <summary class="section-summary">Advanced</summary>
+          <div class="section-body">
+            <div class="selection-indicator" id="selectionIndicator" style="display: none;">
+              <span class="selection-badge">📝 Selection detected</span>
+              <div class="selection-toggle">
+                <label class="toggle-label">
+                  <input type="checkbox" id="selectionToggle" checked>
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Clip Selection</span>
+                </label>
+              </div>
+              <div class="selection-preview" id="selectionPreview"></div>
+            </div>
+
+            <div class="save-method-indicator" id="saveMethodIndicator">
+              <span class="save-method-label">Saving via:</span>
+              <span class="save-method-value" id="saveMethodValue">Obsidian URI</span>
+            </div>
+
+            <div class="formatting-options" id="formattingOptions">
+              <div class="formatting-header">
+                <span class="formatting-title">Formatting</span>
+                <div class="formatting-presets" role="group" aria-label="Formatting presets">
+                  <button type="button" class="format-preset-btn" id="presetBalancedBtn">Balanced</button>
+                  <button type="button" class="format-preset-btn" id="presetTextOnlyBtn">Text-only</button>
+                  <button type="button" class="format-preset-btn" id="presetFullFidelityBtn">Full</button>
+                </div>
+              </div>
+              <div class="formatting-grid">
+                <label class="toggle-label">
+                  <input type="checkbox" id="formatIncludeImages" checked>
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Include images</span>
+                </label>
+                <label class="toggle-label">
+                  <input type="checkbox" id="formatIncludeLinks" checked>
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Include links</span>
+                </label>
+                <label class="toggle-label">
+                  <input type="checkbox" id="formatIncludeMetadata" checked>
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Include metadata</span>
+                </label>
+                <label class="toggle-label">
+                  <input type="checkbox" id="formatCleanFormatting" checked>
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Clean formatting</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </details>
 
         <button class="clip-btn" id="clipBtn" aria-keyshortcuts="Enter">
           <span class="btn-text">Clip to Obsidian</span>

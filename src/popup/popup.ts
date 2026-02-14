@@ -230,6 +230,28 @@ function getSaveSettingsWithFormatting(baseSettings: Settings): Settings {
   };
 }
 
+function resolveSaveMethodLabel(currentSettings: Settings): string {
+  switch (currentSettings.saveMethod) {
+    case "cli": {
+      const cliReady = Boolean(
+        currentSettings.obsidianCli?.enabled && currentSettings.obsidianCli.cliPath && currentSettings.obsidianCli.vault
+      );
+      return cliReady ? "CLI (fallback: URI → Clipboard)" : "CLI not configured (fallback active)";
+    }
+    case "clipboard":
+      return "Clipboard";
+    case "uri":
+    default:
+      return "Obsidian URI (fallback: Clipboard)";
+  }
+}
+
+function updateSaveMethodIndicator(): void {
+  const valueEl = getEl<HTMLSpanElement>("saveMethodValue");
+  if (!valueEl) return;
+  valueEl.textContent = resolveSaveMethodLabel(settings);
+}
+
 function stripMarkdownLinks(markdown: string): string {
   return markdown
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
@@ -343,6 +365,8 @@ async function switchVaultProfile(profileId: string): Promise<void> {
   if (tagsInput) {
     tagsInput.value = (settings.defaultTags || DEFAULT_SETTINGS.defaultTags || "").trim();
   }
+  renderSelectedTagChips();
+  updateSaveMethodIndicator();
 
   showStatus("success", `Switched to vault: ${nextProfile.name}`);
 }
@@ -488,6 +512,8 @@ async function loadSettings(): Promise<void> {
   if (tagsInput) {
     tagsInput.value = (settings.defaultTags || DEFAULT_SETTINGS.defaultTags || "").trim();
   }
+  renderSelectedTagChips();
+  updateSaveMethodIndicator();
 
   // Best effort: try to show actual vault tree if CLI sync is configured.
   try {
@@ -534,7 +560,7 @@ function displayTagSuggestions(suggestions: TagSuggestion[]): void {
   
   // Filter out dismissed suggestions and already-added tags
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
-  const currentTags = (tagsInput?.value || "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+  const currentTags = parseTagsInputValue(tagsInput?.value || "").map((tag) => tag.toLowerCase());
   
   const filteredSuggestions = suggestions.filter(s => {
     const lower = s.tag.toLowerCase();
@@ -600,18 +626,77 @@ function displayTagSuggestions(suggestions: TagSuggestion[]): void {
   container.style.display = "flex";
 }
 
+function parseTagsInputValue(raw: string): string[] {
+  const seen = new Set<string>();
+  const tags: string[] = [];
+
+  for (const part of raw.split(",")) {
+    const normalized = part.trim().replace(/^#+/, "");
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(normalized);
+  }
+
+  return tags;
+}
+
+function setTagsInputValue(tags: string[]): void {
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+  if (!tagsInput) return;
+  tagsInput.value = tags.join(", ");
+}
+
+function renderSelectedTagChips(): void {
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+  const selectedTagChips = getEl<HTMLDivElement>("selectedTagChips");
+  if (!tagsInput || !selectedTagChips) return;
+
+  const tags = parseTagsInputValue(tagsInput.value);
+  selectedTagChips.innerHTML = "";
+
+  for (const tag of tags) {
+    const chip = document.createElement("span");
+    chip.className = "selected-tag-chip";
+
+    const text = document.createElement("span");
+    text.textContent = `#${tag}`;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "selected-tag-chip-remove";
+    removeBtn.title = `Remove tag ${tag}`;
+    removeBtn.setAttribute("aria-label", `Remove tag ${tag}`);
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", () => {
+      const remaining = parseTagsInputValue(tagsInput.value).filter((existing) => existing.toLowerCase() !== tag.toLowerCase());
+      setTagsInputValue(remaining);
+      renderSelectedTagChips();
+      if (currentTagSuggestions.length > 0) {
+        displayTagSuggestions(currentTagSuggestions);
+      }
+    });
+
+    chip.appendChild(text);
+    chip.appendChild(removeBtn);
+    selectedTagChips.appendChild(chip);
+  }
+}
+
 /** Add a tag to the tags input */
 function addTagToInput(tag: string): void {
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
   if (!tagsInput) return;
-  
-  const currentTags = tagsInput.value.split(",").map(t => t.trim()).filter(Boolean);
-  
+
+  const currentTags = parseTagsInputValue(tagsInput.value);
+
   // Don't add if already present
-  if (currentTags.some(t => t.toLowerCase() === tag.toLowerCase())) return;
-  
-  currentTags.push(tag);
-  tagsInput.value = currentTags.join(", ");
+  if (currentTags.some((t) => t.toLowerCase() === tag.toLowerCase())) return;
+
+  currentTags.push(tag.replace(/^#+/, "").trim());
+  setTagsInputValue(currentTags);
+  renderSelectedTagChips();
 }
 
 /** Dismiss a tag suggestion and remember it */
@@ -1167,6 +1252,21 @@ function setupEventListeners(): void {
     });
   }
 
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+  if (tagsInput) {
+    tagsInput.addEventListener("input", () => {
+      renderSelectedTagChips();
+      if (currentTagSuggestions.length > 0) {
+        displayTagSuggestions(currentTagSuggestions);
+      }
+    });
+    tagsInput.addEventListener("blur", () => {
+      const normalizedTags = parseTagsInputValue(tagsInput.value);
+      setTagsInputValue(normalizedTags);
+      renderSelectedTagChips();
+    });
+  }
+
   const selectionToggle = getEl<HTMLInputElement>("selectionToggle");
   if (selectionToggle) {
     selectionToggle.addEventListener("change", () => {
@@ -1373,6 +1473,12 @@ function hideSelectionIndicator(): void {
   updateClipButtonText();
 }
 
+function toggleTemplateEmptyState(showEmpty: boolean): void {
+  const templateEmpty = getEl<HTMLDivElement>("templateEmpty");
+  if (!templateEmpty) return;
+  templateEmpty.style.display = showEmpty ? "block" : "none";
+}
+
 /** Show the template indicator with template name */
 function showTemplateIndicator(name: string, source: "built-in" | "custom"): void {
   const indicator = getEl<HTMLDivElement>("templateIndicator");
@@ -1385,6 +1491,8 @@ function showTemplateIndicator(name: string, source: "built-in" | "custom"): voi
     const prefix = source === "built-in" ? "" : "✨ ";
     nameEl.textContent = prefix + name;
   }
+
+  toggleTemplateEmptyState(false);
 
   // Ensure toggle is checked by default
   const templateToggle = getEl<HTMLInputElement>("templateToggle");
@@ -1402,6 +1510,7 @@ function hideTemplateIndicator(): void {
   if (indicator) {
     indicator.style.display = "none";
   }
+  toggleTemplateEmptyState(true);
   hasTemplate = false;
   useTemplate = true;
 }
