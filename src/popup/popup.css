@@ -481,8 +481,18 @@ body {
   cursor: pointer;
 }
 
+.batch-clip-btn-secondary {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .batch-clip-btn:hover:not(:disabled) {
   background: #ede9fe;
+}
+
+.batch-clip-btn-secondary:hover:not(:disabled) {
+  background: #dbeafe;
 }
 
 .batch-clip-btn:disabled {

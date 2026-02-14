@@ -18,6 +18,7 @@ import {
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
+import { buildFrontmatterFromClip } from "../shared/buildFrontmatter";
 
 let currentTab: chrome.tabs.Tab | null = null;
 let pageType: PageType = "web";
@@ -33,6 +34,15 @@ let currentTitleSuggestions: string[] = []; // Current title suggestions
 let clipHistoryEntries: ClipHistoryEntry[] = [];
 let historyFilters: ClipHistoryFilters = {};
 let batchClipInProgress = false;
+
+type BatchClipMode = "all" | "group";
+
+type PendingBatchClip = {
+  tab: chrome.tabs.Tab;
+  pageType: PageType;
+  result: ClipResult;
+  noteTitle: string;
+};
 
 const PREVIEW_IDLE_TEXT = "Open Preview to generate a cleaned markdown preview";
 const PREVIEW_IDLE_HINT = "Content is extracted without saving to Obsidian.";
@@ -510,6 +520,13 @@ function setupEventListeners(): void {
     });
   }
 
+  const clipTabGroupBtn = getEl<HTMLButtonElement>("clipTabGroupBtn");
+  if (clipTabGroupBtn) {
+    clipTabGroupBtn.addEventListener("click", () => {
+      void handleClipCurrentGroup();
+    });
+  }
+
   const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => {
@@ -752,10 +769,31 @@ function isClippableUrl(url: string | undefined): boolean {
   return Boolean(url && /^https?:\/\//i.test(url));
 }
 
+function getCurrentTabGroupId(): number | null {
+  if (!currentTab || typeof currentTab.groupId !== "number" || currentTab.groupId < 0) {
+    return null;
+  }
+  return currentTab.groupId;
+}
+
+function updateGroupClipButtonVisibility(): void {
+  const clipTabGroupBtn = getEl<HTMLButtonElement>("clipTabGroupBtn");
+  if (!clipTabGroupBtn) return;
+
+  const groupId = getCurrentTabGroupId();
+  if (groupId === null) {
+    clipTabGroupBtn.style.display = "none";
+    return;
+  }
+
+  clipTabGroupBtn.style.display = "block";
+}
+
 function setBatchClipUiState(isBusy: boolean): void {
   const clipBtn = getEl<HTMLButtonElement>("clipBtn");
   const clipFromPreviewBtn = getEl<HTMLButtonElement>("clipFromPreviewBtn");
   const clipAllTabsBtn = getEl<HTMLButtonElement>("clipAllTabsBtn");
+  const clipTabGroupBtn = getEl<HTMLButtonElement>("clipTabGroupBtn");
 
   if (clipBtn) clipBtn.disabled = isBusy;
   if (clipFromPreviewBtn) clipFromPreviewBtn.disabled = isBusy;
@@ -763,12 +801,52 @@ function setBatchClipUiState(isBusy: boolean): void {
     clipAllTabsBtn.disabled = isBusy;
     clipAllTabsBtn.textContent = isBusy ? "Clipping Tabs..." : "Clip All Tabs";
   }
+  if (clipTabGroupBtn) {
+    const hasGroup = getCurrentTabGroupId() !== null;
+    clipTabGroupBtn.disabled = isBusy || !hasGroup;
+    clipTabGroupBtn.textContent = isBusy ? "Clipping Group..." : "Clip Current Tab Group";
+  }
 }
 
-async function handleClipAllTabs(): Promise<void> {
+async function getTabsForBatchClip(mode: BatchClipMode): Promise<chrome.tabs.Tab[]> {
+  const allTabs = await tabsQuery({ currentWindow: true });
+  const clippableTabs = allTabs.filter((tab) => tab.id && isClippableUrl(tab.url));
+
+  if (mode === "all") {
+    return clippableTabs;
+  }
+
+  const groupId = getCurrentTabGroupId();
+  if (groupId === null) {
+    return [];
+  }
+
+  return clippableTabs.filter((tab) => tab.groupId === groupId);
+}
+
+function appendGroupBacklinks(markdown: string, currentTitle: string, relatedClips: PendingBatchClip[]): string {
+  const backlinkItems = relatedClips
+    .filter((clip) => clip.noteTitle !== currentTitle)
+    .map((clip) => `- [[${clip.noteTitle}]]`);
+
+  if (backlinkItems.length === 0) {
+    return markdown;
+  }
+
+  const relatedSection = ["", "## Related Tab Group Notes", ...backlinkItems].join("\n");
+  const normalized = markdown.trimEnd();
+  return `${normalized}\n${relatedSection}\n`;
+}
+
+function getBatchClipProgressLabel(mode: BatchClipMode): string {
+  return mode === "group" ? "group tab" : "tab";
+}
+
+async function handleBatchClip(mode: BatchClipMode): Promise<void> {
   if (batchClipInProgress) return;
 
   const clipAllTabsBtn = getEl<HTMLButtonElement>("clipAllTabsBtn");
+  const clipTabGroupBtn = getEl<HTMLButtonElement>("clipTabGroupBtn");
   const folderInput = getEl<HTMLSelectElement>("folderInput");
   const tagsInput = getEl<HTMLInputElement>("tagsInput");
 
@@ -776,20 +854,22 @@ async function handleClipAllTabs(): Promise<void> {
     batchClipInProgress = true;
     setBatchClipUiState(true);
 
-    const allTabs = await tabsQuery({ currentWindow: true });
-    const tabsToClip = allTabs.filter((tab) => tab.id && isClippableUrl(tab.url));
+    const tabsToClip = await getTabsForBatchClip(mode);
 
     if (tabsToClip.length === 0) {
-      showStatus("error", "No clippable tabs in this window");
+      const emptyMessage =
+        mode === "group" ? "No clippable tabs found in the current tab group" : "No clippable tabs in this window";
+      showStatus("error", emptyMessage);
       return;
     }
 
     let successCount = 0;
     let failureCount = 0;
+    const pendingClips: PendingBatchClip[] = [];
 
     for (let index = 0; index < tabsToClip.length; index += 1) {
       const tab = tabsToClip[index]!;
-      const progress = `Clipping ${index + 1}/${tabsToClip.length}...`;
+      const progress = `Extracting ${index + 1}/${tabsToClip.length} ${getBatchClipProgressLabel(mode)}s...`;
       showStatus("loading", progress);
 
       try {
@@ -802,7 +882,7 @@ async function handleClipAllTabs(): Promise<void> {
           disableTemplate: false
         });
 
-        await saveToObsidian({
+        const { finalTitle } = buildFrontmatterFromClip({
           result,
           settings,
           pageType: tabPageType,
@@ -811,10 +891,50 @@ async function handleClipAllTabs(): Promise<void> {
           overrideTags: tagsInput?.value
         });
 
+        pendingClips.push({
+          tab,
+          pageType: tabPageType,
+          result,
+          noteTitle: finalTitle || result.title || tab.title || "Untitled"
+        });
+      } catch {
+        failureCount += 1;
+        await recordHistoryEntry(
+          buildHistoryEntry(false, {
+            title: tab.title || "Untitled",
+            url: tab.url || ""
+          })
+        );
+      }
+    }
+
+    for (let index = 0; index < pendingClips.length; index += 1) {
+      const pendingClip = pendingClips[index]!;
+      const progress = `Saving ${index + 1}/${pendingClips.length} ${getBatchClipProgressLabel(mode)}s...`;
+      showStatus("loading", progress);
+
+      try {
+        const resultWithBacklinks =
+          mode === "group"
+            ? {
+                ...pendingClip.result,
+                markdown: appendGroupBacklinks(pendingClip.result.markdown, pendingClip.noteTitle, pendingClips)
+              }
+            : pendingClip.result;
+
+        await saveToObsidian({
+          result: resultWithBacklinks,
+          settings,
+          pageType: pendingClip.pageType,
+          currentTabUrl: pendingClip.tab.url || "",
+          overrideFolder: folderInput?.value,
+          overrideTags: tagsInput?.value
+        });
+
         await recordHistoryEntry(
           buildHistoryEntry(true, {
-            title: result.title,
-            url: tab.url || "",
+            title: pendingClip.result.title,
+            url: pendingClip.tab.url || "",
             folder: folderInput?.value,
             tags: (tagsInput?.value || "")
               .split(",")
@@ -828,27 +948,40 @@ async function handleClipAllTabs(): Promise<void> {
         failureCount += 1;
         await recordHistoryEntry(
           buildHistoryEntry(false, {
-            title: tab.title || "Untitled",
-            url: tab.url || ""
+            title: pendingClip.tab.title || pendingClip.result.title || "Untitled",
+            url: pendingClip.tab.url || ""
           })
         );
       }
     }
 
+    const scopeLabel = mode === "group" ? "group tabs" : "tabs";
     if (failureCount === 0) {
-      showStatus("success", `Clipped ${successCount}/${tabsToClip.length} tabs`);
+      showStatus("success", `Clipped ${successCount}/${tabsToClip.length} ${scopeLabel}`);
     } else {
-      showStatus("error", `Clipped ${successCount}/${tabsToClip.length} tabs (${failureCount} failed)`);
+      showStatus("error", `Clipped ${successCount}/${tabsToClip.length} ${scopeLabel} (${failureCount} failed)`);
     }
   } catch (err) {
-    showStatus("error", toErrorMessage(err, "Batch tab clipping failed"));
+    const fallbackMessage = mode === "group" ? "Tab group clipping failed" : "Batch tab clipping failed";
+    showStatus("error", toErrorMessage(err, fallbackMessage));
   } finally {
     batchClipInProgress = false;
     setBatchClipUiState(false);
     if (clipAllTabsBtn) {
       clipAllTabsBtn.blur();
     }
+    if (clipTabGroupBtn) {
+      clipTabGroupBtn.blur();
+    }
   }
+}
+
+async function handleClipAllTabs(): Promise<void> {
+  await handleBatchClip("all");
+}
+
+async function handleClipCurrentGroup(): Promise<void> {
+  await handleBatchClip("group");
 }
 
 async function handleReclip(entry: ClipHistoryEntry, button: HTMLButtonElement): Promise<void> {
@@ -1051,6 +1184,7 @@ async function handleClipFromPreview(): Promise<void> {
 async function init(): Promise<void> {
   await loadSettings();
   currentTab = await getCurrentTab();
+  updateGroupClipButtonVisibility();
 
   // Fallback for restricted pages where content scripts cannot be injected/messaged.
   pageType = currentTab.url ? detectPageType(currentTab.url) : "web";
