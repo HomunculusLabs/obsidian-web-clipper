@@ -206,7 +206,7 @@ Tasks added during implementation that don't fit an existing phase.
 - [x] **Task E2**: Define an extension-compatible local execution bridge for CLI saves (Native Messaging host or local companion service), since MV3 service workers cannot spawn local processes.
 - [x] **Task E3**: Fix template registry integration test failures by making `getBuiltInTemplates` resilient when called without an explicit `Settings` object (currently throws on `settings.disabledBuiltIns`).
 - [x] **Task E4**: Implement Native Messaging bridge support for vault folder operations (`listVaultFolders` + `createVaultFolder`) so popup folder tree and creation actions can execute real CLI commands instead of local fallbacks.
-- [ ] **Task E5**: Restore top-level options persistence for `vaultName` and `defaultFolder` when multi-vault profile editor fields are absent, so edits in the visible Vault Configuration section are not dropped on save.
+- [x] **Task E5**: Restore top-level options persistence for `vaultName` and `defaultFolder` when multi-vault profile editor fields are absent, so edits in the visible Vault Configuration section are not dropped on save.
 - [ ] **Task E6**: Implement Native Messaging bridge binary attachment writes for `saveAttachmentToCli`, so `imageHandling: "download-api"` can persist downloaded image bytes to the vault attachments folder.
 - [ ] **Task E7**: Wire `testCliConnection` through the Native Messaging bridge for real CLI binary/vault validation instead of path-shape-only checks.
 - [ ] **Task E8**: Restore top-level options persistence for `defaultTags` when vault profile editor fields are absent, so edits in the visible Content Options section are not dropped on save.
