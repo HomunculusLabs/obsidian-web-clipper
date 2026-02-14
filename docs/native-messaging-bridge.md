@@ -57,4 +57,33 @@ This must match the host manifest installed on the local machine.
 
 - `manifest.json` now includes `nativeMessaging` permission.
 - If the host is missing or not allowed, save returns `requiresBridge: true` so fallback logic can continue.
-- Folder listing/creation and binary attachment writes are tracked as follow-up emergent tasks (E4, E6).
+
+## Attachment write contract (`saveAttachmentToCli`)
+
+### Request
+
+```json
+{
+  "action": "saveAttachmentToCli",
+  "payload": {
+    "cliPath": "/path/to/obsidian-cli",
+    "vault": "Main Vault",
+    "filePath": "attachments/image-1.png",
+    "base64Data": "iVBORw0KGgoAAAANSUhEUg...",
+    "mimeType": "image/png"
+  }
+}
+```
+
+### Response (success)
+
+```json
+{
+  "success": true,
+  "data": {
+    "filePath": "attachments/image-1.png"
+  }
+}
+```
+
+`data.savedPath` is also accepted for backward compatibility with older host responses.

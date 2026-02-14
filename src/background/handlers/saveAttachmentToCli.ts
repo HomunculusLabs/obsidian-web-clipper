@@ -1,4 +1,5 @@
 import type { SaveAttachmentToCliResponse } from "../../shared/messages";
+import { sendNativeBridgeMessage } from "../nativeMessaging";
 
 type SaveAttachmentToCliRequest = {
   action: "saveAttachmentToCli";
@@ -8,6 +9,21 @@ type SaveAttachmentToCliRequest = {
   cliPath: string;
   mimeType?: string;
 };
+
+type SaveAttachmentBridgeData = {
+  filePath?: unknown;
+  savedPath?: unknown;
+};
+
+function getReturnedFilePath(data: SaveAttachmentBridgeData | undefined, fallback: string): string {
+  const fromFilePath = typeof data?.filePath === "string" ? data.filePath.trim() : "";
+  if (fromFilePath) return fromFilePath;
+
+  const fromSavedPath = typeof data?.savedPath === "string" ? data.savedPath.trim() : "";
+  if (fromSavedPath) return fromSavedPath;
+
+  return fallback;
+}
 
 export async function handleSaveAttachmentToCli(
   request: SaveAttachmentToCliRequest
@@ -33,10 +49,27 @@ export async function handleSaveAttachmentToCli(
     return { success: false, error: "Attachment data is empty" };
   }
 
+  const bridgeResponse = await sendNativeBridgeMessage<SaveAttachmentBridgeData>({
+    action: "saveAttachmentToCli",
+    payload: {
+      cliPath,
+      vault,
+      filePath,
+      base64Data,
+      mimeType: request.mimeType?.trim() || undefined
+    }
+  });
+
+  if (!bridgeResponse.success) {
+    return {
+      success: false,
+      error: bridgeResponse.error,
+      requiresBridge: true
+    };
+  }
+
   return {
-    success: false,
-    error:
-      "Saving image attachments via CLI requires a Native Messaging bridge with binary payload support.",
-    requiresBridge: true
+    success: true,
+    filePath: getReturnedFilePath(bridgeResponse.data, filePath)
   };
 }
