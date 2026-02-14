@@ -531,6 +531,8 @@ function setupEventListeners(): void {
 
 async function saveCurrentSettings(): Promise<void> {
   // Core settings
+  const vaultNameEl = getEl<HTMLInputElement>("vaultName");
+  const defaultFolderEl = getEl<HTMLInputElement>("defaultFolder");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
   const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
   const badgeCounterEnabled = getEl<HTMLInputElement>("badgeCounterEnabled");
@@ -600,16 +602,41 @@ async function saveCurrentSettings(): Promise<void> {
     normalizedVaultProfiles[0] ||
     DEFAULT_SETTINGS.vaultProfiles[0]!;
 
+  const hasProfileVaultFields =
+    !!getEl<HTMLInputElement>("vaultProfileVaultName") &&
+    !!getEl<HTMLInputElement>("vaultProfileDefaultFolder");
+  const topLevelVaultName = (vaultNameEl?.value || "").trim();
+  const topLevelDefaultFolder = (defaultFolderEl?.value || "").trim();
+
+  const effectiveVaultProfiles = hasProfileVaultFields
+    ? normalizedVaultProfiles
+    : normalizedVaultProfiles.map((profile) => {
+        if (profile.id !== activeProfile.id) return profile;
+
+        const nextVaultName = topLevelVaultName || profile.vaultName;
+        const nextDefaultFolder = topLevelDefaultFolder || profile.defaultFolder;
+
+        return {
+          ...profile,
+          vaultName: nextVaultName,
+          name: nextVaultName,
+          defaultFolder: nextDefaultFolder
+        };
+      });
+
+  const effectiveActiveProfile =
+    effectiveVaultProfiles.find((profile) => profile.id === activeProfile.id) || activeProfile;
+
   // Build updated settings
   settings = {
     ...settings,
 
     // Core
-    vaultName: activeProfile.vaultName,
-    defaultFolder: activeProfile.defaultFolder,
-    defaultTags: activeProfile.defaultTags,
-    vaultProfiles: normalizedVaultProfiles.length > 0 ? normalizedVaultProfiles : [...DEFAULT_SETTINGS.vaultProfiles],
-    activeVaultProfileId: activeProfile.id,
+    vaultName: effectiveActiveProfile.vaultName,
+    defaultFolder: effectiveActiveProfile.defaultFolder,
+    defaultTags: effectiveActiveProfile.defaultTags,
+    vaultProfiles: effectiveVaultProfiles.length > 0 ? effectiveVaultProfiles : [...DEFAULT_SETTINGS.vaultProfiles],
+    activeVaultProfileId: effectiveActiveProfile.id,
     includeTimestamps: includeTimestamps?.checked ?? DEFAULT_SETTINGS.includeTimestamps,
     savedFolders: Array.isArray(settings.savedFolders)
       ? settings.savedFolders
@@ -667,7 +694,7 @@ async function saveCurrentSettings(): Promise<void> {
     obsidianCli: {
       enabled: cliEnabled?.checked ?? false,
       cliPath: (cliPath?.value || "").trim(),
-      vault: (cliVault?.value || "").trim() || activeProfile.vaultName
+      vault: (cliVault?.value || "").trim() || effectiveActiveProfile.vaultName
     },
 
     // Title cleanup
