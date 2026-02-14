@@ -13,7 +13,10 @@
         <span class="page-icon" id="pageIcon">🌐</span>
         <span class="page-label" id="pageLabel">Web Page</span>
       </div>
-      <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+      <div class="header-actions">
+        <button class="header-btn" id="historyBtn" title="History">🕘</button>
+        <button class="header-btn" id="settingsBtn" title="Settings">⚙️</button>
+      </div>
     </header>
 
     <!-- Template indicator -->
@@ -44,6 +47,7 @@
     <nav class="tabs" aria-label="Popup tabs">
       <button class="tab-btn active" data-tab="clip" type="button">Clip</button>
       <button class="tab-btn" data-tab="preview" type="button">Preview</button>
+      <button class="tab-btn" data-tab="history" type="button">History</button>
     </nav>
 
     <div class="tab-content active" id="tabClip">
@@ -93,6 +97,13 @@
       <button class="clip-btn clip-btn-secondary" id="clipFromPreviewBtn">
         <span class="btn-text">Clip to Obsidian</span>
       </button>
+    </div>
+
+    <div class="tab-content" id="tabHistory">
+      <div class="history-container">
+        <div class="history-empty" id="historyEmpty">No clips yet. Your last 50 clips will appear here.</div>
+        <div class="history-list" id="historyList"></div>
+      </div>
     </div>
   </div>
 

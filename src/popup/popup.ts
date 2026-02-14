@@ -8,6 +8,7 @@ import { toErrorMessage, TabError } from "../shared/errors";
 import { suggestTagsWithHistory, type TagSuggestion } from "../shared/tagSuggestion";
 import { suggestTitles } from "../shared/titleSuggestion";
 import { markdownToHtml } from "../shared/markdownToHtml";
+import { addClipHistoryEntry, getClipHistory, type ClipHistoryEntry } from "../shared/clipHistory";
 import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay } from "./ui";
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
@@ -23,6 +24,7 @@ let useTemplate = true; // Default to using template when available
 let dismissedTagSuggestions: string[] = []; // Dismissed tag suggestions (lowercase)
 let currentTagSuggestions: TagSuggestion[] = []; // Current tag suggestions with source info
 let currentTitleSuggestions: string[] = []; // Current title suggestions
+let clipHistoryEntries: ClipHistoryEntry[] = [];
 
 const PREVIEW_IDLE_TEXT = "Open Preview to generate a cleaned markdown preview";
 const PREVIEW_IDLE_HINT = "Content is extracted without saving to Obsidian.";
@@ -238,6 +240,124 @@ function hideTitleSuggestions(): void {
   currentTitleSuggestions = [];
 }
 
+function formatHistoryDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString();
+}
+
+function renderHistoryView(): void {
+  const list = getEl<HTMLDivElement>("historyList");
+  const empty = getEl<HTMLDivElement>("historyEmpty");
+  if (!list || !empty) return;
+
+  list.innerHTML = "";
+
+  if (clipHistoryEntries.length === 0) {
+    empty.style.display = "block";
+    list.style.display = "none";
+    return;
+  }
+
+  empty.style.display = "none";
+  list.style.display = "flex";
+
+  for (const entry of clipHistoryEntries) {
+    const item = document.createElement("div");
+    item.className = `history-item ${entry.success ? "success" : "error"}`;
+
+    const title = document.createElement("div");
+    title.className = "history-item-title";
+    title.textContent = entry.title || "Untitled";
+
+    const url = document.createElement("a");
+    url.className = "history-item-url";
+    url.href = entry.url;
+    url.textContent = entry.url;
+    url.target = "_blank";
+    url.rel = "noreferrer";
+
+    const meta = document.createElement("div");
+    meta.className = "history-item-meta";
+    meta.textContent = `${formatHistoryDate(entry.date)} • ${entry.folder || "(no folder)"}`;
+
+    const status = document.createElement("span");
+    status.className = `history-item-status ${entry.success ? "success" : "error"}`;
+    status.textContent = entry.success ? "Saved" : "Failed";
+    meta.appendChild(status);
+
+    item.appendChild(title);
+    item.appendChild(url);
+    item.appendChild(meta);
+
+    if (entry.tags.length > 0) {
+      const tags = document.createElement("div");
+      tags.className = "history-item-tags";
+      for (const tag of entry.tags) {
+        const chip = document.createElement("span");
+        chip.className = "history-tag";
+        chip.textContent = `#${tag}`;
+        tags.appendChild(chip);
+      }
+      item.appendChild(tags);
+    }
+
+    list.appendChild(item);
+  }
+}
+
+async function refreshHistoryView(): Promise<void> {
+  clipHistoryEntries = await getClipHistory();
+  renderHistoryView();
+}
+
+async function recordHistoryEntry(entry: ClipHistoryEntry): Promise<void> {
+  await addClipHistoryEntry(entry);
+  await refreshHistoryView();
+}
+
+function buildHistoryEntry(success: boolean): ClipHistoryEntry {
+  const titleInput = getEl<HTMLInputElement>("titleInput");
+  const folderInput = getEl<HTMLSelectElement>("folderInput");
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+
+  const tags = (tagsInput?.value || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+  return {
+    title: (titleInput?.value || clipperContent?.title || currentTab?.title || "Untitled").trim() || "Untitled",
+    url: currentTab?.url || "",
+    date: new Date().toISOString(),
+    tags,
+    folder: (folderInput?.value || settings.defaultFolder || "").trim(),
+    success
+  };
+}
+
+function activateTab(targetTab: "clip" | "preview" | "history"): void {
+  const tabBtns = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
+  const tabContents = document.querySelectorAll<HTMLElement>(".tab-content");
+
+  tabBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === targetTab);
+  });
+
+  tabContents.forEach((content) => {
+    const isActive = content.id === `tab${targetTab.charAt(0).toUpperCase() + targetTab.slice(1)}`;
+    content.classList.toggle("active", isActive);
+  });
+
+  if (targetTab === "preview") {
+    void updatePreview();
+  }
+
+  if (targetTab === "history") {
+    void refreshHistoryView();
+  }
+}
+
 async function getCurrentTab(): Promise<chrome.tabs.Tab> {
   const tabs = await tabsQuery({ active: true, currentWindow: true });
   const tab = tabs[0];
@@ -269,6 +389,13 @@ function setupEventListeners(): void {
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => {
       chrome.runtime.openOptionsPage();
+    });
+  }
+
+  const historyBtn = getEl<HTMLButtonElement>("historyBtn");
+  if (historyBtn) {
+    historyBtn.addEventListener("click", () => {
+      activateTab("history");
     });
   }
 
@@ -354,27 +481,13 @@ function renderPreviewContent(): void {
 
 /** Setup tab switching functionality */
 function setupTabSwitching(): void {
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  const tabContents = document.querySelectorAll(".tab-content");
+  const tabBtns = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
 
   tabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       const targetTab = btn.getAttribute("data-tab");
-      if (!targetTab) return;
-
-      tabBtns.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-
-      tabContents.forEach((content) => {
-        if (content.id === `tab${targetTab.charAt(0).toUpperCase() + targetTab.slice(1)}`) {
-          content.classList.add("active");
-        } else {
-          content.classList.remove("active");
-        }
-      });
-
-      if (targetTab === "preview") {
-        void updatePreview();
+      if (targetTab === "clip" || targetTab === "preview" || targetTab === "history") {
+        activateTab(targetTab);
       }
     });
   });
@@ -553,12 +666,15 @@ async function handleClip(): Promise<void> {
       overrideTags: tagsInput?.value
     });
 
+    await recordHistoryEntry(buildHistoryEntry(true));
+
     if (!saveResult.usedClipboardFallback) {
       showStatus("success", "Sent to Obsidian");
     }
   } catch (err) {
     const message = toErrorMessage(err, "Failed to clip page");
     console.error("Clip error:", err);
+    await recordHistoryEntry(buildHistoryEntry(false));
     showStatus("error", message);
   } finally {
     if (clipBtn) clipBtn.disabled = false;
@@ -597,6 +713,8 @@ async function handleClipFromPreview(): Promise<void> {
       overrideTags: tagsInput?.value
     });
 
+    await recordHistoryEntry(buildHistoryEntry(true));
+
     if (!saveResult.usedClipboardFallback) {
       const successNotice = showPreviewNotice("✓ Sent to Obsidian", "success");
       if (successNotice) {
@@ -606,6 +724,7 @@ async function handleClipFromPreview(): Promise<void> {
   } catch (err) {
     const message = toErrorMessage(err, "Failed to clip page");
     console.error("Clip from preview error:", err);
+    await recordHistoryEntry(buildHistoryEntry(false));
     const errorNotice = showPreviewNotice(message, "error");
     if (errorNotice) {
       setTimeout(() => errorNotice.remove(), 5000);
@@ -660,6 +779,7 @@ async function init(): Promise<void> {
   setPageTypeDisplay(pageType, twitterThreadLength);
   updateUI(currentTab, pageType, settings);
   setupEventListeners();
+  await refreshHistoryView();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
