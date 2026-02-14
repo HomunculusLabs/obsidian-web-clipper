@@ -74,12 +74,12 @@ export interface BuiltInTemplateWithStatus extends SiteTemplate {
  * This is the recommended way to display built-in templates in the options UI,
  * as it accounts for user preferences stored in settings.
  * 
- * @param settings - The current settings object
+ * @param settings - Optional current settings object (defaults to all built-ins enabled)
  * @returns Array of built-in templates with their enabled status
  */
-export function getBuiltInTemplates(settings: Settings): BuiltInTemplateWithStatus[] {
+export function getBuiltInTemplates(settings?: Settings): BuiltInTemplateWithStatus[] {
   const rawTemplates = getRawBuiltInTemplates();
-  const disabledBuiltIns = settings.disabledBuiltIns || [];
+  const disabledBuiltIns = settings?.disabledBuiltIns || [];
   
   return rawTemplates.map((template) => {
     const isDisabledByUser = disabledBuiltIns.includes(template.domain);

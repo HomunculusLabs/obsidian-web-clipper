@@ -701,6 +701,12 @@ describe("Template registry integration", () => {
     expect(disabled).toHaveLength(0);
   });
 
+  test("getBuiltInTemplates is resilient without settings", () => {
+    const templates = getBuiltInTemplates();
+    expect(templates.length).toBeGreaterThan(0);
+    expect(templates.every((template) => template.isEnabled)).toBe(true);
+  });
+
   test("templates have valid domain patterns", () => {
     const templates = getBuiltInTemplates(DEFAULT_SETTINGS);
 
