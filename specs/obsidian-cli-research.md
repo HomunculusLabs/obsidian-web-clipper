@@ -72,7 +72,28 @@ Also, binary string inspection includes `obsidian://new` and URI-related symbols
 
 This strongly suggests the installed `obsidian-cli` implementation is URI-driven, not direct filesystem writes. If so, URI limitations may still apply (size limits/app dependency), contrary to the Phase 1 assumption that CLI fully replaces URI constraints.
 
-## Practical implication for upcoming Phase 1 tasks
+## 6) Phase 1 target validation (E1)
+
+### Candidate A: `obsidian` app binary
+- Binary path: `/Applications/Obsidian.app/Contents/MacOS/obsidian`
+- Behavior in shell: launches desktop app/runtime; `--help` did not expose stable subcommands for note CRUD.
+- Conclusion: **not** the intended automation CLI for this project.
+
+### Candidate B: `obsidian-cli` package binary
+- Binary path: `/opt/homebrew/bin/obsidian-cli`
+- Behavior in shell: exposes note-oriented commands (`create`, `move`, `delete`, `frontmatter`, etc.) and `--vault` support.
+- Conclusion: this is the **Phase 1 target CLI** used by the current codebase (`cliPath` defaults and tool help all target `obsidian-cli`).
+
+## 7) Direct filesystem writes vs URI wrapper
+
+Validated indicators:
+1. Runtime error text includes `Failed to execute Obsidian URI` for invalid vault invocation.
+2. Binary string inspection includes `obsidian://new` literals.
+3. No documented mode in help text claims direct file I/O bypassing the app URI flow.
+
+Conclusion: current tested `obsidian-cli` (`v0.2.2`) appears to be a **URI-backed wrapper** (opens/dispatches Obsidian URI actions), not a guaranteed direct filesystem writer.
+
+## Practical implication for upcoming work
 - Browser extension code (MV3) cannot directly spawn local processes.
-- Even if a CLI exists, extension-side CLI invocation likely needs a bridge (native messaging host / local helper process).
-- If current `obsidian-cli` is URI-backed, fallback/size-limit strategy must be revisited before implementing Task 3+.
+- Even with a CLI binary, extension-side save requires a bridge (Native Messaging host / local helper service).
+- Because `obsidian-cli` is URI-backed in this environment, URI-size/open-app constraints may still apply; treat CLI mode as UX/automation convenience, not a proven hard replacement for URI transport limits.
