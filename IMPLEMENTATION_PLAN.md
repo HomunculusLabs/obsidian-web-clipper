@@ -167,7 +167,7 @@ User-facing improvements and additional features.
 - [x] **Task 107**: Batch tab clipping — Add "Clip All Tabs" button in popup. Iterate through tabs in current window, clip each, save with progress indicator.
 - [x] **Task 108**: Tab group clipping — Detect Chrome tab groups. Allow clipping all tabs in a group as related notes with backlinks.
 - [x] **Task 109**: Notification system — Show Chrome notification on successful clip (optional, settings toggle). Include note title and vault.
-- [ ] **Task 110**: Dark mode popup — Add dark mode support to popup CSS. Detect system preference or add toggle.
+- [x] **Task 110**: Dark mode popup — Add dark mode support to popup CSS. Detect system preference or add toggle.
 - [ ] **Task 111**: Popup keyboard shortcuts — Add keyboard navigation in popup: Enter to clip, Tab between fields, Escape to close.
 - [ ] **Task 112**: Folder creation — If target folder doesn't exist in Obsidian, offer to create it (via CLI). Show folder tree from vault.
 - [ ] **Task 113**: Multi-vault support — Add vault selector to settings and popup. Store multiple vault configs. Switch between them.
