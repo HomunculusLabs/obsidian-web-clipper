@@ -899,3 +899,152 @@ body {
   color: #5b21b6;
   font-weight: 500;
 }
+
+/* Dark mode */
+body.theme-dark {
+  color: #e5e7eb;
+  background: #0f172a;
+}
+
+body.theme-dark .tabs {
+  background: #1e1b4b;
+  border-bottom-color: #312e81;
+}
+
+body.theme-dark .tab-btn {
+  color: #c4b5fd;
+}
+
+body.theme-dark .tab-btn:hover {
+  background: rgba(196, 181, 253, 0.12);
+}
+
+body.theme-dark .tab-btn.active {
+  color: #ede9fe;
+  background: #111827;
+  border-bottom-color: #a78bfa;
+}
+
+body.theme-dark .content,
+body.theme-dark .preview-container,
+body.theme-dark .history-container {
+  background: #111827;
+}
+
+body.theme-dark .field label,
+body.theme-dark .tag-suggestions-label,
+body.theme-dark .title-suggestions-label,
+body.theme-dark .history-date-separator {
+  color: #9ca3af;
+}
+
+body.theme-dark .field input[type="text"],
+body.theme-dark .field select,
+body.theme-dark .history-search,
+body.theme-dark .history-date-input,
+body.theme-dark .history-clear-btn {
+  background: #1f2937;
+  color: #e5e7eb;
+  border-color: #374151;
+}
+
+body.theme-dark .field input[type="text"]::placeholder,
+body.theme-dark .history-search::placeholder {
+  color: #9ca3af;
+}
+
+body.theme-dark .history-empty {
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+body.theme-dark .history-item {
+  background: #1f2937;
+  border-color: #334155;
+}
+
+body.theme-dark .history-item-title,
+body.theme-dark .preview-content h1,
+body.theme-dark .preview-content h2,
+body.theme-dark .preview-content h3,
+body.theme-dark .preview-content h4,
+body.theme-dark .preview-content h5,
+body.theme-dark .preview-content h6,
+body.theme-dark .preview-content {
+  color: #e5e7eb;
+}
+
+body.theme-dark .history-item-meta,
+body.theme-dark .preview-loading,
+body.theme-dark .preview-loading-hint,
+body.theme-dark .preview-content blockquote {
+  color: #9ca3af;
+}
+
+body.theme-dark .history-reclip-btn,
+body.theme-dark .title-option {
+  background: #111827;
+  border-color: #374151;
+  color: #e5e7eb;
+}
+
+body.theme-dark .history-reclip-btn:hover:not(:disabled),
+body.theme-dark .title-option:hover {
+  background: #0b1220;
+  border-color: #4b5563;
+}
+
+body.theme-dark .title-option-text {
+  color: #d1d5db;
+}
+
+body.theme-dark .preview-container {
+  border-bottom-color: #374151;
+}
+
+body.theme-dark .preview-content a,
+body.theme-dark .history-item-url {
+  color: #c4b5fd;
+}
+
+body.theme-dark .preview-content code {
+  background: #1f2937;
+  color: #f9fafb;
+}
+
+body.theme-dark .preview-content .frontmatter {
+  border-color: #374151;
+  background: #111827;
+}
+
+body.theme-dark .preview-content .frontmatter pre {
+  color: #d1d5db;
+}
+
+body.theme-dark .selection-indicator {
+  background: linear-gradient(135deg, #422006, #78350f);
+  border-bottom-color: #b45309;
+}
+
+body.theme-dark .selection-badge,
+body.theme-dark .selection-preview,
+body.theme-dark .toggle-text {
+  color: #fde68a;
+}
+
+body.theme-dark .template-indicator {
+  background: linear-gradient(135deg, #172554, #1e3a8a);
+  border-bottom-color: #2563eb;
+}
+
+body.theme-dark .template-badge {
+  color: #bfdbfe;
+}
+
+body.theme-dark .toggle-switch {
+  background: #4b5563;
+}
+
+body.theme-dark .toggle-switch::after {
+  background: #f3f4f6;
+}

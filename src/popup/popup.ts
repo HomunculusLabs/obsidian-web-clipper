@@ -49,6 +49,66 @@ const PREVIEW_IDLE_HINT = "Content is extracted without saving to Obsidian.";
 const PREVIEW_LOADING_TEXT = "Generating preview...";
 const PREVIEW_LOADING_HINT = "Extracting cleaned markdown from the current page.";
 
+type PopupTheme = "light" | "dark";
+
+const POPUP_THEME_KEY = "popupTheme";
+let popupThemePreference: PopupTheme | null = null;
+
+function getSystemTheme(): PopupTheme {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function resolvePopupTheme(): PopupTheme {
+  return popupThemePreference ?? getSystemTheme();
+}
+
+function renderThemeButton(theme: PopupTheme): void {
+  const themeBtn = getEl<HTMLButtonElement>("themeBtn");
+  if (!themeBtn) return;
+
+  const isDark = theme === "dark";
+  themeBtn.textContent = isDark ? "☀️" : "🌙";
+  themeBtn.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+  themeBtn.setAttribute("aria-pressed", String(isDark));
+}
+
+function applyPopupTheme(): void {
+  const theme = resolvePopupTheme();
+  document.body.classList.toggle("theme-dark", theme === "dark");
+  renderThemeButton(theme);
+}
+
+async function loadPopupThemePreference(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(POPUP_THEME_KEY);
+    const stored = result[POPUP_THEME_KEY];
+    popupThemePreference = stored === "dark" || stored === "light" ? stored : null;
+  } catch {
+    popupThemePreference = null;
+  }
+
+  applyPopupTheme();
+
+  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  mediaQuery.addEventListener("change", () => {
+    if (!popupThemePreference) {
+      applyPopupTheme();
+    }
+  });
+}
+
+async function togglePopupTheme(): Promise<void> {
+  const nextTheme: PopupTheme = resolvePopupTheme() === "dark" ? "light" : "dark";
+  popupThemePreference = nextTheme;
+  applyPopupTheme();
+
+  try {
+    await chrome.storage.local.set({ [POPUP_THEME_KEY]: nextTheme });
+  } catch {
+    // ignore persistence errors; theme still applies for current session
+  }
+}
+
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
 
@@ -531,6 +591,13 @@ function setupEventListeners(): void {
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => {
       chrome.runtime.openOptionsPage();
+    });
+  }
+
+  const themeBtn = getEl<HTMLButtonElement>("themeBtn");
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      void togglePopupTheme();
     });
   }
 
@@ -1182,6 +1249,7 @@ async function handleClipFromPreview(): Promise<void> {
 }
 
 async function init(): Promise<void> {
+  await loadPopupThemePreference();
   await loadSettings();
   currentTab = await getCurrentTab();
   updateGroupClipButtonVisibility();
