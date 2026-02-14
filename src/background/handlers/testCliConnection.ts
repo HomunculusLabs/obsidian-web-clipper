@@ -1,12 +1,12 @@
 /**
- * Handler for testing Obsidian CLI connection.
+ * Handler for testing Obsidian CLI connection via Native Messaging.
  *
- * NOTE: Manifest V3 service workers cannot spawn local processes directly.
- * This handler validates the CLI path format and returns a placeholder response.
- * Full CLI integration requires a Native Messaging host (to be implemented in Task 6/E2).
+ * MV3 service workers cannot spawn local processes directly, so this delegates
+ * binary + vault validation to the native bridge host.
  */
 
 import type { TestCliConnectionResponse } from "../../shared/messages";
+import { sendNativeBridgeMessage } from "../nativeMessaging";
 
 interface TestCliConnectionRequest {
   action: "testCliConnection";
@@ -14,42 +14,53 @@ interface TestCliConnectionRequest {
   vault: string;
 }
 
-/**
- * Validates that the CLI path looks like a valid file path.
- * Does not actually test the connection (requires Native Messaging host).
- */
+type TestCliBridgeData = {
+  version?: unknown;
+  cliVersion?: unknown;
+};
+
+function getVersion(data: TestCliBridgeData | undefined): string | undefined {
+  const version =
+    typeof data?.version === "string"
+      ? data.version.trim()
+      : typeof data?.cliVersion === "string"
+        ? data.cliVersion.trim()
+        : "";
+
+  return version.length > 0 ? version : undefined;
+}
+
 export async function handleTestCliConnection(
   request: TestCliConnectionRequest
 ): Promise<TestCliConnectionResponse> {
-  const { cliPath, vault } = request;
+  const cliPath = request.cliPath?.trim();
+  const vault = request.vault?.trim();
 
-  // Basic path validation
-  if (!cliPath || cliPath.trim() === "") {
+  if (!cliPath) {
     return { success: false, error: "CLI path is required" };
   }
 
-  // Check for obvious invalid paths
-  const trimmedPath = cliPath.trim();
-
-  // Basic validation: should contain at least a filename
-  if (trimmedPath.length < 3) {
-    return { success: false, error: "Path too short" };
+  if (!vault) {
+    return { success: false, error: "Vault name is required" };
   }
 
-  // Check for common path separators (Unix or Windows)
-  const hasValidPathChars = /[\/\\]/.test(trimmedPath) || /^[a-zA-Z]:/.test(trimmedPath);
-  if (!hasValidPathChars && !trimmedPath.includes("obsidian")) {
+  const bridgeResponse = await sendNativeBridgeMessage<TestCliBridgeData>({
+    action: "testCliConnection",
+    payload: {
+      cliPath,
+      vault
+    }
+  });
+
+  if (!bridgeResponse.success) {
     return {
       success: false,
-      error: "Path should be an absolute path to the obsidian CLI binary"
+      error: bridgeResponse.error
     };
   }
 
-  // MV3 limitation: cannot actually spawn processes from service worker
-  // Full test requires Native Messaging host (Task 6/E2)
-  // For now, return success if path looks valid
   return {
     success: true,
-    version: "validation-only"
+    version: getVersion(bridgeResponse.data)
   };
 }
