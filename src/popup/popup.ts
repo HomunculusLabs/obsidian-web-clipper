@@ -27,6 +27,7 @@ import { getEl, showStatus, populateFolderSelect, updateUI, setPageTypeDisplay }
 import { ensureContentScriptLoaded, performClip } from "./clipFlow";
 import { saveToObsidian } from "./save";
 import { buildFrontmatterFromClip } from "../shared/buildFrontmatter";
+import { applyVaultProfileToSettings, getActiveVaultProfile, getVaultProfiles } from "../shared/vaultProfiles";
 
 let currentTab: chrome.tabs.Tab | null = null;
 let pageType: PageType = "web";
@@ -142,6 +143,51 @@ function mergeFolderLists(...folderLists: readonly string[][]): string[] {
 
 function isCliFolderSyncConfigured(): boolean {
   return Boolean(settings.obsidianCli?.enabled && settings.obsidianCli.cliPath && settings.obsidianCli.vault);
+}
+
+function renderVaultSelector(): void {
+  const vaultSelect = getEl<HTMLSelectElement>("vaultSelect");
+  if (!vaultSelect) return;
+
+  const profiles = getVaultProfiles(settings);
+  const activeProfile = getActiveVaultProfile(settings);
+
+  vaultSelect.innerHTML = "";
+  for (const profile of profiles) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    option.title = profile.vaultName;
+    vaultSelect.appendChild(option);
+  }
+
+  vaultSelect.value = activeProfile.id;
+}
+
+async function switchVaultProfile(profileId: string): Promise<void> {
+  const profiles = getVaultProfiles(settings);
+  const nextProfile = profiles.find((profile) => profile.id === profileId);
+  if (!nextProfile) return;
+
+  settings = applyVaultProfileToSettings(settings, nextProfile);
+
+  await saveSettings({
+    activeVaultProfileId: settings.activeVaultProfileId,
+    vaultName: settings.vaultName,
+    defaultFolder: settings.defaultFolder,
+    defaultTags: settings.defaultTags,
+    obsidianCli: settings.obsidianCli
+  });
+
+  const mergedFolders = mergeFolderLists(settings.savedFolders, [settings.defaultFolder]);
+  renderFolderSelect(mergedFolders);
+
+  const tagsInput = getEl<HTMLInputElement>("tagsInput");
+  if (tagsInput) {
+    tagsInput.value = (settings.defaultTags || DEFAULT_SETTINGS.defaultTags || "").trim();
+  }
+
+  showStatus("success", `Switched to vault: ${nextProfile.name}`);
 }
 
 function renderFolderSelect(folders?: string[]): void {
@@ -274,6 +320,9 @@ async function createFolderFromPopup(): Promise<void> {
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
+  settings = applyVaultProfileToSettings(settings, getActiveVaultProfile(settings));
+
+  renderVaultSelector();
 
   const mergedFolders = mergeFolderLists(settings.savedFolders, [settings.defaultFolder]);
   renderFolderSelect(mergedFolders);
@@ -854,6 +903,13 @@ function setupEventListeners(): void {
   if (clipAllTabsBtn) {
     clipAllTabsBtn.addEventListener("click", () => {
       void handleClipAllTabs();
+    });
+  }
+
+  const vaultSelect = getEl<HTMLSelectElement>("vaultSelect");
+  if (vaultSelect) {
+    vaultSelect.addEventListener("change", () => {
+      void switchVaultProfile(vaultSelect.value);
     });
   }
 

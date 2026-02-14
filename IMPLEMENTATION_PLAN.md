@@ -170,7 +170,7 @@ User-facing improvements and additional features.
 - [x] **Task 110**: Dark mode popup — Add dark mode support to popup CSS. Detect system preference or add toggle.
 - [x] **Task 111**: Popup keyboard shortcuts — Add keyboard navigation in popup: Enter to clip, Tab between fields, Escape to close.
 - [x] **Task 112**: Folder creation — If target folder doesn't exist in Obsidian, offer to create it (via CLI). Show folder tree from vault.
-- [ ] **Task 113**: Multi-vault support — Add vault selector to settings and popup. Store multiple vault configs. Switch between them.
+- [x] **Task 113**: Multi-vault support — Add vault selector to settings and popup. Store multiple vault configs. Switch between them.
 - [ ] **Task 114**: Clip formatting options — Add popup toggle for: include images, include links, include metadata, clean formatting. Quick presets.
 - [ ] **Task 115**: Export settings — Add import/export buttons in options for all settings (templates, rules, folders, etc.) as JSON.
 - [ ] **Task 116**: Onboarding flow — First-run wizard: detect Obsidian installation, set vault name, choose default folder, test connection.

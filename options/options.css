@@ -173,6 +173,26 @@ code {
   gap: 8px;
 }
 
+.vault-profile-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.vault-profile-actions button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  cursor: pointer;
+}
+
+.vault-profile-actions button.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fff5f5;
+}
+
 .folder-tag {
   display: flex;
   justify-content: space-between;

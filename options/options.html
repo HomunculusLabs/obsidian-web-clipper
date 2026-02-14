@@ -30,6 +30,40 @@
       </section>
 
       <section class="section">
+        <h2>Multi-Vault Profiles</h2>
+        <div class="field">
+          <label for="vaultProfileSelect">Active Vault Profile</label>
+          <select id="vaultProfileSelect"></select>
+        </div>
+
+        <div class="vault-profile-actions">
+          <button type="button" id="addVaultProfileBtn">Add Profile</button>
+          <button type="button" id="removeVaultProfileBtn" class="danger">Remove Selected</button>
+        </div>
+
+        <div class="field">
+          <label for="vaultProfileName">Profile Name</label>
+          <input type="text" id="vaultProfileName" placeholder="Work Vault">
+        </div>
+
+        <div class="field">
+          <label for="vaultProfileVaultName">Vault Name</label>
+          <input type="text" id="vaultProfileVaultName" placeholder="Work Vault">
+        </div>
+
+        <div class="field">
+          <label for="vaultProfileDefaultFolder">Default Folder</label>
+          <input type="text" id="vaultProfileDefaultFolder" placeholder="2 - Source Material/Clips">
+        </div>
+
+        <div class="field">
+          <label for="vaultProfileDefaultTags">Default Tags</label>
+          <input type="text" id="vaultProfileDefaultTags" placeholder="web-clip">
+          <small>Each profile can have its own default folder and tags.</small>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Content Options</h2>
 
         <div class="field">

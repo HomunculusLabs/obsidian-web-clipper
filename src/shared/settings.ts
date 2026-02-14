@@ -15,11 +15,22 @@ export interface WikiLinkRule {
   note: string;
 }
 
+export interface VaultProfile {
+  id: string;
+  name: string;
+  vaultName: string;
+  defaultFolder: string;
+  defaultTags: string;
+  obsidianCli?: ObsidianCliConfig;
+}
+
 export interface Settings {
   // --- Core settings ---
   vaultName: string;
   defaultFolder: string;
   defaultTags: string;
+  vaultProfiles: VaultProfile[];
+  activeVaultProfileId: string;
   includeTimestamps: boolean;
   savedFolders: string[];
   enableClipNotifications: boolean;
@@ -89,6 +100,7 @@ export interface Settings {
     | string[]
     | number
     | WikiLinkRule[]
+    | VaultProfile[]
     | ObsidianCliConfig
     | SiteTemplate[]
     | DomainTagRule[]
@@ -98,11 +110,28 @@ export interface Settings {
     | undefined;
 }
 
+const DEFAULT_VAULT_PROFILE_ID = "default-vault";
+
 export const DEFAULT_SETTINGS: Settings = {
   // --- Core settings ---
   vaultName: "Main Vault",
   defaultFolder: "2 - Source Material/Clips",
   defaultTags: "web-clip",
+  vaultProfiles: [
+    {
+      id: DEFAULT_VAULT_PROFILE_ID,
+      name: "Main Vault",
+      vaultName: "Main Vault",
+      defaultFolder: "2 - Source Material/Clips",
+      defaultTags: "web-clip",
+      obsidianCli: {
+        cliPath: "",
+        vault: "",
+        enabled: false
+      }
+    }
+  ],
+  activeVaultProfileId: DEFAULT_VAULT_PROFILE_ID,
   includeTimestamps: true,
   savedFolders: ["2 - Source Material/Clips"],
   enableClipNotifications: true,
@@ -179,6 +208,8 @@ export const SETTINGS_KEYS = [
   "vaultName",
   "defaultFolder",
   "defaultTags",
+  "vaultProfiles",
+  "activeVaultProfileId",
   "includeTimestamps",
   "savedFolders",
   "enableClipNotifications",

@@ -36,6 +36,20 @@ export const ObsidianCliConfigSchema = z.object({
 export type ObsidianCliConfigZod = z.infer<typeof ObsidianCliConfigSchema>;
 
 /**
+ * Vault profile schema for multi-vault support.
+ */
+export const VaultProfileSchema = z.object({
+  id: z.string().min(1, "Vault profile ID is required"),
+  name: z.string().min(1, "Vault profile name is required"),
+  vaultName: z.string().min(1, "Vault name is required"),
+  defaultFolder: z.string().default("2 - Source Material/Clips"),
+  defaultTags: z.string().default("web-clip"),
+  obsidianCli: ObsidianCliConfigSchema.optional(),
+});
+
+export type VaultProfileZod = z.infer<typeof VaultProfileSchema>;
+
+/**
  * Template selectors schema.
  */
 export const TemplateSelectorsSchema = z.object({
@@ -172,6 +186,17 @@ export const SettingsSchema = z.object({
   vaultName: z.string().default("Main Vault"),
   defaultFolder: z.string().default("2 - Source Material/Clips"),
   defaultTags: z.string().default("web-clip"),
+  vaultProfiles: z.array(VaultProfileSchema).default([
+    {
+      id: "default-vault",
+      name: "Main Vault",
+      vaultName: "Main Vault",
+      defaultFolder: "2 - Source Material/Clips",
+      defaultTags: "web-clip",
+      obsidianCli: { cliPath: "", vault: "", enabled: false },
+    },
+  ]),
+  activeVaultProfileId: z.string().default("default-vault"),
   includeTimestamps: z.boolean().default(true),
   savedFolders: z.array(z.string()).default(["2 - Source Material/Clips"]),
   enableClipNotifications: z.boolean().default(true),
@@ -322,6 +347,34 @@ export function migrateSettings(
     if (!Array.isArray(result.savedFolders)) {
       result.savedFolders = ["2 - Source Material/Clips"];
       migratedFields.push("savedFolders");
+    }
+    if (!Array.isArray(result.vaultProfiles)) {
+      const fallbackVaultName = typeof result.vaultName === "string" && result.vaultName.trim()
+        ? result.vaultName.trim()
+        : "Main Vault";
+      const fallbackDefaultFolder =
+        typeof result.defaultFolder === "string" && result.defaultFolder.trim()
+          ? result.defaultFolder.trim()
+          : "2 - Source Material/Clips";
+      const fallbackDefaultTags =
+        typeof result.defaultTags === "string" && result.defaultTags.trim()
+          ? result.defaultTags.trim()
+          : "web-clip";
+
+      result.vaultProfiles = [
+        {
+          id: "default-vault",
+          name: fallbackVaultName,
+          vaultName: fallbackVaultName,
+          defaultFolder: fallbackDefaultFolder,
+          defaultTags: fallbackDefaultTags,
+        },
+      ];
+      migratedFields.push("vaultProfiles");
+    }
+    if (typeof result.activeVaultProfileId !== "string" || !result.activeVaultProfileId) {
+      result.activeVaultProfileId = "default-vault";
+      migratedFields.push("activeVaultProfileId");
     }
     if (!Array.isArray(result.wikiLinkRules)) {
       result.wikiLinkRules = [];

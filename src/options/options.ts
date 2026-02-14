@@ -3,7 +3,8 @@ import {
   VALID_CODE_BLOCK_LANGUAGE,
   VALID_TABLE_HANDLING,
   type Settings,
-  type WikiLinkRule
+  type WikiLinkRule,
+  type VaultProfile
 } from "../shared/settings";
 import type { CodeBlockLanguageMode, TableHandlingMode } from "../shared/types";
 import type { SaveMethod } from "../shared/obsidianCli";
@@ -12,6 +13,7 @@ import {
   saveSettings as saveSettingsToStorage
 } from "../shared/settingsService";
 import { getEl, showStatus, populateForm } from "./ui";
+import { applyVaultProfileToSettings, getActiveVaultProfile, getVaultProfiles } from "../shared/vaultProfiles";
 import { addFolder, renderSavedFolders } from "./folderList";
 import {
   renderCustomTemplates,
@@ -24,6 +26,64 @@ import {
 } from "../shared/titleTemplate";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
+let vaultProfilesDraft: VaultProfile[] = [];
+let activeVaultProfileIdDraft = "";
+
+function buildVaultProfileId(): string {
+  return `vault-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function syncDraftProfileFromForm(profileId: string): void {
+  const profile = vaultProfilesDraft.find((item) => item.id === profileId);
+  if (!profile) return;
+
+  const name = getEl<HTMLInputElement>("vaultProfileName")?.value?.trim() || "";
+  const vaultName = getEl<HTMLInputElement>("vaultProfileVaultName")?.value?.trim() || "";
+  const defaultFolder = getEl<HTMLInputElement>("vaultProfileDefaultFolder")?.value?.trim() || "";
+  const defaultTags = getEl<HTMLInputElement>("vaultProfileDefaultTags")?.value?.trim() || "";
+
+  profile.name = name || vaultName || profile.name;
+  profile.vaultName = vaultName || profile.vaultName;
+  profile.defaultFolder = defaultFolder || profile.defaultFolder;
+  profile.defaultTags = defaultTags || profile.defaultTags;
+}
+
+function renderVaultProfileEditor(): void {
+  const select = getEl<HTMLSelectElement>("vaultProfileSelect");
+  const nameInput = getEl<HTMLInputElement>("vaultProfileName");
+  const vaultNameInput = getEl<HTMLInputElement>("vaultProfileVaultName");
+  const defaultFolderInput = getEl<HTMLInputElement>("vaultProfileDefaultFolder");
+  const defaultTagsInput = getEl<HTMLInputElement>("vaultProfileDefaultTags");
+
+  if (!select || !nameInput || !vaultNameInput || !defaultFolderInput || !defaultTagsInput) return;
+
+  select.innerHTML = "";
+  for (const profile of vaultProfilesDraft) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    select.appendChild(option);
+  }
+
+  if (!vaultProfilesDraft.some((profile) => profile.id === activeVaultProfileIdDraft)) {
+    activeVaultProfileIdDraft = vaultProfilesDraft[0]?.id || "";
+  }
+
+  select.value = activeVaultProfileIdDraft;
+  const activeProfile = vaultProfilesDraft.find((profile) => profile.id === activeVaultProfileIdDraft);
+  if (!activeProfile) return;
+
+  nameInput.value = activeProfile.name;
+  vaultNameInput.value = activeProfile.vaultName;
+  defaultFolderInput.value = activeProfile.defaultFolder;
+  defaultTagsInput.value = activeProfile.defaultTags;
+}
+
+function loadVaultProfilesDraft(sourceSettings: Settings): void {
+  vaultProfilesDraft = getVaultProfiles(sourceSettings).map((profile) => ({ ...profile }));
+  activeVaultProfileIdDraft = getActiveVaultProfile(sourceSettings).id;
+  renderVaultProfileEditor();
+}
 
 // --- Parsing helpers ---
 
@@ -124,7 +184,9 @@ function buildCustomTemplates(
 
 async function loadSettings(): Promise<void> {
   settings = await loadSettingsFromStorage();
+  settings = applyVaultProfileToSettings(settings, getActiveVaultProfile(settings));
   populateForm(settings);
+  loadVaultProfilesDraft(settings);
 }
 
 /**
@@ -174,6 +236,57 @@ function setupEventListeners(): void {
   if (addFolderBtn) {
     addFolderBtn.addEventListener("click", () => {
       void addFolder(settings);
+    });
+  }
+
+  const vaultProfileSelect = getEl<HTMLSelectElement>("vaultProfileSelect");
+  if (vaultProfileSelect) {
+    vaultProfileSelect.addEventListener("change", () => {
+      syncDraftProfileFromForm(activeVaultProfileIdDraft);
+      activeVaultProfileIdDraft = vaultProfileSelect.value;
+      renderVaultProfileEditor();
+    });
+  }
+
+  const addVaultProfileBtn = getEl<HTMLButtonElement>("addVaultProfileBtn");
+  if (addVaultProfileBtn) {
+    addVaultProfileBtn.addEventListener("click", () => {
+      syncDraftProfileFromForm(activeVaultProfileIdDraft);
+      const next: VaultProfile = {
+        id: buildVaultProfileId(),
+        name: "New Vault",
+        vaultName: "New Vault",
+        defaultFolder: DEFAULT_SETTINGS.defaultFolder,
+        defaultTags: DEFAULT_SETTINGS.defaultTags
+      };
+      vaultProfilesDraft.push(next);
+      activeVaultProfileIdDraft = next.id;
+      renderVaultProfileEditor();
+    });
+  }
+
+  const removeVaultProfileBtn = getEl<HTMLButtonElement>("removeVaultProfileBtn");
+  if (removeVaultProfileBtn) {
+    removeVaultProfileBtn.addEventListener("click", () => {
+      if (vaultProfilesDraft.length <= 1) {
+        showStatus("error", "At least one vault profile is required");
+        return;
+      }
+
+      const removingId = activeVaultProfileIdDraft;
+      vaultProfilesDraft = vaultProfilesDraft.filter((profile) => profile.id !== removingId);
+      activeVaultProfileIdDraft = vaultProfilesDraft[0]?.id || "";
+      renderVaultProfileEditor();
+    });
+  }
+
+  const vaultProfileFields = ["vaultProfileName", "vaultProfileVaultName", "vaultProfileDefaultFolder", "vaultProfileDefaultTags"] as const;
+  for (const fieldId of vaultProfileFields) {
+    const input = getEl<HTMLInputElement>(fieldId);
+    if (!input) continue;
+    input.addEventListener("input", () => {
+      syncDraftProfileFromForm(activeVaultProfileIdDraft);
+      renderVaultProfileEditor();
     });
   }
 
@@ -253,9 +366,6 @@ function setupEventListeners(): void {
 
 async function saveCurrentSettings(): Promise<void> {
   // Core settings
-  const vaultName = getEl<HTMLInputElement>("vaultName");
-  const defaultFolder = getEl<HTMLInputElement>("defaultFolder");
-  const defaultTags = getEl<HTMLInputElement>("defaultTags");
   const includeTimestamps = getEl<HTMLInputElement>("includeTimestamps");
   const enableClipNotifications = getEl<HTMLInputElement>("enableClipNotifications");
 
@@ -307,14 +417,32 @@ async function saveCurrentSettings(): Promise<void> {
   // Parse note index
   const wikiLinkNoteIndex = parseNoteIndex(wikiLinkNoteIndexEl?.value ?? "");
 
+  syncDraftProfileFromForm(activeVaultProfileIdDraft);
+  const normalizedVaultProfiles = vaultProfilesDraft
+    .map((profile) => ({
+      ...profile,
+      name: (profile.name || "").trim() || (profile.vaultName || "").trim() || "Vault",
+      vaultName: (profile.vaultName || "").trim() || DEFAULT_SETTINGS.vaultName,
+      defaultFolder: (profile.defaultFolder || "").trim() || DEFAULT_SETTINGS.defaultFolder,
+      defaultTags: (profile.defaultTags || "").trim() || DEFAULT_SETTINGS.defaultTags
+    }))
+    .filter((profile) => profile.id);
+
+  const activeProfile =
+    normalizedVaultProfiles.find((profile) => profile.id === activeVaultProfileIdDraft) ||
+    normalizedVaultProfiles[0] ||
+    DEFAULT_SETTINGS.vaultProfiles[0]!;
+
   // Build updated settings
   settings = {
     ...settings,
 
     // Core
-    vaultName: (vaultName?.value || "").trim() || DEFAULT_SETTINGS.vaultName,
-    defaultFolder: (defaultFolder?.value || "").trim() || DEFAULT_SETTINGS.defaultFolder,
-    defaultTags: (defaultTags?.value || "").trim() || DEFAULT_SETTINGS.defaultTags,
+    vaultName: activeProfile.vaultName,
+    defaultFolder: activeProfile.defaultFolder,
+    defaultTags: activeProfile.defaultTags,
+    vaultProfiles: normalizedVaultProfiles.length > 0 ? normalizedVaultProfiles : [...DEFAULT_SETTINGS.vaultProfiles],
+    activeVaultProfileId: activeProfile.id,
     includeTimestamps: includeTimestamps?.checked ?? DEFAULT_SETTINGS.includeTimestamps,
     savedFolders: Array.isArray(settings.savedFolders)
       ? settings.savedFolders
@@ -368,7 +496,7 @@ async function saveCurrentSettings(): Promise<void> {
     obsidianCli: {
       enabled: cliEnabled?.checked ?? false,
       cliPath: (cliPath?.value || "").trim(),
-      vault: (cliVault?.value || "").trim()
+      vault: (cliVault?.value || "").trim() || activeProfile.vaultName
     },
 
     // Title cleanup
@@ -398,6 +526,7 @@ async function resetSettings(): Promise<void> {
 
   settings = { ...DEFAULT_SETTINGS };
   populateForm(settings);
+  loadVaultProfilesDraft(settings);
   renderSavedFolders(settings);
 
   await saveSettingsToStorage(settings);
