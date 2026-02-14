@@ -208,5 +208,6 @@ Tasks added during implementation that don't fit an existing phase.
 - [ ] **Task E4**: Implement Native Messaging bridge support for vault folder operations (`listVaultFolders` + `createVaultFolder`) so popup folder tree and creation actions can execute real CLI commands instead of local fallbacks.
 - [ ] **Task E5**: Restore top-level options persistence for `vaultName` and `defaultFolder` when multi-vault profile editor fields are absent, so edits in the visible Vault Configuration section are not dropped on save.
 - [ ] **Task E6**: Implement Native Messaging bridge binary attachment writes for `saveAttachmentToCli`, so `imageHandling: "download-api"` can persist downloaded image bytes to the vault attachments folder.
+- [ ] **Task E7**: Wire `testCliConnection` through the Native Messaging bridge for real CLI binary/vault validation instead of path-shape-only checks.
 
 <!-- New tasks will be added here by the Ralph loop as they are discovered -->
