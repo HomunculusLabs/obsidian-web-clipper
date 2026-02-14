@@ -8,6 +8,7 @@ import {
 } from "../shared/settings";
 import type { CodeBlockLanguageMode, TableHandlingMode } from "../shared/types";
 import type { SaveMethod } from "../shared/obsidianCli";
+import type { DetectCliResponse, TestCliConnectionResponse } from "../shared/messages";
 import {
   loadSettings as loadSettingsFromStorage,
   mergeSettings,
@@ -29,6 +30,10 @@ import {
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let vaultProfilesDraft: VaultProfile[] = [];
 let activeVaultProfileIdDraft = "";
+
+const ONBOARDING_COMPLETED_KEY = "onboardingCompleted";
+let onboardingDetectedCliPath = "";
+let onboardingConnectionOk = false;
 
 function buildVaultProfileId(): string {
   return `vault-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -84,6 +89,43 @@ function loadVaultProfilesDraft(sourceSettings: Settings): void {
   vaultProfilesDraft = getVaultProfiles(sourceSettings).map((profile) => ({ ...profile }));
   activeVaultProfileIdDraft = getActiveVaultProfile(sourceSettings).id;
   renderVaultProfileEditor();
+}
+
+function setOnboardingStatus(id: "onboardingDetectStatus" | "onboardingTestStatus", message: string, state: "neutral" | "success" | "error" = "neutral"): void {
+  const el = getEl<HTMLParagraphElement>(id);
+  if (!el) return;
+  el.textContent = message;
+  el.className = "onboarding-status-text";
+  if (state !== "neutral") {
+    el.classList.add(state);
+  }
+}
+
+function syncProfileBasics(vaultName: string, defaultFolder: string): void {
+  const activeProfile = vaultProfilesDraft.find((profile) => profile.id === activeVaultProfileIdDraft);
+  if (!activeProfile) return;
+
+  const nextVaultName = vaultName.trim() || activeProfile.vaultName;
+  const nextDefaultFolder = defaultFolder.trim() || activeProfile.defaultFolder;
+
+  activeProfile.vaultName = nextVaultName;
+  activeProfile.name = nextVaultName;
+  activeProfile.defaultFolder = nextDefaultFolder;
+}
+
+async function markOnboardingComplete(): Promise<void> {
+  await chrome.storage.local.set({ [ONBOARDING_COMPLETED_KEY]: true });
+}
+
+async function isOnboardingCompleted(): Promise<boolean> {
+  const raw = await chrome.storage.local.get(ONBOARDING_COMPLETED_KEY);
+  return raw[ONBOARDING_COMPLETED_KEY] === true;
+}
+
+function setOnboardingVisibility(visible: boolean): void {
+  const wizard = getEl<HTMLDivElement>("onboardingWizard");
+  if (!wizard) return;
+  wizard.style.display = visible ? "flex" : "none";
 }
 
 // --- Parsing helpers ---
@@ -422,6 +464,34 @@ function setupEventListeners(): void {
     });
   }
 
+  const onboardingDetectBtn = getEl<HTMLButtonElement>("onboardingDetectBtn");
+  if (onboardingDetectBtn) {
+    onboardingDetectBtn.addEventListener("click", () => {
+      void runOnboardingCliDetection();
+    });
+  }
+
+  const onboardingTestBtn = getEl<HTMLButtonElement>("onboardingTestBtn");
+  if (onboardingTestBtn) {
+    onboardingTestBtn.addEventListener("click", () => {
+      void runOnboardingConnectionTest();
+    });
+  }
+
+  const onboardingSkipBtn = getEl<HTMLButtonElement>("onboardingSkipBtn");
+  if (onboardingSkipBtn) {
+    onboardingSkipBtn.addEventListener("click", () => {
+      void skipOnboarding();
+    });
+  }
+
+  const onboardingFinishBtn = getEl<HTMLButtonElement>("onboardingFinishBtn");
+  if (onboardingFinishBtn) {
+    onboardingFinishBtn.addEventListener("click", () => {
+      void finishOnboarding();
+    });
+  }
+
   // Title templates toggle - show/hide template settings
   const titleTemplatesEnabled = getEl<HTMLInputElement>("titleTemplatesEnabled");
   if (titleTemplatesEnabled) {
@@ -717,6 +787,165 @@ async function autoDetectCli(): Promise<void> {
   }
 }
 
+async function runOnboardingCliDetection(): Promise<void> {
+  const detectBtn = getEl<HTMLButtonElement>("onboardingDetectBtn");
+  const vaultNameInput = getEl<HTMLInputElement>("onboardingVaultName");
+
+  if (!detectBtn) return;
+
+  detectBtn.disabled = true;
+  setOnboardingStatus("onboardingDetectStatus", "Detecting...", "neutral");
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "detectCli"
+    }) as DetectCliResponse;
+
+    if (response?.cliPath) {
+      onboardingDetectedCliPath = response.cliPath;
+
+      const cliPathInput = getEl<HTMLInputElement>("cliPath");
+      const cliVaultInput = getEl<HTMLInputElement>("cliVault");
+      const cliEnabled = getEl<HTMLInputElement>("cliEnabled");
+
+      if (cliPathInput) cliPathInput.value = response.cliPath;
+      if (cliVaultInput) cliVaultInput.value = (vaultNameInput?.value || "").trim() || settings.vaultName;
+      if (cliEnabled) cliEnabled.checked = true;
+
+      setOnboardingStatus(
+        "onboardingDetectStatus",
+        `Detected ${response.cliPath}${response.platform ? ` (${response.platform})` : ""}`,
+        "success"
+      );
+    } else {
+      onboardingDetectedCliPath = "";
+      setOnboardingStatus(
+        "onboardingDetectStatus",
+        response?.note || "No CLI found. You can still continue with URI save method.",
+        "error"
+      );
+    }
+  } catch (err) {
+    onboardingDetectedCliPath = "";
+    const message = err instanceof Error ? err.message : "Detection failed";
+    setOnboardingStatus("onboardingDetectStatus", message, "error");
+  } finally {
+    detectBtn.disabled = false;
+  }
+}
+
+async function runOnboardingConnectionTest(): Promise<void> {
+  const testBtn = getEl<HTMLButtonElement>("onboardingTestBtn");
+  if (!testBtn) return;
+
+  const vaultName = (getEl<HTMLInputElement>("onboardingVaultName")?.value || "").trim();
+  const cliPath = (getEl<HTMLInputElement>("cliPath")?.value || "").trim() || onboardingDetectedCliPath;
+
+  if (!cliPath) {
+    onboardingConnectionOk = false;
+    setOnboardingStatus("onboardingTestStatus", "Set or detect a CLI path first.", "error");
+    return;
+  }
+
+  testBtn.disabled = true;
+  setOnboardingStatus("onboardingTestStatus", "Testing connection...", "neutral");
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "testCliConnection",
+      cliPath,
+      vault: vaultName || settings.vaultName
+    }) as TestCliConnectionResponse;
+
+    onboardingConnectionOk = !!response?.success;
+    if (response?.success) {
+      setOnboardingStatus("onboardingTestStatus", "Connection successful.", "success");
+      return;
+    }
+
+    setOnboardingStatus(
+      "onboardingTestStatus",
+      response?.error || "Connection test failed.",
+      "error"
+    );
+  } catch (err) {
+    onboardingConnectionOk = false;
+    const message = err instanceof Error ? err.message : "Connection test failed";
+    setOnboardingStatus("onboardingTestStatus", message, "error");
+  } finally {
+    testBtn.disabled = false;
+  }
+}
+
+async function skipOnboarding(): Promise<void> {
+  await markOnboardingComplete();
+  setOnboardingVisibility(false);
+  showStatus("success", "Onboarding skipped. You can configure settings anytime.");
+}
+
+async function finishOnboarding(): Promise<void> {
+  const vaultNameInput = getEl<HTMLInputElement>("onboardingVaultName");
+  const defaultFolderInput = getEl<HTMLInputElement>("onboardingDefaultFolder");
+  const saveMethodInput = getEl<HTMLSelectElement>("saveMethod");
+  const cliEnabledInput = getEl<HTMLInputElement>("cliEnabled");
+  const cliVaultInput = getEl<HTMLInputElement>("cliVault");
+
+  const vaultName = (vaultNameInput?.value || "").trim() || settings.vaultName;
+  const defaultFolder = (defaultFolderInput?.value || "").trim() || settings.defaultFolder;
+
+  const vaultNameField = getEl<HTMLInputElement>("vaultName");
+  const defaultFolderField = getEl<HTMLInputElement>("defaultFolder");
+  if (vaultNameField) vaultNameField.value = vaultName;
+  if (defaultFolderField) defaultFolderField.value = defaultFolder;
+
+  syncProfileBasics(vaultName, defaultFolder);
+
+  if (cliVaultInput) {
+    cliVaultInput.value = vaultName;
+  }
+
+  if (onboardingDetectedCliPath) {
+    const cliPathInput = getEl<HTMLInputElement>("cliPath");
+    if (cliPathInput) cliPathInput.value = onboardingDetectedCliPath;
+    if (cliEnabledInput) cliEnabledInput.checked = true;
+  }
+
+  if (saveMethodInput && onboardingDetectedCliPath) {
+    saveMethodInput.value = onboardingConnectionOk ? "cli" : "uri";
+    const cliSettings = getEl<HTMLDivElement>("cliSettings");
+    if (cliSettings) {
+      cliSettings.style.display = saveMethodInput.value === "cli" ? "block" : "none";
+    }
+  }
+
+  await saveCurrentSettings();
+  await markOnboardingComplete();
+  setOnboardingVisibility(false);
+  showStatus("success", "Onboarding complete. Settings saved.");
+}
+
+async function maybeShowOnboarding(): Promise<void> {
+  const completed = await isOnboardingCompleted();
+  if (completed) return;
+
+  onboardingDetectedCliPath = settings.obsidianCli?.cliPath || "";
+  onboardingConnectionOk = false;
+
+  const vaultNameInput = getEl<HTMLInputElement>("onboardingVaultName");
+  const defaultFolderInput = getEl<HTMLInputElement>("onboardingDefaultFolder");
+  if (vaultNameInput) vaultNameInput.value = settings.vaultName || DEFAULT_SETTINGS.vaultName;
+  if (defaultFolderInput) defaultFolderInput.value = settings.defaultFolder || DEFAULT_SETTINGS.defaultFolder;
+
+  if (onboardingDetectedCliPath) {
+    setOnboardingStatus("onboardingDetectStatus", `Using existing CLI path: ${onboardingDetectedCliPath}`, "success");
+  } else {
+    setOnboardingStatus("onboardingDetectStatus", "Not detected yet.", "neutral");
+  }
+  setOnboardingStatus("onboardingTestStatus", "Connection not tested yet.", "neutral");
+
+  setOnboardingVisibility(true);
+}
+
 async function init(): Promise<void> {
   await loadSettings();
   setupEventListeners();
@@ -729,6 +958,7 @@ async function init(): Promise<void> {
     }
   );
   setupTabSwitching();
+  await maybeShowOnboarding();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
