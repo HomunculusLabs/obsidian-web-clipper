@@ -670,12 +670,126 @@ async function handleListVaultFolders(payload: Record<string, unknown>): Promise
   }
 }
 
-async function handleCreateVaultFolder(_payload: Record<string, unknown>): Promise<NativeResponse> {
-  return {
-    success: false,
-    code: "NOT_IMPLEMENTED",
-    error: "createVaultFolder is not implemented yet"
-  };
+async function handleCreateVaultFolder(payload: Record<string, unknown>): Promise<NativeResponse> {
+  // Extract and validate required fields
+  const cliPath = payload.cliPath;
+  const vault = payload.vault;
+  const folderPath = payload.folderPath;
+  const vaultPathOverride = payload.vaultPath;
+
+  if (!isNonEmptyString(cliPath)) {
+    return {
+      success: false,
+      code: "INVALID_CLI_PATH",
+      error: "cliPath must be a non-empty string"
+    };
+  }
+
+  if (!isNonEmptyString(vault)) {
+    return {
+      success: false,
+      code: "INVALID_VAULT",
+      error: "vault must be a non-empty string"
+    };
+  }
+
+  if (!isNonEmptyString(folderPath)) {
+    return {
+      success: false,
+      code: "INVALID_FOLDER_PATH",
+      error: "folderPath must be a non-empty string"
+    };
+  }
+
+  // Sanitize the folder path to prevent directory traversal
+  const sanitizedPath = sanitizePath(folderPath);
+  if (!sanitizedPath) {
+    return {
+      success: false,
+      code: "INVALID_FOLDER_PATH",
+      error: "folderPath resolves to an empty path after sanitization"
+    };
+  }
+
+  // Resolve vault path
+  const vaultResult = await resolveVaultPath(vault, isNonEmptyString(vaultPathOverride) ? vaultPathOverride : undefined);
+  if ("error" in vaultResult) {
+    return {
+      success: false,
+      code: vaultResult.code,
+      error: vaultResult.error
+    };
+  }
+
+  const resolvedVaultPath = vaultResult.path;
+
+  try {
+    const path = await import("path");
+    const fs = await import("fs");
+
+    const normalizedVaultRoot = path.resolve(resolvedVaultPath);
+
+    // Resolve and guard destination path to remain inside vault root
+    const destinationPath = path.resolve(normalizedVaultRoot, sanitizedPath);
+    const relativeToVault = path.relative(normalizedVaultRoot, destinationPath);
+
+    if (
+      relativeToVault.startsWith("..") ||
+      path.isAbsolute(relativeToVault)
+    ) {
+      return {
+        success: false,
+        code: "INVALID_FOLDER_PATH",
+        error: "Folder path escapes vault root"
+      };
+    }
+
+    // Check that vault directory exists and is accessible
+    try {
+      const stat = await fs.promises.stat(normalizedVaultRoot);
+      if (!stat.isDirectory()) {
+        return {
+          success: false,
+          code: "VAULT_NOT_DIR",
+          error: `Vault path "${normalizedVaultRoot}" is not a directory`
+        };
+      }
+    } catch (statErr) {
+      if ((statErr as NodeJS.ErrnoException).code === "ENOENT") {
+        return {
+          success: false,
+          code: "VAULT_NOT_FOUND",
+          error: `Vault directory "${normalizedVaultRoot}" does not exist`
+        };
+      }
+      if ((statErr as NodeJS.ErrnoException).code === "EACCES") {
+        return {
+          success: false,
+          code: "VAULT_ACCESS_DENIED",
+          error: `Permission denied accessing vault directory "${normalizedVaultRoot}"`
+        };
+      }
+      throw statErr;
+    }
+
+    // Create the directory with recursive option (equivalent to mkdir -p)
+    await fs.promises.mkdir(destinationPath, { recursive: true });
+
+    return {
+      success: true,
+      data: {
+        folderPath: sanitizedPath,
+        createdPath: destinationPath,
+        vault
+      }
+    };
+  } catch (err) {
+    return {
+      success: false,
+      code: "EXECUTION_ERROR",
+      error: `Failed to create vault folder: ${err instanceof Error ? err.message : String(err)}`
+    };
+  }
 }
 
 const handlers: Record<string, ActionHandler> = {
