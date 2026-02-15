@@ -550,12 +550,124 @@ async function handleTestCliConnection(
   }
 }
 
-async function handleListVaultFolders(_payload: Record<string, unknown>): Promise<NativeResponse> {
-  return {
-    success: false,
-    code: "NOT_IMPLEMENTED",
-    error: "listVaultFolders is not implemented yet"
-  };
+async function handleListVaultFolders(payload: Record<string, unknown>): Promise<NativeResponse> {
+  // Extract and validate required fields
+  const cliPath = payload.cliPath;
+  const vault = payload.vault;
+  const vaultPathOverride = payload.vaultPath;
+
+  if (!isNonEmptyString(cliPath)) {
+    return {
+      success: false,
+      code: "INVALID_CLI_PATH",
+      error: "cliPath must be a non-empty string"
+    };
+  }
+
+  if (!isNonEmptyString(vault)) {
+    return {
+      success: false,
+      code: "INVALID_VAULT",
+      error: "vault must be a non-empty string"
+    };
+  }
+
+  // Resolve vault path
+  const vaultResult = await resolveVaultPath(vault, isNonEmptyString(vaultPathOverride) ? vaultPathOverride : undefined);
+  if ("error" in vaultResult) {
+    return {
+      success: false,
+      code: vaultResult.code,
+      error: vaultResult.error
+    };
+  }
+
+  const resolvedVaultPath = vaultResult.path;
+
+  try {
+    const path = await import("path");
+    const fs = await import("fs");
+
+    const normalizedVaultRoot = path.resolve(resolvedVaultPath);
+
+    // Check that vault directory exists and is accessible
+    try {
+      const stat = await fs.promises.stat(normalizedVaultRoot);
+      if (!stat.isDirectory()) {
+        return {
+          success: false,
+          code: "VAULT_NOT_DIR",
+          error: `Vault path "${normalizedVaultRoot}" is not a directory`
+        };
+      }
+    } catch (statErr) {
+      if ((statErr as NodeJS.ErrnoException).code === "ENOENT") {
+        return {
+          success: false,
+          code: "VAULT_NOT_FOUND",
+          error: `Vault directory "${normalizedVaultRoot}" does not exist`
+        };
+      }
+      if ((statErr as NodeJS.ErrnoException).code === "EACCES") {
+        return {
+          success: false,
+          code: "VAULT_ACCESS_DENIED",
+          error: `Permission denied accessing vault directory "${normalizedVaultRoot}"`
+        };
+      }
+      throw statErr;
+    }
+
+    // Recursively walk the vault directory and collect folder paths
+    const folders: string[] = [];
+    const hiddenPattern = /^\./; // Match hidden files/folders (starting with .)
+
+    async function walkDirectory(dirPath: string, relativePath: string): Promise<void> {
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+      } catch (readErr) {
+        // Skip directories we can't read (permission issues, etc.)
+        console.error(`Warning: Could not read directory "${dirPath}": ${readErr}`);
+        return;
+      }
+
+      for (const entry of entries) {
+        // Skip hidden directories (like .obsidian, .trash, etc.)
+        if (hiddenPattern.test(entry.name)) {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+          folders.push(entryRelativePath);
+
+          // Recurse into subdirectory
+          const entryFullPath = path.join(dirPath, entry.name);
+          await walkDirectory(entryFullPath, entryRelativePath);
+        }
+      }
+    }
+
+    await walkDirectory(normalizedVaultRoot, "");
+
+    // Sort folders alphabetically for consistent ordering
+    folders.sort((a, b) => a.localeCompare(b));
+
+    return {
+      success: true,
+      data: {
+        folders,
+        vaultPath: normalizedVaultRoot
+      }
+    };
+  } catch (err) {
+    return {
+      success: false,
+      code: "EXECUTION_ERROR",
+      error: `Failed to list vault folders: ${err instanceof Error ? err.message : String(err)}`
+    };
+  }
 }
 
 async function handleCreateVaultFolder(_payload: Record<string, unknown>): Promise<NativeResponse> {
