@@ -23,7 +23,9 @@
     "clip:pdf": "npx tsx tools/pdf-clip.ts",
     "clip:scrape": "bun run tools/scrape-site.ts",
     "pipeline": "bun run tools/pipeline.ts",
-    "mcp": "bun run tools/mcp-server.ts"
+    "mcp": "bun run tools/mcp-server.ts",
+    "native:install": "cd native-host && chmod +x install.sh && ./install.sh",
+    "native:install:bun": "bun run native-host/install.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
