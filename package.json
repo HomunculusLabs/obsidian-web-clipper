@@ -25,7 +25,8 @@
     "pipeline": "bun run tools/pipeline.ts",
     "mcp": "bun run tools/mcp-server.ts",
     "native:install": "cd native-host && chmod +x install.sh && ./install.sh",
-    "native:install:bun": "bun run native-host/install.ts"
+    "native:install:bun": "bun run native-host/install.ts",
+    "native:uninstall": "cd native-host && chmod +x uninstall.sh && ./uninstall.sh"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
