@@ -1,0 +1,9 @@
+{
+  "name": "com.t3rpz.obsidian_web_clipper",
+  "description": "Native messaging host for Obsidian Web Clipper - enables direct CLI integration for saving clips to Obsidian vaults",
+  "path": "{{HOST_PATH}}",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://{{EXTENSION_ID}}/"
+  ]
+}
