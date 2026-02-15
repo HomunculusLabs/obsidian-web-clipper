@@ -193,8 +193,9 @@ User-facing improvements and additional features.
 | 6. Agentic Tools | 69-88 | CLI tools, MCP server |
 | 7. Refactoring | 89-102 | Code quality, tests |
 | 8. UX Polish | 103-120 | New features, UI improvements |
+| 9. Native Messaging Host | NM1-NM12 | Bridge binary, installer, tests |
 
-**Total: 120 tasks**
+**Total: 132 tasks (120 original + 8 emergent + 12 native messaging)**
 
 ---
 
@@ -210,5 +211,24 @@ Tasks added during implementation that don't fit an existing phase.
 - [x] **Task E6**: Implement Native Messaging bridge binary attachment writes for `saveAttachmentToCli`, so `imageHandling: "download-api"` can persist downloaded image bytes to the vault attachments folder.
 - [x] **Task E7**: Wire `testCliConnection` through the Native Messaging bridge for real CLI binary/vault validation instead of path-shape-only checks.
 - [x] **Task E8**: Restore top-level options persistence for `defaultTags` when vault profile editor fields are absent, so edits in the visible Content Options section are not dropped on save.
+
+---
+
+## Phase 9: Native Messaging Host (Tasks NM1–NM12)
+
+The extension side is fully wired up — all 5 background handlers (`saveToCli`, `saveAttachmentToCli`, `testCliConnection`, `listVaultFolders`, `createVaultFolder`) already delegate to `chrome.runtime.sendNativeMessage()` via `src/background/nativeMessaging.ts`. But the actual native host binary, host manifest, and installer don't exist yet, so every CLI operation from the extension silently fails with "Native Messaging bridge error: Specified native messaging host not found." These tasks build the missing server side.
+
+- [x] **Task NM1**: Add `nativeMessaging` permission to `src/manifest.json` — The `permissions` array is missing `"nativeMessaging"`. Without it Chrome blocks `sendNativeMessage()` calls entirely. Also add `"nativeMessaging"` to the `"optional_permissions"` array if we want to defer the permission prompt (decide which approach).
+- [ ] **Task NM2**: Create native host entry point — Create `native-host/host.ts` (Bun/Node script). Reads JSON messages from stdin (Chrome native messaging length-prefixed protocol: 4-byte LE uint32 length prefix, then JSON body). Dispatches on `action` field (`saveToCli`, `saveAttachmentToCli`, `testCliConnection`, `listVaultFolders`, `createVaultFolder`). Writes JSON responses to stdout using the same length-prefix protocol. Must handle stdin EOF and exit cleanly.
+- [ ] **Task NM3**: Implement `saveToCli` action in native host — Receives `{ action: "saveToCli", payload: { cliPath, vault, filePath, content } }`. Spawns `cliPath create <filePath> --content <content> --vault <vault> --overwrite`. Returns `{ success: true }` or `{ success: false, error: "..." }`. Sanitize all args to prevent shell injection.
+- [ ] **Task NM4**: Implement `saveAttachmentToCli` action in native host — Receives `{ action: "saveAttachmentToCli", payload: { cliPath, vault, filePath, base64Data, mimeType? } }`. Decodes base64 to a temp file, then uses the CLI or direct filesystem write to place the file at `<vault-root>/<filePath>`. Returns `{ success: true, data: { filePath } }`.
+- [ ] **Task NM5**: Implement `testCliConnection` action in native host — Receives `{ action: "testCliConnection", payload: { cliPath, vault } }`. Runs `cliPath --version` and optionally `cliPath print-default`. Returns `{ success: true, data: { version: "x.y.z" } }` or error.
+- [ ] **Task NM6**: Implement `listVaultFolders` action in native host — Receives `{ action: "listVaultFolders", payload: { cliPath, vault } }`. Walks the vault directory on disk to enumerate folders (or uses CLI if it supports listing). Returns `{ success: true, data: { folders: ["path/a", "path/b"] } }`.
+- [ ] **Task NM7**: Implement `createVaultFolder` action in native host — Receives `{ action: "createVaultFolder", payload: { cliPath, vault, folderPath } }`. Creates the directory at `<vault-root>/<folderPath>` using `mkdir -p` or `fs.mkdir({ recursive: true })`. Returns `{ success: true }`.
+- [ ] **Task NM8**: Create Chrome native messaging host manifest — Create `native-host/com.t3rpz.obsidian_web_clipper.json` with `{ "name": "com.t3rpz.obsidian_web_clipper", "description": "...", "path": "/absolute/path/to/host", "type": "stdio", "allowed_origins": ["chrome-extension://<id>/"] }`. The `path` and `allowed_origins` fields must be templated and filled at install time.
+- [ ] **Task NM9**: Create installer script — Create `native-host/install.sh` (macOS/Linux) and `native-host/install.bat` (Windows). The script: (a) compiles `host.ts` to a standalone executable via `bun build --compile` (or creates a shell wrapper that runs `bun run host.ts`), (b) writes the host manifest JSON with the correct absolute path and extension ID to the platform-specific location (`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` on macOS, `~/.config/google-chrome/NativeMessagingHosts/` on Linux, registry key on Windows), (c) makes the host executable. Add `npm run native:install` script to `package.json`.
+- [ ] **Task NM10**: Create uninstaller script — Create `native-host/uninstall.sh` / `native-host/uninstall.bat` that removes the host manifest from the platform-specific directory. Add `npm run native:uninstall` script.
+- [ ] **Task NM11**: Native host tests — Create `tests/native-host/` with tests for the native host. Test: (a) length-prefixed message reading/writing, (b) action dispatch for all 5 actions with mocked CLI calls, (c) error handling (invalid JSON, unknown action, missing fields), (d) base64 decode for attachment saves, (e) shell injection prevention.
+- [ ] **Task NM12**: Native host documentation — Update `docs/native-messaging-bridge.md` with full setup instructions: prerequisites (Bun or Node.js), install steps per platform (macOS, Linux, Windows), how to find the extension ID, troubleshooting (permissions, host not found, path issues). Add a "Native Messaging Setup" section to the options page onboarding wizard that detects whether the host is installed and guides the user through setup.
 
 <!-- New tasks will be added here by the Ralph loop as they are discovered -->
