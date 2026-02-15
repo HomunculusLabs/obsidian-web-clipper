@@ -24,7 +24,8 @@ const RUNTIME_REQUEST_ACTIONS = [
   "saveAttachmentToCli",
   "listVaultFolders",
   "createVaultFolder",
-  "saveContent"
+  "saveContent",
+  "testNativeHost"
 ] as const;
 
 export function isRuntimeRequest(value: unknown): value is RuntimeRequest {

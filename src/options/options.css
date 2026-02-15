@@ -746,3 +746,106 @@ code {
   gap: 12px;
   margin-top: 18px;
 }
+
+/* Native Host Status Styles */
+.onboarding-step-desc {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.native-host-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.status-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.status-icon.success {
+  color: #10b981;
+}
+
+.status-icon.error {
+  color: #ef4444;
+}
+
+.status-icon.pending {
+  color: #f59e0b;
+}
+
+.native-host-install-section {
+  padding: 16px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.install-instructions {
+  font-size: 13px;
+  font-weight: 500;
+  color: #92400e;
+  margin-bottom: 8px;
+}
+
+.install-command-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1f2937;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.install-command-box code {
+  flex: 1;
+  color: #f3f4f6;
+  background: none;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.copy-cmd-btn {
+  padding: 4px 12px;
+  background: #4b5563;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.copy-cmd-btn:hover {
+  background: #6b7280;
+}
+
+.copy-cmd-btn.copied {
+  background: #10b981;
+}
+
+.install-note {
+  font-size: 12px;
+  color: #92400e;
+  margin: 0;
+}
+
+.install-note a {
+  color: #b45309;
+  text-decoration: underline;
+}
+
+.install-note a:hover {
+  color: #92400e;
+}

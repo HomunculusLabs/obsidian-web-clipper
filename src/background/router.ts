@@ -13,6 +13,7 @@ import { handleSaveAttachmentToCli } from "./handlers/saveAttachmentToCli";
 import { handleListVaultFolders } from "./handlers/listVaultFolders";
 import { handleCreateVaultFolder } from "./handlers/createVaultFolder";
 import { handleSaveContent } from "./handlers/saveContent";
+import { handleTestNativeHost } from "./handlers/testNativeHost";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -38,6 +39,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleCreateVaultFolder(request);
     case "saveContent":
       return handleSaveContent(request);
+    case "testNativeHost":
+      return handleTestNativeHost(request);
     default: {
       // Exhaustive check: this will fail to compile if any case is missing
       const _exhaustive: never = request;

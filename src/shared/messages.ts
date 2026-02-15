@@ -32,7 +32,8 @@ export type RuntimeRequest =
       vault: string;
       /** Whether to fall back to clipboard if URI fails (default: true) */
       fallbackToClipboard?: boolean;
-    };
+    }
+  | { action: "testNativeHost" };
 
 export type SaveContentResponse =
   | { success: true; usedMethod: "uri" | "clipboard" }

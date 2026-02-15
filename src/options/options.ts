@@ -101,6 +101,104 @@ function setOnboardingStatus(id: "onboardingDetectStatus" | "onboardingTestStatu
   }
 }
 
+let nativeHostInstalled = false;
+
+/**
+ * Update the native host status UI elements
+ */
+function updateNativeHostStatusUI(status: "checking" | "installed" | "not-installed"): void {
+  const statusIcon = getEl<HTMLSpanElement>("nativeHostStatusIcon");
+  const statusText = getEl<HTMLSpanElement>("nativeHostStatusText");
+  const installSection = getEl<HTMLDivElement>("nativeHostInstallSection");
+  const installCommand = getEl<HTMLElement>("installCommand");
+
+  if (!statusIcon || !statusText) return;
+
+  if (status === "checking") {
+    statusIcon.textContent = "○";
+    statusIcon.className = "status-icon pending";
+    statusText.textContent = "Checking native messaging host...";
+    if (installSection) installSection.style.display = "none";
+    nativeHostInstalled = false;
+  } else if (status === "installed") {
+    statusIcon.textContent = "✓";
+    statusIcon.className = "status-icon success";
+    statusText.textContent = "Native messaging host installed and working";
+    if (installSection) installSection.style.display = "none";
+    nativeHostInstalled = true;
+  } else {
+    statusIcon.textContent = "✗";
+    statusIcon.className = "status-icon error";
+    statusText.textContent = "Native messaging host not installed";
+    if (installSection) installSection.style.display = "block";
+    nativeHostInstalled = false;
+
+    // Generate install command with extension ID placeholder
+    if (installCommand) {
+      const extensionId = chrome.runtime.id;
+      installCommand.textContent = `cd native-host && ./install.sh --extension-id ${extensionId}`;
+    }
+  }
+}
+
+/**
+ * Check if the native messaging host is installed and working
+ */
+async function checkNativeHostStatus(): Promise<void> {
+  updateNativeHostStatusUI("checking");
+
+  try {
+    // Try to ping the native host via testCliConnection with empty params
+    // This will fail with a specific error if the host is not installed
+    const response = await chrome.runtime.sendMessage({
+      action: "testNativeHost"
+    });
+
+    if (response?.success) {
+      updateNativeHostStatusUI("installed");
+    } else if (response?.code === "HOST_NOT_FOUND" || response?.requiresBridge) {
+      updateNativeHostStatusUI("not-installed");
+    } else {
+      // Host exists but there might be an issue with CLI
+      // Still consider it "installed" since the bridge is working
+      updateNativeHostStatusUI("installed");
+    }
+  } catch {
+    // Native messaging host not found or error occurred
+    updateNativeHostStatusUI("not-installed");
+  }
+}
+
+/**
+ * Copy the install command to clipboard
+ */
+async function copyInstallCommand(): Promise<void> {
+  const installCommand = getEl<HTMLElement>("installCommand");
+  const copyBtn = getEl<HTMLButtonElement>("copyInstallCmd");
+
+  if (!installCommand?.textContent) return;
+
+  try {
+    await navigator.clipboard.writeText(installCommand.textContent);
+    if (copyBtn) {
+      copyBtn.textContent = "Copied!";
+      copyBtn.classList.add("copied");
+      setTimeout(() => {
+        copyBtn.textContent = "Copy";
+        copyBtn.classList.remove("copied");
+      }, 2000);
+    }
+  } catch {
+    // Clipboard access failed
+    if (copyBtn) {
+      copyBtn.textContent = "Failed";
+      setTimeout(() => {
+        copyBtn.textContent = "Copy";
+      }, 2000);
+    }
+  }
+}
+
 function syncProfileBasics(vaultName: string, defaultFolder: string): void {
   const activeProfile = vaultProfilesDraft.find((profile) => profile.id === activeVaultProfileIdDraft);
   if (!activeProfile) return;
@@ -468,6 +566,22 @@ function setupEventListeners(): void {
   if (onboardingDetectBtn) {
     onboardingDetectBtn.addEventListener("click", () => {
       void runOnboardingCliDetection();
+    });
+  }
+
+  // Native host check button
+  const checkNativeHostBtn = getEl<HTMLButtonElement>("checkNativeHostBtn");
+  if (checkNativeHostBtn) {
+    checkNativeHostBtn.addEventListener("click", () => {
+      void checkNativeHostStatus();
+    });
+  }
+
+  // Copy install command button
+  const copyInstallCmdBtn = getEl<HTMLButtonElement>("copyInstallCmd");
+  if (copyInstallCmdBtn) {
+    copyInstallCmdBtn.addEventListener("click", () => {
+      void copyInstallCommand();
     });
   }
 
@@ -982,6 +1096,9 @@ async function maybeShowOnboarding(): Promise<void> {
   setOnboardingStatus("onboardingTestStatus", "Connection not tested yet.", "neutral");
 
   setOnboardingVisibility(true);
+
+  // Check native host status after showing the onboarding
+  void checkNativeHostStatus();
 }
 
 async function init(): Promise<void> {

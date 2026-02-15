@@ -15,16 +15,36 @@
     <div id="onboardingWizard" class="onboarding-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
       <div class="onboarding-card">
         <h2 id="onboardingTitle">Welcome to Obsidian Web Clipper</h2>
-        <p class="onboarding-subtitle">Quick setup: detect Obsidian CLI, choose your vault + folder, then test the connection.</p>
+        <p class="onboarding-subtitle">Quick setup: install the native messaging host, detect Obsidian CLI, configure your vault, then test the connection.</p>
 
         <ol class="onboarding-steps">
           <li>
-            <h3>1) Detect Obsidian installation</h3>
+            <h3>1) Native Messaging Host</h3>
+            <p class="onboarding-step-desc">The native messaging host enables direct CLI integration for faster, more reliable saves.</p>
+            <div class="native-host-status">
+              <span id="nativeHostStatusIcon" class="status-icon">○</span>
+              <span id="nativeHostStatusText">Checking...</span>
+            </div>
+            <div id="nativeHostInstallSection" class="native-host-install-section" style="display: none;">
+              <p class="install-instructions">Run this command in your terminal:</p>
+              <div class="install-command-box">
+                <code id="installCommand">./install.sh --extension-id YOUR_ID</code>
+                <button type="button" id="copyInstallCmd" class="copy-cmd-btn" title="Copy to clipboard">Copy</button>
+              </div>
+              <p class="install-note">
+                <strong>Prerequisites:</strong> <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a> (recommended) or Node.js 18+.
+                See <a href="https://github.com/your-repo/obsidian-web-clipper/blob/main/docs/native-messaging-bridge.md" target="_blank" rel="noopener">full documentation</a>.
+              </p>
+            </div>
+            <button type="button" id="checkNativeHostBtn" class="secondary-btn">Check Again</button>
+          </li>
+          <li>
+            <h3>2) Detect Obsidian installation</h3>
             <button type="button" id="onboardingDetectBtn" class="secondary-btn">Detect Obsidian CLI</button>
             <p id="onboardingDetectStatus" class="onboarding-status-text">Not detected yet.</p>
           </li>
           <li>
-            <h3>2) Choose vault + default folder</h3>
+            <h3>3) Choose vault + default folder</h3>
             <div class="field">
               <label for="onboardingVaultName">Vault Name</label>
               <input type="text" id="onboardingVaultName" placeholder="Main Vault">
@@ -35,7 +55,7 @@
             </div>
           </li>
           <li>
-            <h3>3) Test connection</h3>
+            <h3>4) Test connection</h3>
             <button type="button" id="onboardingTestBtn" class="secondary-btn">Test Connection</button>
             <p id="onboardingTestStatus" class="onboarding-status-text">Connection not tested yet.</p>
           </li>
