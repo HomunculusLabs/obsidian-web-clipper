@@ -8,7 +8,69 @@ export type RuntimeRequest =
   | { action: "getSettings" }
   | { action: "copyToClipboard"; data: string }
   | { action: "openObsidianUri"; uri: string }
-  | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number };
+  | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number }
+  | { action: "testCliConnection"; cliPath: string; vault: string }
+  | { action: "detectCli" }
+  | { action: "saveToCli"; filePath: string; content: string; vault: string; cliPath: string }
+  | {
+      action: "saveAttachmentToCli";
+      filePath: string;
+      base64Data: string;
+      vault: string;
+      cliPath: string;
+      mimeType?: string;
+    }
+  | { action: "listVaultFolders"; vault: string; cliPath: string }
+  | { action: "createVaultFolder"; vault: string; cliPath: string; folderPath: string }
+  | {
+      action: "saveContent";
+      /** Full markdown content with frontmatter */
+      markdown: string;
+      /** Target file path (without .md extension) */
+      filePath: string;
+      /** Vault name */
+      vault: string;
+      /** Whether to fall back to clipboard if URI fails (default: true) */
+      fallbackToClipboard?: boolean;
+    }
+  | { action: "testNativeHost" };
+
+export type SaveContentResponse =
+  | { success: true; usedMethod: "uri" | "clipboard" }
+  | { success: false; error: string };
+
+export type SaveToCliResponse =
+  | { success: true }
+  | { success: false; error: string; requiresBridge?: boolean };
+
+export type SaveAttachmentToCliResponse =
+  | { success: true; filePath: string }
+  | { success: false; error: string; requiresBridge?: boolean };
+
+export type TestCliConnectionResponse =
+  | { success: true; version?: string }
+  | { success: false; error: string };
+
+export type DetectCliResponse = {
+  /** Whether detection was attempted */
+  attempted: boolean;
+  /** The detected or guessed path (may be empty) */
+  cliPath: string;
+  /** The platform that was detected */
+  platform: string;
+  /** List of alternative paths to try */
+  alternatives: string[];
+  /** Note about detection limitations */
+  note: string;
+};
+
+export type ListVaultFoldersResponse =
+  | { success: true; folders: string[] }
+  | { success: false; error: string; requiresBridge?: boolean };
+
+export type CreateVaultFolderResponse =
+  | { success: true }
+  | { success: false; error: string; requiresBridge?: boolean };
 
 export type ExtractPdfResponse =
   | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }
@@ -24,9 +86,20 @@ export type TabRequest =
       isSPA?: boolean;
       selectionOnly?: boolean;
       includeTimestamps?: boolean;
+      disableTemplate?: boolean; // Override template matching for this clip
       settings: Settings; // Pass settings to content script for extraction
     }
-  | { action: "getPageInfo" };
+  | { action: "getPageInfo" }
+  | { action: "getSelectionInfo" }
+  | { action: "getTemplateInfo"; settings: Settings };
+
+/** Selection info returned from content script */
+export type SelectionInfo = {
+  /** Whether user has text selected */
+  hasSelection: boolean;
+  /** Preview of selected text (truncated) */
+  preview: string;
+};
 
 export type TabResponse =
   | { ok: true; result: ClipResult }
@@ -37,4 +110,18 @@ export type PageInfo = {
   title: string;
   type: PageType;
   contentType?: string;
+  /** Twitter/X thread length (if this is a thread) */
+  twitterThreadLength?: number;
+};
+
+/** Template info returned from content script */
+export type TemplateInfo = {
+  /** Whether a template matches the current URL */
+  hasTemplate: boolean;
+  /** Name of the matching template (if any) */
+  templateName?: string;
+  /** Domain of the matching template */
+  templateDomain?: string;
+  /** Whether the template is built-in or custom */
+  templateSource?: "built-in" | "custom";
 };

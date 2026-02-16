@@ -9,7 +9,9 @@
     "clipboardWrite",
     "scripting",
     "contextMenus",
-    "offscreen"
+    "offscreen",
+    "notifications",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://*/*",
@@ -22,7 +24,8 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content/content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "type": "module"
     }
   ],
   "action": {
@@ -46,11 +49,22 @@
         "mac": "Command+Shift+O"
       },
       "description": "Clip current page to Obsidian"
+    },
+    "clip-selection": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Clip selected text to Obsidian"
     }
   },
   "web_accessible_resources": [
     {
       "resources": ["pdfjs/pdf.worker.js"],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": ["content/*.js"],
       "matches": ["<all_urls>"]
     }
   ]

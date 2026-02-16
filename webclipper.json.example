@@ -1,0 +1,43 @@
+{
+  "$schema": "./tools/lib/config.ts",
+  "version": 1,
+
+  "obsidian": {
+    "cli": false,
+    "cliPath": "obsidian-cli",
+    "vault": "Main Vault",
+    "folder": "Clips"
+  },
+
+  "browser": {
+    "profile": "~/.config/google-chrome/Default",
+    "headless": true,
+    "wait": 5000,
+    "timeout": 60000
+  },
+
+  "content": {
+    "tags": ["web-clip"],
+    "timestamps": true,
+    "imageHandling": "link"
+  },
+
+  "tools": {
+    "concurrency": 4,
+    "continueOnError": false,
+    "progress": true,
+    "maxDepth": 2,
+    "maxPages": 50
+  },
+
+  "mcp": {
+    "name": "web-clipper",
+    "version": "1.0.0",
+    "transport": "stdio",
+    "port": 3000
+  },
+
+  "debug": {
+    "enabled": false
+  }
+}

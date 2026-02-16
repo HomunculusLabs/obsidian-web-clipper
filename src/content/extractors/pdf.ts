@@ -1,26 +1,28 @@
 import { extractPdfTextFromUrl } from "../../shared/pdf";
 import { toErrorMessage } from "../../shared/errors";
+import { debug } from "../../shared/debug";
 
 import type { ClipResult } from "../../shared/types";
 
 // Extract PDF content using PDF.js (delegates to background)
 export async function extractPDFContent(result: ClipResult): Promise<ClipResult> {
   result.metadata.type = "document";
-  console.log("[PDF] extractPDFContent called");
-  console.log("[PDF] result.url:", result.url);
-  console.log("[PDF] window.location.href:", window.location.href);
-  console.log("[PDF] document.contentType:", document.contentType);
+  debug("PDF", "extractPDFContent called");
+  debug("PDF", "result.url:", result.url);
+  debug("PDF", "window.location.href:", window.location.href);
+  debug("PDF", "document.contentType:", document.contentType);
 
   try {
-    console.log("[PDF] Calling extractPdfTextFromUrl...");
+    debug("PDF", "Calling extractPdfTextFromUrl...");
     const { text, pageCount, truncated, hasTextLayer } =
       await extractPdfTextFromUrl(result.url, {
         maxPages: 200,
         maxChars: 120000,
         includePageHeadings: true
       });
-    console.log(
-      "[PDF] Extraction complete. Pages:",
+    debug(
+      "PDF",
+      "Extraction complete. Pages:",
       pageCount,
       "hasTextLayer:",
       hasTextLayer

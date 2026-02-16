@@ -3,7 +3,9 @@ import type { PageInfo, TabRequest, TabResponse } from "../shared/messages";
 import type { Settings } from "../shared/settings";
 import { tabsSendMessage, scriptingExecuteScript } from "../shared/chromeAsync";
 import { isClipResult, isTabResponse } from "../shared/guards";
+import { TabError, ExtractionError } from "../shared/errors";
 import { sleep } from "./ui";
+import { debug } from "../shared/debug";
 
 const SPA_DOMAINS = [
   "react.dev",
@@ -76,16 +78,20 @@ export type ClipOptions = {
   tab: chrome.tabs.Tab;
   pageType: PageType;
   settings: Settings;
+  /** Whether to clip only the selected text */
+  selectionOnly?: boolean;
+  /** Whether to disable template matching for this clip */
+  disableTemplate?: boolean;
 };
 
 export async function performClip(options: ClipOptions): Promise<ClipResult> {
-  const { tab, pageType, settings } = options;
+  const { tab, pageType, settings, selectionOnly, disableTemplate } = options;
 
   if (!tab.id) {
-    throw new Error("Active tab has no id (cannot clip)");
+    throw new TabError("Active tab has no id (cannot clip)", "TAB_NO_ID");
   }
   if (!tab.url || !/^https?:\/\//.test(tab.url)) {
-    throw new Error("This page cannot be clipped (unsupported URL)");
+    throw new TabError("This page cannot be clipped (unsupported URL)", "URL_UNSUPPORTED");
   }
 
   await ensureContentScriptLoaded(tab.id);
@@ -95,19 +101,21 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
     action: "clip",
     pageType,
     isSPA: isLikelySPA(tab.url),
+    selectionOnly,
     includeTimestamps: settings.includeTimestamps,
+    disableTemplate,
     settings
   };
 
-  console.log("[Popup] Sending clip request:", request);
-  console.log("[Popup] Tab URL:", tab.url);
+  debug("Popup", "Sending clip request:", request);
+  debug("Popup", "Tab URL:", tab.url);
 
   const rawResponse = await tabsSendMessage<TabRequest, unknown>(tab.id, request);
-  console.log("[Popup] Got response:", rawResponse);
+  debug("Popup", "Got response:", rawResponse);
   const response = normalizeTabResponse(rawResponse);
 
   if (!response.ok) {
-    throw new Error(response.error || "Failed to extract content");
+    throw new ExtractionError(response.error || "Failed to extract content", "EXTRACTION_FAILED");
   }
 
   return response.result;

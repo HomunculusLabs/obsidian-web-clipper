@@ -2,6 +2,8 @@
 // Service workers can't run PDF.js directly (no DOM), so we delegate to offscreen
 
 import type { PdfOffscreenRequest, PdfOffscreenResponse } from "../shared/pdfOffscreenMessages";
+import { ExtractionError } from "../shared/errors";
+import { debug } from "../shared/debug";
 
 export type PdfExtractResult = {
   text: string;
@@ -46,7 +48,7 @@ export async function extractPdfFromUrl(
   maxPages = 200,
   maxChars = 120000
 ): Promise<PdfExtractResult> {
-  console.log("[PDF Background] Delegating to offscreen document:", url);
+  debug("PDF Background", "Delegating to offscreen document:", url);
 
   await ensureOffscreenDocument();
 
@@ -61,7 +63,7 @@ export async function extractPdfFromUrl(
   const response = rawResponse as PdfOffscreenResponse;
 
   if (!response.success) {
-    throw new Error(response.error || "PDF extraction failed");
+    throw new ExtractionError(response.error || "PDF extraction failed", "PDF_EXTRACTION_FAILED");
   }
 
   return {

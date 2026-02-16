@@ -5,19 +5,48 @@
   "scripts": {
     "build": "bun run build/build.ts",
     "dev": "bun run build/build.ts --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src tools tests build --ext .ts,.tsx",
+    "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint src tools tests build --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tools/**/*.ts\" \"tests/**/*.ts\" \"build/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tools/**/*.ts\" \"tests/**/*.ts\" \"build/**/*.ts\"",
+    "test": "bun test",
+    "test:typecheck": "bun run typecheck && bun test",
+    "test:full": "bun run typecheck && bun run lint && bun test",
+    "ci": "bun run typecheck && bun test",
+    "ci:full": "bun run typecheck && bun run lint && bun run format:check && bun test",
+    "clip:chatgpt": "bun run tools/chatgpt-clipper.ts",
+    "clip:stdin": "bun run tools/clip-stdin.ts",
+    "clip:url": "bun run tools/clip-url.ts",
+    "clip:twitter": "bun run tools/twitter-clipper.ts",
+    "clip:search": "bun run tools/search-clip.ts",
+    "clip:pdf": "npx tsx tools/pdf-clip.ts",
+    "clip:scrape": "bun run tools/scrape-site.ts",
+    "pipeline": "bun run tools/pipeline.ts",
+    "mcp": "bun run tools/mcp-server.ts",
+    "native:install": "cd native-host && chmod +x install.sh && ./install.sh",
+    "native:install:bun": "bun run native-host/install.ts",
+    "native:uninstall": "cd native-host && chmod +x uninstall.sh && ./uninstall.sh"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
     "pdfjs-dist": "3.11.174",
     "turndown": "^7.2.0",
-    "turndown-plugin-gfm": "^1.0.2"
+    "turndown-plugin-gfm": "^1.0.2",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/bun": "^1.3.6",
     "@types/chrome": "^0.0.260",
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.2.1",
     "@types/turndown": "^5.0.6",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "happy-dom": "^15.0.0",
+    "prettier": "^3.2.0",
+    "puppeteer": "^24.37.2",
     "typescript": "^5.4.5"
   }
 }

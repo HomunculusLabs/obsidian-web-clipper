@@ -12,6 +12,62 @@
       <h1>⚡ Obsidian Web Clipper Settings</h1>
     </header>
 
+    <div id="onboardingWizard" class="onboarding-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+      <div class="onboarding-card">
+        <h2 id="onboardingTitle">Welcome to Obsidian Web Clipper</h2>
+        <p class="onboarding-subtitle">Quick setup: install the native messaging host, detect Obsidian CLI, configure your vault, then test the connection.</p>
+
+        <ol class="onboarding-steps">
+          <li>
+            <h3>1) Native Messaging Host</h3>
+            <p class="onboarding-step-desc">The native messaging host enables direct CLI integration for faster, more reliable saves.</p>
+            <div class="native-host-status">
+              <span id="nativeHostStatusIcon" class="status-icon">○</span>
+              <span id="nativeHostStatusText">Checking...</span>
+            </div>
+            <div id="nativeHostInstallSection" class="native-host-install-section" style="display: none;">
+              <p class="install-instructions">Run this command in your terminal:</p>
+              <div class="install-command-box">
+                <code id="installCommand">./install.sh --extension-id YOUR_ID</code>
+                <button type="button" id="copyInstallCmd" class="copy-cmd-btn" title="Copy to clipboard">Copy</button>
+              </div>
+              <p class="install-note">
+                <strong>Prerequisites:</strong> <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a> (recommended) or Node.js 18+.
+                See <a href="https://github.com/your-repo/obsidian-web-clipper/blob/main/docs/native-messaging-bridge.md" target="_blank" rel="noopener">full documentation</a>.
+              </p>
+            </div>
+            <button type="button" id="checkNativeHostBtn" class="secondary-btn">Check Again</button>
+          </li>
+          <li>
+            <h3>2) Detect Obsidian installation</h3>
+            <button type="button" id="onboardingDetectBtn" class="secondary-btn">Detect Obsidian CLI</button>
+            <p id="onboardingDetectStatus" class="onboarding-status-text">Not detected yet.</p>
+          </li>
+          <li>
+            <h3>3) Choose vault + default folder</h3>
+            <div class="field">
+              <label for="onboardingVaultName">Vault Name</label>
+              <input type="text" id="onboardingVaultName" placeholder="Main Vault">
+            </div>
+            <div class="field">
+              <label for="onboardingDefaultFolder">Default Folder</label>
+              <input type="text" id="onboardingDefaultFolder" placeholder="2 - Source Material/Clips">
+            </div>
+          </li>
+          <li>
+            <h3>4) Test connection</h3>
+            <button type="button" id="onboardingTestBtn" class="secondary-btn">Test Connection</button>
+            <p id="onboardingTestStatus" class="onboarding-status-text">Connection not tested yet.</p>
+          </li>
+        </ol>
+
+        <div class="onboarding-actions">
+          <button type="button" id="onboardingSkipBtn" class="reset-btn">Skip for now</button>
+          <button type="button" id="onboardingFinishBtn" class="save-btn">Finish Setup</button>
+        </div>
+      </div>
+    </div>
+
     <main>
       <section class="section">
         <h2>Vault Configuration</h2>
@@ -42,12 +98,153 @@
           <input type="checkbox" id="includeTimestamps">
           <label for="includeTimestamps">Include timestamps in YouTube transcripts</label>
         </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="enableClipNotifications" checked>
+          <label for="enableClipNotifications">Show Chrome notification after successful clip</label>
+          <small>Notification includes note title and target vault</small>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="badgeCounterEnabled" checked>
+          <label for="badgeCounterEnabled">Show clip counter on extension badge</label>
+          <small>Displays the number of successful clips in the current period</small>
+        </div>
+
+        <div class="field">
+          <label for="badgeCounterResetInterval">Badge counter reset interval</label>
+          <select id="badgeCounterResetInterval">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+          <small>Choose when the badge counter resets</small>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Title Cleanup</h2>
+        <p class="section-desc">Automatically clean up page titles when clipping.</p>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="cleanTitles" checked>
+          <label for="cleanTitles">Clean titles automatically</label>
+          <small>Remove site names (e.g., " - Medium"), decode HTML entities, normalize whitespace</small>
+        </div>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="preferTitleCase" checked>
+          <label for="preferTitleCase">Apply title case</label>
+          <small>Capitalize the first letter of each word (except small words like "the", "and")</small>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Title Templates</h2>
+        <p class="section-desc">Customize how note titles are formatted. Use placeholders to include dates, domains, and other metadata.</p>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="titleTemplatesEnabled">
+          <label for="titleTemplatesEnabled">Enable title templates</label>
+          <small>Apply a template to format note titles automatically</small>
+        </div>
+
+        <div id="titleTemplateSettings" class="template-settings">
+          <div class="field">
+            <label for="selectedTitleTemplate">Title Format</label>
+            <select id="selectedTitleTemplate">
+              <option value="default">Default (Title Only)</option>
+              <option value="date-title">Date - Title</option>
+              <option value="domain-title">Domain/Title</option>
+              <option value="type-title">Type - Title</option>
+              <option value="author-title">Author - Title</option>
+              <option value="year-month-title">Year/Month - Title</option>
+              <option value="site-title">Site Name - Title</option>
+              <option value="datetime-title">DateTime - Title</option>
+            </select>
+            <small>Choose a template format for note titles</small>
+          </div>
+
+          <div class="field">
+            <label for="customTitleTemplate">Custom Template</label>
+            <input type="text" id="customTitleTemplate" placeholder="{date} - {title}">
+            <small>Enter a custom template (e.g., <code>{date} - {title}</code>). Available: {title}, {date}, {time}, {datetime}, {domain}, {type}, {author}, {siteName}, {tags}, {folder}, {year}, {month}, {day}</small>
+          </div>
+
+          <div class="field">
+            <label>Available Placeholders</label>
+            <div class="placeholders-help">
+              <code>{"{title}"}</code> - Page title &nbsp;
+              <code>{"{date}"}</code> - YYYY-MM-DD &nbsp;
+              <code>{"{domain}"}</code> - Website domain<br>
+              <code>{"{type}"}</code> - Page type &nbsp;
+              <code>{"{author}"}</code> - Author name &nbsp;
+              <code>{"{siteName}"}</code> - Site name<br>
+              <code>{"{year}"}</code>, <code>{"{month}"}</code>, <code>{"{day}"}</code> - Date parts &nbsp;
+              <code>{"{time}"}</code> - HH-mm
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Obsidian CLI Integration</h2>
+        <p class="section-desc">Use the Obsidian CLI for direct file creation instead of URI schemes.</p>
+
+        <div class="field">
+          <label for="saveMethod">Save Method</label>
+          <select id="saveMethod">
+            <option value="uri">URI Scheme (obsidian://)</option>
+            <option value="cli">Obsidian CLI</option>
+            <option value="clipboard">Copy to Clipboard</option>
+          </select>
+          <small>How clips are saved to Obsidian</small>
+        </div>
+
+        <div id="cliSettings" class="cli-settings">
+          <div class="field checkbox">
+            <input type="checkbox" id="cliEnabled">
+            <label for="cliEnabled">Enable CLI Integration</label>
+          </div>
+
+          <div class="field">
+            <label for="cliPath">CLI Path</label>
+            <div class="input-with-button">
+              <input type="text" id="cliPath" placeholder="/usr/local/bin/obsidian">
+              <button id="autoDetectCliBtn" class="auto-detect-btn" type="button">Auto-detect</button>
+            </div>
+            <small>Full path to the obsidian CLI binary (e.g., /usr/local/bin/obsidian)</small>
+          </div>
+
+          <div class="field">
+            <label for="cliVault">CLI Vault Override</label>
+            <input type="text" id="cliVault" placeholder="Leave empty to use Vault Name above">
+            <small>Optional: Different vault name for CLI operations</small>
+          </div>
+
+          <div class="field">
+            <button id="testCliBtn" class="test-btn">Test CLI Connection</button>
+            <span id="cliTestResult" class="test-result"></span>
+          </div>
+        </div>
       </section>
 
       <section class="section">
         <h2>Keyboard Shortcuts</h2>
         <p><strong>Clip to Obsidian:</strong> <kbd>Ctrl+Shift+O</kbd> (Mac: <kbd>Cmd+Shift+O</kbd>)</p>
         <p>To customize, go to <code>chrome://extensions/shortcuts</code></p>
+      </section>
+
+      <section class="section">
+        <h2>Custom Templates</h2>
+        <p class="section-desc">Create site-specific extraction rules for better clipping. Templates use CSS selectors to extract content from specific domains.</p>
+
+        <div class="template-toolbar">
+          <button id="addTemplateBtn" class="add-template-btn">+ Add Template</button>
+          <button id="importTemplatesBtn" class="import-btn">Import JSON</button>
+          <button id="exportTemplatesBtn" class="export-btn">Export JSON</button>
+        </div>
+
+        <div id="customTemplatesList" class="templates-list"></div>
       </section>
 
       <section class="section">
@@ -63,6 +260,15 @@
         </div>
       </section>
 
+      <section class="section">
+        <h2>Settings Backup</h2>
+        <p class="section-desc">Import/export all extension settings (vault profiles, templates, rules, folders, and preferences) as JSON.</p>
+        <div class="settings-transfer-actions">
+          <button id="exportSettingsBtn" class="secondary-btn" type="button">Export Settings JSON</button>
+          <button id="importSettingsBtn" class="secondary-btn" type="button">Import Settings JSON</button>
+        </div>
+      </section>
+
       <div class="actions">
         <button id="saveBtn" class="save-btn">Save Settings</button>
         <button id="resetBtn" class="reset-btn">Reset to Defaults</button>
@@ -70,6 +276,135 @@
 
       <div id="status" class="status"></div>
     </main>
+  </div>
+
+  <!-- Template Editor Modal -->
+  <div id="templateModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="templateModalTitle">Add New Template</h3>
+        <button id="templateModalClose" class="modal-close" type="button">&times;</button>
+      </div>
+      
+      <form id="templateForm" class="template-form">
+        <div class="form-tabs">
+          <button type="button" class="tab-btn active" data-tab="basic">Basic</button>
+          <button type="button" class="tab-btn" data-tab="selectors">Selectors</button>
+          <button type="button" class="tab-btn" data-tab="advanced">Advanced</button>
+        </div>
+
+        <div class="tab-content active" data-tab="basic">
+          <div class="field">
+            <label for="templateName">Template Name *</label>
+            <input type="text" id="templateName" placeholder="My Custom Site" required>
+            <small>Human-readable name for this template</small>
+          </div>
+
+          <div class="field">
+            <label for="templateDomain">Domain Pattern *</label>
+            <input type="text" id="templateDomain" placeholder="example.com or *.example.com" required>
+            <small>Domain to match (supports wildcards like *.medium.com)</small>
+          </div>
+
+          <div class="field checkbox">
+            <input type="checkbox" id="templateEnabled" checked>
+            <label for="templateEnabled">Enabled</label>
+          </div>
+
+          <div class="field">
+            <label for="templateDescription">Description</label>
+            <input type="text" id="templateDescription" placeholder="What this template extracts">
+            <small>Optional description of what this template does</small>
+          </div>
+
+          <div class="field">
+            <label for="templatePriority">Priority</label>
+            <input type="number" id="templatePriority" value="0" min="0" max="1000">
+            <small>Higher priority templates are checked first (default: 0)</small>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="selectors">
+          <p class="tab-desc">CSS selectors for extracting content. Leave blank to skip extraction.</p>
+
+          <div class="field">
+            <label for="selectorTitle">Title Selector</label>
+            <input type="text" id="selectorTitle" placeholder="h1, .title, [data-title]">
+            <small>CSS selector for the page title</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorContent">Content Selector</label>
+            <input type="text" id="selectorContent" placeholder="article, .content, [data-content]">
+            <small>CSS selector for the main content area</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorAuthor">Author Selector</label>
+            <input type="text" id="selectorAuthor" placeholder=".author, [data-author]">
+            <small>CSS selector for the author name</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorDate">Date Selector</label>
+            <input type="text" id="selectorDate" placeholder="time, .date, [data-date]">
+            <small>CSS selector for the publication date</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorTags">Tags Selector</label>
+            <input type="text" id="selectorTags" placeholder=".tags a, [data-tags]">
+            <small>CSS selector for tags/categories</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorDescription">Description Selector</label>
+            <input type="text" id="selectorDescription" placeholder=".description, [data-description]">
+            <small>CSS selector for description/summary</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorUrl">URL Selector</label>
+            <input type="text" id="selectorUrl" placeholder="link[rel=canonical]">
+            <small>CSS selector for canonical URL</small>
+          </div>
+
+          <div class="field">
+            <label for="selectorImage">Image Selector</label>
+            <input type="text" id="selectorImage" placeholder=".hero img, [data-image]">
+            <small>CSS selector for main image</small>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="advanced">
+          <div class="field">
+            <label for="templateUrlPattern">URL Pattern (Optional)</label>
+            <input type="text" id="templateUrlPattern" placeholder="^/article/ or /blog/*">
+            <small>Additional regex/glob pattern to match specific URL paths</small>
+          </div>
+
+          <div class="field">
+            <label for="templateRemoveSelectors">Remove Selectors (one per line)</label>
+            <textarea id="templateRemoveSelectors" rows="4" placeholder=".sidebar&#10;.ads&#10;.comments"></textarea>
+            <small>CSS selectors for elements to remove before extraction</small>
+          </div>
+
+          <div class="field">
+            <label for="templateFrontmatter">Frontmatter Extras (JSON)</label>
+            <textarea id="templateFrontmatter" rows="4" placeholder='{
+  "site": "mysite",
+  "type": "article"
+}'></textarea>
+            <small>Additional frontmatter fields to include in the clip</small>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="templateFormCancel" class="cancel-btn">Cancel</button>
+          <button type="submit" id="templateFormSave" class="save-btn">Save Template</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="options.js"></script>

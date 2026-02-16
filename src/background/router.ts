@@ -1,10 +1,19 @@
 import { isRuntimeRequest } from "../shared/guards";
 import type { RuntimeRequest } from "../shared/messages";
+import { RouterError } from "../shared/errors";
 
 import { handleGetSettings } from "./handlers/getSettings";
 import { handleCopyToClipboard } from "./handlers/copyToClipboard";
 import { handleOpenObsidianUri } from "./handlers/openObsidianUri";
 import { handleExtractPdf } from "./handlers/extractPdf";
+import { handleTestCliConnection } from "./handlers/testCliConnection";
+import { handleDetectCli } from "./handlers/detectCli";
+import { handleSaveToCli } from "./handlers/saveToCli";
+import { handleSaveAttachmentToCli } from "./handlers/saveAttachmentToCli";
+import { handleListVaultFolders } from "./handlers/listVaultFolders";
+import { handleCreateVaultFolder } from "./handlers/createVaultFolder";
+import { handleSaveContent } from "./handlers/saveContent";
+import { handleTestNativeHost } from "./handlers/testNativeHost";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -16,8 +25,27 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleOpenObsidianUri(request);
     case "extractPdf":
       return handleExtractPdf(request);
-    default:
-      throw new Error(`Unknown action: ${(request as any).action}`);
+    case "testCliConnection":
+      return handleTestCliConnection(request);
+    case "detectCli":
+      return handleDetectCli(request);
+    case "saveToCli":
+      return handleSaveToCli(request);
+    case "saveAttachmentToCli":
+      return handleSaveAttachmentToCli(request);
+    case "listVaultFolders":
+      return handleListVaultFolders(request);
+    case "createVaultFolder":
+      return handleCreateVaultFolder(request);
+    case "saveContent":
+      return handleSaveContent(request);
+    case "testNativeHost":
+      return handleTestNativeHost(request);
+    default: {
+      // Exhaustive check: this will fail to compile if any case is missing
+      const _exhaustive: never = request;
+      throw new RouterError(`Unknown action: ${(_exhaustive as { action: string }).action}`, "UNKNOWN_ACTION");
+    }
   }
 }
 

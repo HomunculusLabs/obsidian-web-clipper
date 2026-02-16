@@ -1,6 +1,6 @@
-export type PageType = "web" | "youtube" | "pdf";
+export type PageType = "web" | "youtube" | "pdf" | "twitter";
 
-export type ClipContentType = "article" | "video" | "document";
+export type ClipContentType = "article" | "video" | "document" | "tweet";
 
 export type YouTubeVideoType =
   | "normal"
@@ -108,6 +108,39 @@ export interface ClipMetadata {
   // Site-specific metadata
   siteName?: string;
   language?: string;
+
+  // --- Selection clipping context ---
+
+  /** Clip mode: "selection" when clipping only user-selected text */
+  clipMode?: "full" | "selection";
+
+  /** Surrounding context for selection (e.g., parent paragraph or heading) */
+  selectionContext?: string;
+
+  /** Number of selection ranges (for multi-selection, >1 means Ctrl+click) */
+  selectionCount?: number;
+
+  // --- Template extraction ---
+
+  /** Name of the site template used for extraction (if any) */
+  templateUsed?: string;
+
+  // --- Twitter/X specific metadata (Task 51) ---
+
+  /** Twitter author handle (without @) */
+  twitterAuthorHandle?: string;
+
+  /** Number of tweets in thread (if this is a thread) */
+  twitterThreadLength?: number;
+
+  /** Twitter engagement stats */
+  twitterEngagement?: {
+    replies: number;
+    retweets: number;
+    likes: number;
+    views?: number;
+    bookmarks?: number;
+  };
 }
 
 export interface ClipResult {

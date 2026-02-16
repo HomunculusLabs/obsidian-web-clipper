@@ -2,6 +2,7 @@ import type { PageType } from "../shared/types";
 import type { Settings } from "../shared/settings";
 import { DEFAULT_SETTINGS } from "../shared/settings";
 import { getFolderCandidates } from "../shared/folders";
+import { cleanTitle } from "../shared/titleSuggestion";
 
 export type StatusType = "success" | "error" | "loading";
 
@@ -18,6 +19,12 @@ const PAGE_TYPES: readonly PageTypeConfig[] = [
     pattern: /^https?:\/\/(www\.)?youtube\.com\/(watch|shorts)(\b|\/|\?|#)/,
     icon: "▶️",
     label: "YouTube Video"
+  },
+  {
+    type: "twitter",
+    pattern: /^https?:\/\/(www\.|mobile\.)?(twitter|x)\.com\//,
+    icon: "🐦",
+    label: "Tweet"
   },
   {
     type: "pdf",
@@ -52,23 +59,46 @@ function getPageTypeConfig(type: PageType): PageTypeConfig {
   return PAGE_TYPES.find((c) => c.type === type) || PAGE_TYPES[PAGE_TYPES.length - 1];
 }
 
-export function setPageTypeDisplay(type: PageType): void {
+export function setPageTypeDisplay(type: PageType, threadLength?: number): void {
   const config = getPageTypeConfig(type);
   const iconEl = getEl<HTMLSpanElement>("pageIcon");
   const labelEl = getEl<HTMLSpanElement>("pageLabel");
 
   if (iconEl) iconEl.textContent = config.icon;
-  if (labelEl) labelEl.textContent = config.label;
+  
+  // For Twitter, show "Thread" label if thread is detected
+  if (labelEl) {
+    if (type === "twitter" && threadLength && threadLength > 1) {
+      labelEl.textContent = `Thread (${threadLength} tweets)`;
+    } else {
+      labelEl.textContent = config.label;
+    }
+  }
 }
 
-export function populateFolderSelect(select: HTMLSelectElement, settings: Settings): void {
-  const folders = getFolderCandidates(settings);
+function toFolderTreeLabel(folder: string): string {
+  const segments = folder.split("/").filter(Boolean);
+  const depth = Math.max(0, segments.length - 1);
+  const leaf = segments[segments.length - 1] || folder;
+  const indent = depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}↳ ` : "";
+  return `${indent}${leaf}`;
+}
+
+export function populateFolderSelect(
+  select: HTMLSelectElement,
+  settings: Settings,
+  foldersOverride?: string[]
+): void {
+  const folders = (foldersOverride && foldersOverride.length > 0 ? foldersOverride : getFolderCandidates(settings))
+    .slice()
+    .sort((a, b) => a.localeCompare(b));
 
   select.innerHTML = "";
   for (const folder of folders) {
     const opt = document.createElement("option");
     opt.value = folder;
-    opt.textContent = folder;
+    opt.textContent = toFolderTreeLabel(folder);
+    opt.title = folder;
     select.appendChild(opt);
   }
 
@@ -81,19 +111,27 @@ export function populateFolderSelect(select: HTMLSelectElement, settings: Settin
     const fallback = DEFAULT_SETTINGS.defaultFolder;
     const opt = document.createElement("option");
     opt.value = fallback;
-    opt.textContent = fallback;
+    opt.textContent = toFolderTreeLabel(fallback);
+    opt.title = fallback;
     select.appendChild(opt);
     select.value = fallback;
   }
 }
 
-export function updateUI(tab: chrome.tabs.Tab | null, pageType: PageType): void {
+export function updateUI(tab: chrome.tabs.Tab | null, pageType: PageType, settings?: Settings): void {
   if (!tab) return;
 
   setPageTypeDisplay(pageType);
 
   const titleInput = getEl<HTMLInputElement>("titleInput");
   if (titleInput) {
-    titleInput.value = tab.title || "Untitled";
+    let title = tab.title || "Untitled";
+    
+    // Apply title cleanup if enabled
+    if (settings?.cleanTitles) {
+      title = cleanTitle(title, { preferTitleCase: settings.preferTitleCase });
+    }
+    
+    titleInput.value = title;
   }
 }

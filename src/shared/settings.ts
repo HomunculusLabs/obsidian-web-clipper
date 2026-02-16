@@ -3,6 +3,11 @@ import type {
   CodeBlockLanguageMode,
   ImageHandlingMode
 } from "./types";
+import type { ObsidianCliConfig, SaveMethod } from "./obsidianCli";
+import type { SiteTemplate, TemplateSettings } from "./templates";
+import type { DomainTagRule } from "./domainTags";
+import type { TitleTemplate, TitleTemplateSettings } from "./titleTemplate";
+import type { TagRule } from "./tagRules";
 
 // Wiki-link injection rule: maps a term to a note name
 export interface WikiLinkRule {
@@ -10,13 +15,33 @@ export interface WikiLinkRule {
   note: string;
 }
 
+export interface VaultProfile {
+  id: string;
+  name: string;
+  vaultName: string;
+  defaultFolder: string;
+  defaultTags: string;
+  obsidianCli?: ObsidianCliConfig;
+}
+
+export type BadgeCounterResetInterval = "daily" | "weekly";
+
 export interface Settings {
   // --- Core settings ---
   vaultName: string;
   defaultFolder: string;
   defaultTags: string;
+  vaultProfiles: VaultProfile[];
+  activeVaultProfileId: string;
   includeTimestamps: boolean;
   savedFolders: string[];
+  enableClipNotifications: boolean;
+  badgeCounterEnabled: boolean;
+  badgeCounterResetInterval: BadgeCounterResetInterval;
+
+  // --- Save method settings ---
+  saveMethod: SaveMethod;
+  obsidianCli: ObsidianCliConfig;
 
   // --- Metadata settings ---
   includeOGFields: boolean;
@@ -46,6 +71,32 @@ export interface Settings {
   imageDownloadEndpoint: string; // For future Obsidian plugin API integration
   imageAttachmentsFolder: string;
 
+  // --- Template settings ---
+  templatesEnabled: boolean;
+  customTemplates: SiteTemplate[];
+  disabledBuiltIns: string[];
+
+  // --- Tag suggestion settings ---
+  domainTagRules: DomainTagRule[];
+  useDefaultDomainTags: boolean;
+
+  // --- Tag rules engine (Task 66) ---
+  tagRules: TagRule[];
+  useDefaultTagRules: boolean;
+
+  // --- Title cleanup settings ---
+  cleanTitles: boolean; // Whether to clean titles (remove site names, decode entities)
+  preferTitleCase: boolean; // Whether to apply title case to cleaned titles
+
+  // --- Title template settings ---
+  titleTemplates: TitleTemplateSettings;
+
+  // --- Debug settings ---
+  debug: boolean; // Enable debug logging to console
+
+  // --- Schema versioning ---
+  settingsVersion?: number; // Internal schema version for migrations
+
   // Index signature for dynamic access
   [key: string]:
     | string
@@ -53,16 +104,51 @@ export interface Settings {
     | string[]
     | number
     | WikiLinkRule[]
+    | VaultProfile[]
+    | ObsidianCliConfig
+    | SiteTemplate[]
+    | DomainTagRule[]
+    | TagRule[]
+    | TitleTemplateSettings
+    | TitleTemplate[]
     | undefined;
 }
+
+const DEFAULT_VAULT_PROFILE_ID = "default-vault";
 
 export const DEFAULT_SETTINGS: Settings = {
   // --- Core settings ---
   vaultName: "Main Vault",
   defaultFolder: "2 - Source Material/Clips",
   defaultTags: "web-clip",
+  vaultProfiles: [
+    {
+      id: DEFAULT_VAULT_PROFILE_ID,
+      name: "Main Vault",
+      vaultName: "Main Vault",
+      defaultFolder: "2 - Source Material/Clips",
+      defaultTags: "web-clip",
+      obsidianCli: {
+        cliPath: "",
+        vault: "",
+        enabled: false
+      }
+    }
+  ],
+  activeVaultProfileId: DEFAULT_VAULT_PROFILE_ID,
   includeTimestamps: true,
   savedFolders: ["2 - Source Material/Clips"],
+  enableClipNotifications: true,
+  badgeCounterEnabled: true,
+  badgeCounterResetInterval: "daily",
+
+  // --- Save method settings ---
+  saveMethod: "uri",
+  obsidianCli: {
+    cliPath: "",
+    vault: "",
+    enabled: false
+  },
 
   // --- Metadata settings ---
   includeOGFields: true,
@@ -90,7 +176,37 @@ export const DEFAULT_SETTINGS: Settings = {
   // --- Image settings ---
   imageHandling: "keep",
   imageDownloadEndpoint: "",
-  imageAttachmentsFolder: "attachments"
+  imageAttachmentsFolder: "attachments",
+
+  // --- Template settings ---
+  templatesEnabled: true,
+  customTemplates: [],
+  disabledBuiltIns: [],
+
+  // --- Tag suggestion settings ---
+  domainTagRules: [], // Custom rules; combined with defaults if useDefaultDomainTags is true
+  useDefaultDomainTags: true,
+
+  // --- Tag rules engine (Task 66) ---
+  tagRules: [], // Custom tag rules; combined with defaults if useDefaultTagRules is true
+  useDefaultTagRules: true,
+
+  // --- Title cleanup settings ---
+  cleanTitles: true, // Clean titles by default
+  preferTitleCase: true, // Apply title case by default
+
+  // --- Title template settings ---
+  titleTemplates: {
+    enabled: false,
+    selectedTemplate: "default",
+    customTemplates: []
+  },
+
+  // --- Debug settings ---
+  debug: false, // Disabled by default
+
+  // --- Schema versioning ---
+  settingsVersion: 1
 };
 
 export const SETTINGS_KEYS = [
@@ -98,8 +214,16 @@ export const SETTINGS_KEYS = [
   "vaultName",
   "defaultFolder",
   "defaultTags",
+  "vaultProfiles",
+  "activeVaultProfileId",
   "includeTimestamps",
   "savedFolders",
+  "enableClipNotifications",
+  "badgeCounterEnabled",
+  "badgeCounterResetInterval",
+  // Save method
+  "saveMethod",
+  "obsidianCli",
   // Metadata
   "includeOGFields",
   "includeTwitterFields",
@@ -122,7 +246,26 @@ export const SETTINGS_KEYS = [
   // Images
   "imageHandling",
   "imageDownloadEndpoint",
-  "imageAttachmentsFolder"
+  "imageAttachmentsFolder",
+  // Templates
+  "templatesEnabled",
+  "customTemplates",
+  "disabledBuiltIns",
+  // Tag suggestions
+  "domainTagRules",
+  "useDefaultDomainTags",
+  // Tag rules engine
+  "tagRules",
+  "useDefaultTagRules",
+  // Title cleanup
+  "cleanTitles",
+  "preferTitleCase",
+  // Title templates
+  "titleTemplates",
+  // Debug
+  "debug",
+  // Schema version
+  "settingsVersion"
 ] as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];
@@ -139,4 +282,9 @@ export const VALID_IMAGE_HANDLING: ImageHandlingMode[] = [
   "remove",
   "data-uri",
   "download-api"
+];
+
+export const VALID_BADGE_COUNTER_RESET_INTERVALS: BadgeCounterResetInterval[] = [
+  "daily",
+  "weekly"
 ];

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Post : r/programming</title>
+</head>
+<body>
+  <shreddit-app>
+    <main>
+      <shreddit-post id="t3_abc123" author="testuser" score="1234" comment-count="123" 
+                     created-time="2023-01-15T10:00:00">
+        <a slot="full-post-link" href="https://example.com/article">Test Post Title</a>
+        <div slot="post-media">
+          <shreddit-aspect-ratio>
+            <img src="https://example.com/image.jpg" alt="Post image">
+          </shreddit-aspect-ratio>
+        </div>
+        <div slot="post-body">
+          <p>This is the self-post content with <strong>bold text</strong> and a link.</p>
+        </div>
+      </shreddit-post>
+      <shreddit-comment-tree>
+        <shreddit-comment author="commenter1" score="42" created-time="2023-01-15T11:00:00">
+          <div slot="comment">
+            <p>Great post! I especially liked the part about testing.</p>
+          </div>
+          <shreddit-comment author="testuser" score="15">
+            <div slot="comment">
+              <p>Thanks! Glad you found it helpful.</p>
+            </div>
+          </shreddit-comment>
+        </shreddit-comment>
+      </shreddit-comment-tree>
+    </main>
+  </shreddit-app>
+</body>
+</html>
