@@ -179,3 +179,4 @@ If you want, I can also generate:
 - A concise "User README" for non-developers
 - A separate "Developer README" with architecture diagrams and contribution workflow
 - Per-tool deep-dive pages under `docs/tools/` for long-term maintenance
+# AI Gatekeeper Test
