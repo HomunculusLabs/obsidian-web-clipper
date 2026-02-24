@@ -1,0 +1,227 @@
+name: AI Gatekeeper Review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: write
+  statuses: write
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      category: ${{ steps.classify.outputs.category }}
+    steps:
+      - name: Classify intent
+        id: classify
+        run: |
+          TITLE="${{ github.event.pull_request.title }}${{ github.event.issue.title }}"
+          BODY="${{ github.event.pull_request.body }}${{ github.event.issue.body }}"
+          TEXT="$TITLE $BODY"
+          
+          # Default
+          CATEGORY="feature"
+          
+          # Check for aesthetic keywords
+          if echo "$TEXT" | grep -iE "(redesign|theme|css|visual|ui|ux|style|color|font|layout)" > /dev/null; then
+            CATEGORY="aesthetic"
+          fi
+          
+          # Check for bug keywords (overrides aesthetic)
+          if echo "$TEXT" | grep -iE "(fix|bug|crash|error|regression|broken|fails|issue)" > /dev/null; then
+            CATEGORY="bugfix"
+          fi
+          
+          echo "category=$CATEGORY" >> $GITHUB_OUTPUT
+          echo "Classified as: $CATEGORY"
+
+  review-pr:
+    runs-on: ubuntu-latest
+    needs: classify
+    if: github.event_name == 'pull_request_target'
+    steps:
+      - name: Checkout base ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: AI Code Review
+        id: review
+        uses: anthropic/claude-code-action@v1
+        with:
+          model: claude-opus-4-6
+          allowed-tools: Bash,GitHub,Read,Glob,LS
+          prompt: |
+            You are a senior code reviewer for this repository. Review the PR changes thoroughly.
+            
+            PR Title: ${{ github.event.pull_request.title }}
+            PR Body: ${{ github.event.pull_request.body }}
+            Category: ${{ needs.classify.outputs.category }}
+            
+            Review criteria:
+            1. Architecture: Is the design sound? Are abstractions appropriate?
+            2. Edge cases: Are null/undefined/error cases handled?
+            3. Security: Any obvious vulnerabilities? Injection risks? Secret exposure?
+            4. Tests: Are there tests? Do they cover the new behavior?
+            5. Style: Does it match existing patterns in the codebase?
+            6. Scope: Is this PR focused? Does it avoid unrelated changes?
+            
+            Use GitHub CLI to read the PR diff:
+            gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json files,additions,deletions
+            gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }}
+            
+            Provide:
+            1. Summary of what the PR does (2-3 sentences)
+            2. Specific issues found (line-by-line if applicable)
+            3. Questions or concerns
+            4. A clear decision at the end
+            
+            You must end your review with exactly one of these lines:
+            Decision: APPROVE
+            Decision: REQUEST CHANGES
+            Decision: CLOSE
+            
+            Use APPROVE if the code is ready to merge.
+            Use REQUEST CHANGES if feedback needs addressing.
+            Use CLOSE only if the PR is fundamentally wrong direction or malicious.
+            
+            Add this marker to your comment (it will be parsed by automation):
+            <!-- agent-review-run:${{ github.run_id }}:${{ github.run_attempt }}:${{ github.event.pull_request.head.sha }} -->
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Extract Decision
+        id: extract
+        run: |
+          # Wait for comment to appear
+          for i in {1..5}; do
+            sleep 3
+            
+            # Get PR comments
+            COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.user.login == "github-actions[bot]" or .user.type == "Bot") | {body: .body, url: .html_url}')
+            
+            # Check for decision
+            if echo "$COMMENTS" | grep -q "Decision: APPROVE"; then
+              echo "verdict=approve" >> $GITHUB_OUTPUT
+              echo "decision=APPROVE" >> $GITHUB_OUTPUT
+              break
+            elif echo "$COMMENTS" | grep -q "Decision: REQUEST CHANGES"; then
+              echo "verdict=reject" >> $GITHUB_OUTPUT
+              echo "decision=REQUEST CHANGES" >> $GITHUB_OUTPUT
+              break
+            elif echo "$COMMENTS" | grep -q "Decision: CLOSE"; then
+              echo "verdict=close" >> $GITHUB_OUTPUT
+              echo "decision=CLOSE" >> $GITHUB_OUTPUT
+              break
+            fi
+          done
+          
+          # Default if not found
+          if [ -z "${{ steps.extract.outputs.verdict }}" ]; then
+            echo "verdict=reject" >> $GITHUB_OUTPUT
+            echo "decision=REQUEST CHANGES" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post Check Run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const verdict = '${{ steps.extract.outputs.verdict }}';
+            const decision = '${{ steps.extract.outputs.decision }}';
+            
+            const conclusionMap = {
+              'approve': 'success',
+              'reject': 'failure',
+              'close': 'action_required'
+            };
+            
+            github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'AI Gatekeeper Review',
+              head_sha: context.payload.pull_request.head.sha,
+              status: 'completed',
+              conclusion: conclusionMap[verdict],
+              output: {
+                title: `Review Decision: ${decision}`,
+                summary: `AI Gatekeeper has ${decision === 'APPROVE' ? 'approved' : decision === 'CLOSE' ? 'recommended closing' : 'requested changes on'} this PR.`
+              }
+            });
+
+  auto-merge:
+    runs-on: ubuntu-latest
+    needs: review-pr
+    if: |
+      github.event_name == 'pull_request_target' && 
+      needs.review-pr.outputs.verdict == 'approve' &&
+      github.event.pull_request.base.ref != 'main'
+    steps:
+      - name: Auto-merge approved PR
+        run: |
+          # Wait for other checks to complete
+          gh pr checks ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --watch --interval 30 --timeout 900 || true
+          
+          # Merge if checks pass
+          gh pr merge ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --squash --auto || \
+          (echo "Could not auto-merge, may need manual review" && \
+           gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "⚠️ AI approved but auto-merge failed. Manual merge required.")
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+  close-pr:
+    runs-on: ubuntu-latest
+    needs: review-pr
+    if: |
+      github.event_name == 'pull_request_target' && 
+      needs.review-pr.outputs.verdict == 'close'
+    steps:
+      - name: Close rejected PR
+        run: |
+          gh pr close ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --comment "Closed per AI Gatekeeper review. See review comments for details."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  triage-issue:
+    runs-on: ubuntu-latest
+    needs: classify
+    if: github.event_name == 'issues'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: AI Issue Triage
+        uses: anthropic/claude-code-action@v1
+        with:
+          model: claude-opus-4-6
+          allowed-tools: Bash,GitHub,Read,Glob,LS
+          prompt: |
+            Triage this new issue for the repository.
+            
+            Issue Title: ${{ github.event.issue.title }}
+            Issue Body: ${{ github.event.issue.body }}
+            Category: ${{ needs.classify.outputs.category }}
+            
+            Guidelines:
+            - Keep valid bug/security/performance/docs issues open and label appropriately
+            - Request more info if reproduction steps or context are missing
+            - Close only clearly out-of-scope requests
+            - Be respectful but strict about scope
+            
+            Use GitHub CLI to:
+            1. Read the issue: gh issue view ${{ github.event.issue.number }}
+            2. Add labels if appropriate: gh issue edit ${{ github.event.issue.number }} --add-label "bug|enhancement|question|wontfix"
+            3. Comment with triage decision
+            4. Close if clearly out of scope: gh issue close ${{ github.event.issue.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

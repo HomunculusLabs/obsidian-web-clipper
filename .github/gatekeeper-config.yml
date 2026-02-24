@@ -1,0 +1,53 @@
+# AI Gatekeeper Configuration
+# Copy this to .github/gatekeeper-config.yml and customize per repo
+
+# Project type affects review focus
+project_type: "node"  # node, python, rust, go, etc.
+
+# Review criteria weights (1-10)
+criteria:
+  architecture: 9      # Design patterns, abstractions
+  edge_cases: 8        # Null handling, error cases
+  security: 9          # Injection, secrets, vulnerabilities
+  tests: 7             # Test coverage
+  style: 6             # Code style consistency
+  scope: 7             # PR focus (avoid unrelated changes)
+
+# Category-specific rules
+categories:
+  bugfix:
+    require_tests: true
+    check_regression: true
+  feature:
+    require_tests: true
+    check_api_surface: true
+  aesthetic:
+    require_tests: false
+    check_accessibility: true
+
+# Ignore patterns (don't review these)
+ignore:
+  - "*.lock"
+  - "*.md"
+  - "package-lock.json"
+  - "yarn.lock"
+  - "dist/**"
+  - "build/**"
+  - "node_modules/**"
+
+# Auto-merge settings
+auto_merge:
+  enabled: true
+  exclude_branches:
+    - "main"
+    - "master"
+    - "production"
+  require_checks:
+    - "test"
+    - "lint"
+
+# Review comment templates
+templates:
+  approve: "✅ AI Gatekeeper approves this PR. Ready to merge."
+  request_changes: "🔄 AI Gatekeeper has requested changes. Please address the feedback above."
+  close: "❌ AI Gatekeeper recommends closing this PR. See review comments for details."
