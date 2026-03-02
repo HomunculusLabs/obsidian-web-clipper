@@ -158,9 +158,9 @@ async function buildAll(watchMode: boolean) {
   await ensureDir(DIST_DIR);
 
   await bundleEntrypoint(backgroundEntrypoint!, "background", watchMode);
-  // Use ESM with code splitting for content script to enable lazy loading of extractors
-  // This reduces initial bundle size by ~75KB (Twitter extractor alone is ~60KB)
-  await bundleEntrypoint(contentEntrypoint!, "content", watchMode, { esm: true });
+  // Keep content script as classic IIFE for maximum compatibility across
+  // Chrome extension content script loading/injection paths.
+  await bundleEntrypoint(contentEntrypoint!, "content", watchMode);
   await bundleEntrypoint(popupEntrypoint!, "popup", watchMode);
   await bundleEntrypoint(optionsEntrypoint!, "options", watchMode);
   if (offscreenEntrypoint) {

@@ -5,6 +5,10 @@ function rejectOnLastError(reject: (err: Error) => void): boolean {
   return true;
 }
 
+function isMissingReceiverMessage(message: string): boolean {
+  return /receiving end does not exist|could not establish connection/i.test(message);
+}
+
 export function storageGet<T extends Record<string, unknown>>(
   keys: readonly (keyof T)[] | null
 ): Promise<Partial<T>> {
@@ -48,11 +52,24 @@ export function tabsSendMessage<TReq, TRes>(
   message: TReq
 ): Promise<TRes> {
   return new Promise((resolve, reject) => {
-    // Chrome messaging API accepts any serializable message
-    chrome.tabs.sendMessage(tabId, message, (response: TRes) => {
-      if (rejectOnLastError(reject)) return;
-      resolve(response);
-    });
+    const send = (attempt: number): void => {
+      // Chrome messaging API accepts any serializable message
+      chrome.tabs.sendMessage(tabId, message, (response: TRes) => {
+        const lastError = chrome.runtime?.lastError;
+        if (lastError) {
+          const errorMessage = lastError.message || "Chrome API error";
+          if (attempt === 0 && isMissingReceiverMessage(errorMessage)) {
+            setTimeout(() => send(attempt + 1), 80);
+            return;
+          }
+          reject(new Error(errorMessage));
+          return;
+        }
+        resolve(response);
+      });
+    };
+
+    send(0);
   });
 }
 
@@ -60,11 +77,24 @@ export function runtimeSendMessage<TReq, TRes>(
   message: TReq
 ): Promise<TRes> {
   return new Promise((resolve, reject) => {
-    // Chrome messaging API accepts any serializable message
-    chrome.runtime.sendMessage(message, (response: TRes) => {
-      if (rejectOnLastError(reject)) return;
-      resolve(response);
-    });
+    const send = (attempt: number): void => {
+      // Chrome messaging API accepts any serializable message
+      chrome.runtime.sendMessage(message, (response: TRes) => {
+        const lastError = chrome.runtime?.lastError;
+        if (lastError) {
+          const errorMessage = lastError.message || "Chrome API error";
+          if (attempt === 0 && isMissingReceiverMessage(errorMessage)) {
+            setTimeout(() => send(attempt + 1), 80);
+            return;
+          }
+          reject(new Error(errorMessage));
+          return;
+        }
+        resolve(response);
+      });
+    };
+
+    send(0);
   });
 }
 

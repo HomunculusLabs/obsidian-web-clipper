@@ -7,10 +7,15 @@ import {
   isPaywalled,
   type ReadabilityArticleLike
 } from "../web/paywall";
-import { getSelection, type SelectionResult } from "../selection";
+import { getSelection } from "../selection";
 import { getTemplateForUrl, isDedicatedExtractorTemplate } from "../templates";
 import { ExtractionError } from "../../shared/errors";
 import { debug } from "../../shared/debug";
+import {
+  extractSeedFinderProfile,
+  isSeedFinderStrainTemplate,
+  renderSeedFinderProfileMarkdown
+} from "./seedfinderProfile";
 
 import type { ClipResult } from "../../shared/types";
 import type { Settings } from "../../shared/settings";
@@ -259,19 +264,28 @@ function extractWithTemplate(
       try {
         const elements = doc.querySelectorAll(selector);
         elements.forEach((el) => el.remove());
-      } catch (e) {
+      } catch {
         console.warn("[Web Extractor] Invalid removeSelector:", selector);
       }
     }
   }
 
-  // Extract content using the template's content selector
-  // Note: selectors.content is guaranteed to be defined because the caller checks it
-  const contentEl = doc.querySelector(selectors.content!);
-  if (!contentEl) {
+  // Extract content using the template's content selector.
+  // Some sites (including GitHub) can render multiple matching containers
+  // (mobile/desktop variants, truncated preview + full content). Pick the
+  // candidate with the richest text content instead of first match.
+  // Note: selectors.content is guaranteed to be defined because the caller checks it.
+  const contentCandidates = Array.from(doc.querySelectorAll(selectors.content!));
+  if (contentCandidates.length === 0) {
     console.warn("[Web Extractor] Template content selector not found:", selectors.content);
     return null;
   }
+
+  const contentEl = contentCandidates.reduce((best, candidate) => {
+    const bestScore = (best?.textContent || "").replace(/\s+/g, " ").trim().length;
+    const candidateScore = (candidate.textContent || "").replace(/\s+/g, " ").trim().length;
+    return candidateScore > bestScore ? candidate : best;
+  });
 
   // Extract title
   let title = "";
@@ -332,13 +346,35 @@ function extractWithTemplate(
     Object.assign(metadata, template.frontmatterExtras);
   }
 
+  let profileMarkdown = "";
+
+  // SeedFinder strain pages: derive normalized profile metadata
+  if (isSeedFinderStrainTemplate(template, pageUrl)) {
+    const profile = extractSeedFinderProfile(doc, contentEl);
+    if (profile?.seedFinderProfile) {
+      metadata.seedFinderProfile = profile.seedFinderProfile;
+      profileMarkdown = renderSeedFinderProfileMarkdown(profile.seedFinderProfile);
+
+      // Legacy compatibility mirrors while downstream consumers migrate.
+      if (profile.seedFinderProfile.lineage) {
+        metadata.lineage = profile.seedFinderProfile.lineage;
+      }
+
+      if (profile.seedFinderProfile.lineageParents?.length) {
+        metadata.lineageParents = [...profile.seedFinderProfile.lineageParents];
+      }
+    }
+  }
+
   // Build final markdown
   const finalTitle = title || document.title || "Untitled";
   const excerpt = description ? `> ${description}\n\n` : "";
+  const profileSection = profileMarkdown ? `${profileMarkdown}\n\n` : "";
 
   return {
-    markdown: `# ${finalTitle}\n\n${excerpt}${markdown}`,
+    markdown: `# ${finalTitle}\n\n${excerpt}${profileSection}${markdown}`,
     title: finalTitle,
     metadata
   };
 }
+

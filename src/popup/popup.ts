@@ -63,7 +63,13 @@ const PREVIEW_LOADING_HINT = "Extracting cleaned markdown from the current page.
 type PopupTheme = "light" | "dark";
 
 const POPUP_THEME_KEY = "popupTheme";
+const VIEW_MODE = new URLSearchParams(window.location.search).get("view");
+const IS_SIDE_PANEL_VIEW = VIEW_MODE === "sidepanel";
 let popupThemePreference: PopupTheme | null = null;
+
+function applySurfaceMode(): void {
+  document.body.classList.toggle("is-sidepanel", IS_SIDE_PANEL_VIEW);
+}
 
 type ClipFormattingOptions = {
   includeImages: boolean;
@@ -411,11 +417,19 @@ async function refreshFolderTreeFromVault(
     return false;
   }
 
-  const response = await runtimeSendMessage<RuntimeRequest, ListVaultFoldersResponse>({
-    action: "listVaultFolders",
-    vault: settings.obsidianCli.vault,
-    cliPath: settings.obsidianCli.cliPath
-  });
+  let response: ListVaultFoldersResponse;
+  try {
+    response = await runtimeSendMessage<RuntimeRequest, ListVaultFoldersResponse>({
+      action: "listVaultFolders",
+      vault: settings.obsidianCli.vault,
+      cliPath: settings.obsidianCli.cliPath
+    });
+  } catch (err) {
+    if (showErrors) {
+      showStatus("error", toErrorMessage(err, "Unable to load vault folders"));
+    }
+    return false;
+  }
 
   if (!response.success) {
     if (showErrors) {
@@ -480,12 +494,20 @@ async function createFolderFromPopup(): Promise<void> {
     return;
   }
 
-  const response = await runtimeSendMessage<RuntimeRequest, CreateVaultFolderResponse>({
-    action: "createVaultFolder",
-    vault: settings.obsidianCli.vault,
-    cliPath: settings.obsidianCli.cliPath,
-    folderPath
-  });
+  let response: CreateVaultFolderResponse;
+  try {
+    response = await runtimeSendMessage<RuntimeRequest, CreateVaultFolderResponse>({
+      action: "createVaultFolder",
+      vault: settings.obsidianCli.vault,
+      cliPath: settings.obsidianCli.cliPath,
+      folderPath
+    });
+  } catch (err) {
+    await addFolderLocally(folderPath);
+    hideCreateFolderRow();
+    showStatus("error", `${toErrorMessage(err, "Unable to create folder via CLI bridge")}. Added folder locally for now.`);
+    return;
+  }
 
   if (!response.success) {
     await addFolderLocally(folderPath);
@@ -1118,15 +1140,92 @@ function handlePopupKeyboardShortcuts(event: KeyboardEvent): void {
 }
 
 async function getCurrentTab(): Promise<chrome.tabs.Tab> {
-  const tabs = await tabsQuery({ active: true, currentWindow: true });
-  const tab = tabs[0];
+  const preferredActive = await tabsQuery({ active: true, lastFocusedWindow: true });
+  const fallbackActive = await tabsQuery({ active: true, currentWindow: true });
+
+  const activeCandidates = [...preferredActive, ...fallbackActive].filter(
+    (tab): tab is chrome.tabs.Tab => typeof tab?.id === "number"
+  );
+
+  // Prefer a clippable active tab when available (common for popup action usage).
+  const clippableActive = activeCandidates.find((tab) => isClippableUrl(tab.url));
+  if (clippableActive) {
+    return clippableActive;
+  }
+
+  // Side panel contexts can occasionally surface the extension surface as the
+  // "active" tab. Fall back to the most recently accessed clippable tab.
+  const lastFocusedTabs = await tabsQuery({ lastFocusedWindow: true });
+  const recentClippable = lastFocusedTabs.find(
+    (tab): tab is chrome.tabs.Tab => typeof tab?.id === "number" && isClippableUrl(tab.url)
+  );
+
+  if (recentClippable) {
+    return recentClippable;
+  }
+
+  const tab = activeCandidates[0];
   if (!tab) {
     throw new TabError("No active tab found", "TAB_NOT_FOUND");
   }
-  if (!tab.id) {
-    throw new TabError("Active tab has no id (cannot message/inject)", "TAB_NO_ID");
-  }
-  return tab;
+
+  throw new TabError(
+    `This page cannot be clipped (unsupported URL: ${tab.url || "unknown"})`,
+    "URL_UNSUPPORTED"
+  );
+}
+
+function setActiveSidebarLink(targetId: string): void {
+  const sidebarLinks = document.querySelectorAll<HTMLButtonElement>(".sidebar-link");
+  sidebarLinks.forEach((link) => {
+    link.classList.toggle("active", link.dataset.target === targetId);
+  });
+}
+
+function setupSidebarNavigation(): void {
+  const sidebarLinks = document.querySelectorAll<HTMLButtonElement>(".sidebar-link");
+  if (sidebarLinks.length === 0) return;
+
+  sidebarLinks.forEach((link) => {
+    link.addEventListener("click", () => {
+      const targetId = link.dataset.target;
+      if (!targetId) return;
+
+      const target = document.getElementById(targetId);
+      if (!target) return;
+
+      if (target instanceof HTMLDetailsElement) {
+        target.open = true;
+      }
+
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSidebarLink(targetId);
+    });
+  });
+
+  const sections = document.querySelectorAll<HTMLDetailsElement>(".popup-section");
+  sections.forEach((section) => {
+    section.addEventListener("toggle", () => {
+      if (section.open && section.id) {
+        setActiveSidebarLink(section.id);
+      }
+    });
+  });
+
+  document.addEventListener("focusin", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    if (target.id === "clipBtn") {
+      setActiveSidebarLink("clipBtn");
+      return;
+    }
+
+    const section = target.closest<HTMLDetailsElement>(".popup-section");
+    if (section?.id) {
+      setActiveSidebarLink(section.id);
+    }
+  });
 }
 
 function setupEventListeners(): void {
@@ -1323,6 +1422,7 @@ function setupEventListeners(): void {
 
   // Tab switching
   setupTabSwitching();
+  setupSidebarNavigation();
 
   document.addEventListener("keydown", handlePopupKeyboardShortcuts);
 }
@@ -1408,9 +1508,7 @@ async function updatePreview(forceRefresh = false): Promise<void> {
   previewContent.innerHTML = "";
 
   try {
-    if (!currentTab) {
-      currentTab = await getCurrentTab();
-    }
+    currentTab = await getCurrentTab();
 
     const extractionSettings = getExtractionSettingsWithFormatting(settings);
 
@@ -1817,9 +1915,7 @@ async function handleClip(): Promise<void> {
     showStatus("loading", "Clipping page...");
     if (clipBtn) clipBtn.disabled = true;
 
-    if (!currentTab) {
-      currentTab = await getCurrentTab();
-    }
+    currentTab = await getCurrentTab();
 
     const extractionSettings = getExtractionSettingsWithFormatting(settings);
 
@@ -1908,9 +2004,7 @@ async function handleClipFromPreview(): Promise<void> {
       throw new Error("Preview content is unavailable.");
     }
 
-    if (!currentTab) {
-      currentTab = await getCurrentTab();
-    }
+    currentTab = await getCurrentTab();
 
     const titleInput = getEl<HTMLInputElement>("titleInput");
     const folderInput = getEl<HTMLSelectElement>("folderInput");
@@ -1950,6 +2044,7 @@ async function handleClipFromPreview(): Promise<void> {
 }
 
 async function init(): Promise<void> {
+  applySurfaceMode();
   await loadPopupThemePreference();
   await loadSettings();
   currentTab = await getCurrentTab();

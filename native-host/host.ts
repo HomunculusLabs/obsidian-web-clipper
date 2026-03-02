@@ -56,16 +56,26 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 /**
- * Basic path sanitization to prevent directory traversal
- * Removes null bytes, prevents .. traversal, normalizes slashes
+ * Basic path sanitization to prevent directory traversal.
+ * Removes null bytes, strips ".." path segments (but leaves ".." inside
+ * filenames like "foo..bar" intact), normalizes slashes.
  */
-function sanitizePath(path: string): string {
-  return path
+function sanitizePath(rawPath: string): string {
+  const cleaned = rawPath
     .replace(/\0/g, "")           // Remove null bytes
-    .replace(/\.\./g, "")         // Prevent directory traversal
-    .replace(/\/+/g, "/")         // Normalize multiple slashes
-    .replace(/^\/+/, "")          // Remove leading slashes
+    .replace(/\\/g, "/")          // Normalize backslashes to forward slashes
+    .replace(/\/+/g, "/")         // Collapse multiple slashes
     .trim();
+
+  // Split into segments, drop any that are exactly ".." (traversal),
+  // but keep segments that merely contain ".." (e.g. "foo..bar").
+  const segments = cleaned
+    .split("/")
+    .filter((seg) => seg !== ".." && seg !== ".");
+
+  return segments
+    .join("/")
+    .replace(/^\/+/, "");         // Remove leading slashes
 }
 
 async function handleSaveToCli(payload: Record<string, unknown>): Promise<NativeResponse> {
@@ -75,6 +85,7 @@ async function handleSaveToCli(payload: Record<string, unknown>): Promise<Native
   const filePath = payload.filePath;
   const content = payload.content;
   const overwrite = payload.overwrite;
+  const vaultPathOverride = payload.vaultPath;
 
   if (!isNonEmptyString(cliPath)) {
     return {
@@ -110,75 +121,170 @@ async function handleSaveToCli(payload: Record<string, unknown>): Promise<Native
 
   // Sanitize the file path to prevent directory traversal
   const sanitizedPath = sanitizePath(filePath);
-
-  // Build command arguments
-  // obsidian-cli create <note> --content "..." --vault "..." [--overwrite]
-  const args = [
-    "create",
-    sanitizedPath,
-    "--content",
-    content,
-    "--vault",
-    vault
-  ];
-
-  // Add overwrite flag (default true unless explicitly set to false)
-  if (overwrite !== false) {
-    args.push("--overwrite");
+  if (!sanitizedPath) {
+    return {
+      success: false,
+      code: "INVALID_FILE_PATH",
+      error: "filePath resolves to an empty path after sanitization"
+    };
   }
 
-  try {
-    const { spawn } = await import("child_process");
+  // Extension sends note path without extension; write markdown files directly.
+  const notePath = sanitizedPath.endsWith(".md") ? sanitizedPath : `${sanitizedPath}.md`;
 
-    const result = await new Promise<NativeResponse>((resolve) => {
-      const proc = spawn(cliPath, args, {
-        stdio: ["ignore", "pipe", "pipe"]
-      });
+  // NOTE:
+  // We prefer direct filesystem writes over obsidian-cli --content because the
+  // current obsidian-cli implementation is URI-backed and truncates at
+  // characters like '&' in content payloads.
 
-      let stdout = "";
-      let stderr = "";
+  async function saveViaCliProcess(): Promise<NativeResponse> {
+    const args = ["create", sanitizedPath, "--content", content, "--vault", vault];
+    if (overwrite !== false) {
+      args.push("--overwrite");
+    }
 
-      proc.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
+    try {
+      const { spawn } = await import("child_process");
 
-      proc.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      proc.on("error", (err) => {
-        resolve({
-          success: false,
-          code: "SPAWN_ERROR",
-          error: `Failed to spawn CLI: ${err.message}`
+      return await new Promise<NativeResponse>((resolve) => {
+        const proc = spawn(cliPath, args, {
+          stdio: ["ignore", "pipe", "pipe"]
         });
-      });
 
-      proc.on("close", (code) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-            data: {
-              filePath: sanitizedPath,
-              vault
-            }
-          });
-        } else {
-          // Extract meaningful error from stderr
-          const errorMsg = stderr.trim() || stdout.trim() || `CLI exited with code ${code}`;
+        let stdout = "";
+        let stderr = "";
+
+        proc.stdout?.on("data", (data) => {
+          stdout += data.toString();
+        });
+
+        proc.stderr?.on("data", (data) => {
+          stderr += data.toString();
+        });
+
+        proc.on("error", (err) => {
           resolve({
             success: false,
-            code: "CLI_ERROR",
-            error: errorMsg,
-            data: {
-              exitCode: code ?? undefined
-            }
+            code: "SPAWN_ERROR",
+            error: `Failed to spawn CLI: ${err.message}`
           });
-        }
-      });
-    });
+        });
 
-    return result;
+        proc.on("close", (code) => {
+          if (code === 0) {
+            resolve({
+              success: true,
+              data: {
+                filePath: sanitizedPath,
+                vault
+              }
+            });
+          } else {
+            const errorMsg = stderr.trim() || stdout.trim() || `CLI exited with code ${code}`;
+            resolve({
+              success: false,
+              code: "CLI_ERROR",
+              error: errorMsg,
+              data: {
+                exitCode: code ?? undefined
+              }
+            });
+          }
+        });
+      });
+    } catch (err) {
+      return {
+        success: false,
+        code: "EXECUTION_ERROR",
+        error: err instanceof Error ? err.message : String(err)
+      };
+    }
+  }
+
+  // Resolve vault path. If unavailable, fall back to cli process behavior for
+  // compatibility with environments that rely on cli-only flow.
+  const vaultResult = await resolveVaultPath(vault, isNonEmptyString(vaultPathOverride) ? vaultPathOverride : undefined);
+  if ("error" in vaultResult) {
+    return saveViaCliProcess();
+  }
+
+  const resolvedVaultPath = vaultResult.path;
+
+  try {
+    const path = await import("path");
+    const fs = await import("fs");
+
+    const normalizedVaultRoot = path.resolve(resolvedVaultPath);
+
+    // Resolve and guard destination path to remain inside vault root
+    const destinationPath = path.resolve(normalizedVaultRoot, notePath);
+    const relativeToVault = path.relative(normalizedVaultRoot, destinationPath);
+
+    if (relativeToVault.startsWith("..") || path.isAbsolute(relativeToVault)) {
+      return {
+        success: false,
+        code: "INVALID_FILE_PATH",
+        error: "File path escapes vault root"
+      };
+    }
+
+    // Check that vault directory exists and is accessible
+    try {
+      const stat = await fs.promises.stat(normalizedVaultRoot);
+      if (!stat.isDirectory()) {
+        return {
+          success: false,
+          code: "VAULT_NOT_DIR",
+          error: `Vault path "${normalizedVaultRoot}" is not a directory`
+        };
+      }
+    } catch (statErr) {
+      if ((statErr as NodeJS.ErrnoException).code === "ENOENT") {
+        return {
+          success: false,
+          code: "VAULT_NOT_FOUND",
+          error: `Vault directory "${normalizedVaultRoot}" does not exist`
+        };
+      }
+      if ((statErr as NodeJS.ErrnoException).code === "EACCES") {
+        return {
+          success: false,
+          code: "VAULT_ACCESS_DENIED",
+          error: `Permission denied accessing vault directory "${normalizedVaultRoot}"`
+        };
+      }
+      throw statErr;
+    }
+
+    // Ensure parent directories exist
+    await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
+
+    // Preserve overwrite semantics (default true unless explicitly false)
+    if (overwrite === false) {
+      try {
+        await fs.promises.writeFile(destinationPath, content, { encoding: "utf8", flag: "wx" });
+      } catch (writeErr) {
+        if ((writeErr as NodeJS.ErrnoException).code === "EEXIST") {
+          return {
+            success: false,
+            code: "FILE_EXISTS",
+            error: `File already exists: ${notePath}`
+          };
+        }
+        throw writeErr;
+      }
+    } else {
+      await fs.promises.writeFile(destinationPath, content, "utf8");
+    }
+
+    return {
+      success: true,
+      data: {
+        filePath: sanitizedPath,
+        vault,
+        writtenPath: destinationPath
+      }
+    };
   } catch (err) {
     return {
       success: false,
