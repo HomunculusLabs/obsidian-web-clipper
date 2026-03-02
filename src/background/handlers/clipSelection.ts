@@ -22,6 +22,7 @@ import { debug } from "../../shared/debug";
 import { toErrorMessage } from "../../shared/errors";
 import { showClipSavedNotification } from "../../shared/notifications";
 import { incrementBadgeCounter } from "../../shared/badgeCounter";
+import { handleSaveToCli } from "./saveToCli";
 import type { TabRequest, TabResponse } from "../../shared/messages";
 import type { PageType, ClipResult } from "../../shared/types";
 
@@ -30,6 +31,7 @@ const SPA_DOMAINS = [
   "vuejs.org",
   "nextjs.org",
   "docs.github.com",
+  "github.com",
   "developer.mozilla.org",
   "stackoverflow.com",
   "reddit.com",
@@ -61,12 +63,19 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isMissingReceiverError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /receiving end does not exist|could not establish connection/i.test(message);
+}
+
 async function ensureContentScriptLoaded(tabId: number): Promise<void> {
   try {
     await tabsSendMessage<TabRequest, unknown>(tabId, { action: "getPageInfo" });
     return;
-  } catch {
-    // Not injected yet; inject the bundled content script.
+  } catch (err) {
+    if (!isMissingReceiverError(err)) {
+      throw err;
+    }
   }
 
   await scriptingExecuteScript({
@@ -74,11 +83,18 @@ async function ensureContentScriptLoaded(tabId: number): Promise<void> {
     files: ["content/content.js"]
   });
 
-  // Give the injected script a moment to initialize its onMessage listener.
-  await sleep(150);
-
-  // Verify listener is live.
-  await tabsSendMessage<TabRequest, unknown>(tabId, { action: "getPageInfo" });
+  const maxAttempts = 4;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await sleep(120 * attempt);
+    try {
+      await tabsSendMessage<TabRequest, unknown>(tabId, { action: "getPageInfo" });
+      return;
+    } catch (err) {
+      if (!isMissingReceiverError(err) || attempt === maxAttempts) {
+        throw new Error("Could not connect to the page content script. Refresh the tab and try again.");
+      }
+    }
+  }
 }
 
 interface ClipSelectionResult {
@@ -99,7 +115,6 @@ function buildMarkdown(
 ): string {
   const finalTitle = sanitizeFilename(result.title || "Untitled");
 
-  const folder = (settings.defaultFolder || DEFAULT_SETTINGS.defaultFolder || "").trim();
   const rawTags = (settings.defaultTags || DEFAULT_SETTINGS.defaultTags || "").trim();
   const tags = addAutoTags(parseTags(rawTags), pageType);
 
@@ -242,38 +257,73 @@ export async function handleClipSelection(): Promise<ClipSelectionResult> {
     const noteTitle = finalTitle.trim() || "Untitled";
     const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName || "Main Vault").trim();
 
-    // Try to save using the configured method with fallback
+    // Save using configured method with fallback chain.
     const saveMethod = settings.saveMethod || DEFAULT_SETTINGS.saveMethod || "uri";
+    const methods: Array<"cli" | "uri" | "clipboard"> =
+      saveMethod === "cli"
+        ? ["cli", "uri", "clipboard"]
+        : saveMethod === "uri"
+          ? ["uri", "clipboard"]
+          : ["clipboard"];
 
-    // Try URI first (if CLI not enabled or as fallback)
-    if (saveMethod === "uri" || saveMethod === "cli") {
-      const uriResult = await saveViaUri(vault, filePath, markdown);
-      if (uriResult.success) {
-        void showClipSavedNotification(settings, noteTitle, vault);
-        void incrementBadgeCounter(settings);
-        return { success: true };
+    let lastError = "Failed to save clipped selection";
+
+    for (const method of methods) {
+      if (method === "cli") {
+        const cliPath = (settings.obsidianCli?.cliPath || "").trim();
+        const cliEnabled = settings.obsidianCli?.enabled === true;
+        const cliVault = (settings.obsidianCli?.vault || vault).trim() || vault;
+
+        if (!cliEnabled || !cliPath) {
+          lastError = "Obsidian CLI is not configured";
+          debug("ClipSelection", "CLI save skipped: not configured");
+          continue;
+        }
+
+        const cliResult = await handleSaveToCli({
+          action: "saveToCli",
+          filePath,
+          content: markdown,
+          vault: cliVault,
+          cliPath
+        });
+
+        if (cliResult.success) {
+          void showClipSavedNotification(settings, noteTitle, cliVault);
+          void incrementBadgeCounter(settings);
+          return { success: true };
+        }
+
+        lastError = cliResult.error || "CLI save failed";
+        debug("ClipSelection", `CLI save failed, trying fallback: ${lastError}`);
+        continue;
       }
 
-      // If URI failed and we're using CLI, CLI would need Native Messaging bridge
-      // For now, fall back to clipboard
-      if (saveMethod === "cli") {
-        debug("ClipSelection", "CLI save not available in service worker, falling back to clipboard");
-      }
-    }
+      if (method === "uri") {
+        const uriResult = await saveViaUri(vault, filePath, markdown);
+        if (uriResult.success) {
+          void showClipSavedNotification(settings, noteTitle, vault);
+          void incrementBadgeCounter(settings);
+          return { success: true };
+        }
 
-    // Clipboard fallback
-    if (saveMethod === "clipboard" || saveMethod === "uri" || saveMethod === "cli") {
+        lastError = uriResult.error || "URI save failed";
+        debug("ClipSelection", `URI save failed, trying fallback: ${lastError}`);
+        continue;
+      }
+
       const clipboardResult = await saveViaClipboard(markdown);
       if (clipboardResult.success) {
-        debug("ClipSelection", "Selection clip saved to clipboard (paste into Obsidian)");
+        debug("ClipSelection", "Selection clip saved to clipboard (fallback)");
         void showClipSavedNotification(settings, noteTitle, vault);
         void incrementBadgeCounter(settings);
         return { success: true };
       }
-      return { success: false, error: clipboardResult.error || "Failed to save to clipboard" };
+
+      lastError = clipboardResult.error || "Clipboard save failed";
     }
 
-    return { success: false, error: "Unknown save method" };
+    return { success: false, error: lastError };
   } catch (err) {
     return { success: false, error: toErrorMessage(err, "Failed to clip selection") };
   }

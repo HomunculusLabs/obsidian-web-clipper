@@ -5,6 +5,7 @@
   "description": "Clip web pages, PDFs, and YouTube videos to clean markdown for Obsidian",
   "permissions": [
     "activeTab",
+    "sidePanel",
     "storage",
     "clipboardWrite",
     "scripting",
@@ -24,17 +25,18 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content/content.js"],
-      "run_at": "document_idle",
-      "type": "module"
+      "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html?view=sidepanel"
   },
   "options_page": "options/options.html",
   "icons": {

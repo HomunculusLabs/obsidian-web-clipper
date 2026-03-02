@@ -8,7 +8,7 @@
  * Configuration for the Obsidian CLI integration
  */
 export interface ObsidianCliConfig {
-  /** Path to the obsidian CLI binary (e.g., '/usr/local/bin/obsidian') */
+  /** Path to the obsidian CLI binary (e.g., '/opt/homebrew/bin/obsidian-cli') */
   cliPath: string;
   
   /** Target vault name for saves */

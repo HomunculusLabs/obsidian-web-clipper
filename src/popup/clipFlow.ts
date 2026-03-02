@@ -12,6 +12,7 @@ const SPA_DOMAINS = [
   "vuejs.org",
   "nextjs.org",
   "docs.github.com",
+  "github.com",
   "developer.mozilla.org",
   "stackoverflow.com",
   "reddit.com",
@@ -26,6 +27,11 @@ const SPA_DOMAINS = [
   "linear.app",
   "discord.com"
 ] as const;
+
+function isMissingReceiverError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /receiving end does not exist|could not establish connection/i.test(message);
+}
 
 export function isLikelySPA(url: string | undefined): boolean {
   if (!url) return false;
@@ -48,20 +54,39 @@ export async function ensureContentScriptLoaded(tabId: number): Promise<void> {
   try {
     await tabsSendMessage<TabRequest, PageInfo>(tabId, { action: "getPageInfo" });
     return;
-  } catch {
-    // Not injected yet; inject the bundled content script.
+  } catch (err) {
+    if (!isMissingReceiverError(err)) {
+      throw err;
+    }
   }
 
-  await scriptingExecuteScript({
-    target: { tabId },
-    files: ["content/content.js"]
-  });
+  try {
+    await scriptingExecuteScript({
+      target: { tabId },
+      files: ["content/content.js"]
+    });
+  } catch (err) {
+    throw new TabError(
+      err instanceof Error ? err.message : "Failed to inject content script",
+      "CONTENT_SCRIPT_INJECT_FAILED"
+    );
+  }
 
-  // Give the injected script a moment to initialize its onMessage listener.
-  await sleep(150);
-
-  // Verify listener is live.
-  await tabsSendMessage<TabRequest, PageInfo>(tabId, { action: "getPageInfo" });
+  const maxAttempts = 4;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await sleep(120 * attempt);
+    try {
+      await tabsSendMessage<TabRequest, PageInfo>(tabId, { action: "getPageInfo" });
+      return;
+    } catch (err) {
+      if (!isMissingReceiverError(err) || attempt === maxAttempts) {
+        throw new TabError(
+          "Could not connect to the page content script. Refresh the tab and try again.",
+          "CONTENT_SCRIPT_INJECT_FAILED"
+        );
+      }
+    }
+  }
 }
 
 function normalizeTabResponse(raw: unknown): TabResponse {
@@ -110,7 +135,19 @@ export async function performClip(options: ClipOptions): Promise<ClipResult> {
   debug("Popup", "Sending clip request:", request);
   debug("Popup", "Tab URL:", tab.url);
 
-  const rawResponse = await tabsSendMessage<TabRequest, unknown>(tab.id, request);
+  let rawResponse: unknown;
+  try {
+    rawResponse = await tabsSendMessage<TabRequest, unknown>(tab.id, request);
+  } catch (err) {
+    if (!isMissingReceiverError(err)) {
+      throw err;
+    }
+
+    // Receiver likely got unloaded during navigation/reload. Re-check and retry once.
+    await ensureContentScriptLoaded(tab.id);
+    rawResponse = await tabsSendMessage<TabRequest, unknown>(tab.id, request);
+  }
+
   debug("Popup", "Got response:", rawResponse);
   const response = normalizeTabResponse(rawResponse);
 

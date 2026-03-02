@@ -14,23 +14,32 @@
  */
 const COMMON_CLI_PATHS: Record<string, string[]> = {
   // macOS
+  // Prefer obsidian-cli package paths first because the app binary is not a
+  // reliable command-line interface for note operations.
   darwin: [
+    "/opt/homebrew/bin/obsidian-cli",
+    "/usr/local/bin/obsidian-cli",
+    "~/.local/bin/obsidian-cli",
+    "~/bin/obsidian-cli",
+    "/Applications/Obsidian.app/Contents/MacOS/obsidian",
     "/usr/local/bin/obsidian",
     "/opt/homebrew/bin/obsidian",
-    "/usr/local/opt/obsidian/bin/obsidian",
-    "~/bin/obsidian",
-    "~/.local/bin/obsidian",
   ],
   // Linux
   linux: [
+    "/usr/local/bin/obsidian-cli",
+    "/usr/bin/obsidian-cli",
+    "~/.local/bin/obsidian-cli",
+    "~/bin/obsidian-cli",
     "/usr/local/bin/obsidian",
     "/usr/bin/obsidian",
-    "~/.local/bin/obsidian",
-    "~/bin/obsidian",
     "/snap/bin/obsidian",
   ],
   // Windows
   win32: [
+    "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\obsidian-cli\\obsidian-cli.exe",
+    "C:\\Program Files\\obsidian-cli\\obsidian-cli.exe",
+    "C:\\Program Files (x86)\\obsidian-cli\\obsidian-cli.exe",
     "C:\\Program Files\\Obsidian\\obsidian.exe",
     "C:\\Program Files (x86)\\Obsidian\\obsidian.exe",
     "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Obsidian\\obsidian.exe",
