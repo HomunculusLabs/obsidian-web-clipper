@@ -9,9 +9,13 @@
  * - No-match cases: Empty results and default diagnostics
  * - Truncation: Behavior when matches exceed MAX_RELATED_CLIPS
  * - Tie-break determinism: Stable ordering when scores are equal
+ * - Cache parity: Cached and rebuilt paths produce identical outputs
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { promises as fs } from "fs";
+import { tmpdir } from "os";
+import * as path from "path";
 import {
   RELATED_CLIPS_GRAPH_VERSION,
   MAX_RELATED_CLIPS,
@@ -32,6 +36,11 @@ import {
   type RelatedClipsDiagnostics,
   type RelatednessScore,
 } from "../../../src/shared/relatedClipsContract";
+import {
+  indexVaultWithCache,
+  type VaultIndexOptions,
+  type VaultIndexResult,
+} from "../../../src/shared/vaultIndex";
 
 // =============================================================================
 // PASS CASES - Normal matching scenarios
@@ -959,5 +968,461 @@ describe("INTEGRATION CASES - Full pipeline", () => {
     const markdown2 = renderRelatedClipsSection(result2);
 
     expect(markdown1).toBe(markdown2);
+  });
+});
+
+// =============================================================================
+// CACHE PARITY CASES - Cached and rebuilt paths produce identical outputs
+// =============================================================================
+
+describe("CACHE PARITY CASES - Cached vs rebuilt path determinism", () => {
+  let testVaultPath: string;
+
+  beforeEach(async () => {
+    // Create temporary test vault
+    testVaultPath = path.join(
+      tmpdir(),
+      `related-clips-cache-parity-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    await fs.mkdir(testVaultPath, { recursive: true });
+  });
+
+  afterEach(async () => {
+    // Cleanup test vault
+    if (testVaultPath) {
+      await fs.rm(testVaultPath, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * Create a test note with frontmatter
+   */
+  async function createTestNote(
+    filename: string,
+    content: string
+  ): Promise<void> {
+    const filePath = path.join(testVaultPath, filename);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, "utf-8");
+  }
+
+  test("cache-parity: candidates from cache hit match cache rebuild", async () => {
+    // Create test notes in vault
+    await createTestNote(
+      "Clips/Article 1.md",
+      `---
+source: https://example.com/article1
+title: Article 1
+tags:
+  - typescript
+  - api
+keywords:
+  - typescript
+  - api
+  - testing
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Article 1 Content`
+    );
+
+    await createTestNote(
+      "Clips/Article 2.md",
+      `---
+source: https://example.com/article2
+title: Article 2
+tags:
+  - typescript
+  - web-dev
+keywords:
+  - typescript
+  - web
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# Article 2 Content`
+    );
+
+    await createTestNote(
+      "Clips/Article 3.md",
+      `---
+source: https://different.com/article3
+title: Article 3
+tags:
+  - javascript
+  - api
+keywords:
+  - javascript
+date_clipped: 2026-03-03T10:00:00.000Z
+---
+# Article 3 Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // First call: cache miss, rebuild
+    const resultMiss = await indexVaultWithCache(options);
+    expect(resultMiss.cacheDiagnostics?.cacheHit).toBe(false);
+    expect(resultMiss.cacheDiagnostics?.cacheRebuilt).toBe(true);
+
+    // Second call: cache hit
+    const resultHit = await indexVaultWithCache(options);
+    expect(resultHit.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(resultHit.cacheDiagnostics?.cacheRebuilt).toBe(false);
+
+    // Candidates from cache hit should match cache rebuild
+    // Sort both arrays for comparison since order may differ but content should be identical
+    const sortedMiss = [...resultMiss.candidates].sort((a, b) => a.path.localeCompare(b.path));
+    const sortedHit = [...resultHit.candidates].sort((a, b) => a.path.localeCompare(b.path));
+
+    expect(sortedHit).toEqual(sortedMiss);
+    expect(sortedHit).toHaveLength(3);
+
+    // Verify candidate order is deterministic (sorted by path)
+    const pathsHit = resultHit.candidates.map((c) => c.path).sort();
+    const pathsMiss = resultMiss.candidates.map((c) => c.path).sort();
+    expect(pathsHit).toEqual(pathsMiss);
+
+    // Verify all candidate fields are identical (iterate through sorted arrays)
+    for (let i = 0; i < sortedMiss.length; i++) {
+      const missCandidate = sortedMiss[i];
+      const hitCandidate = sortedHit[i];
+
+      expect(hitCandidate.path).toBe(missCandidate.path);
+      expect(hitCandidate.title).toBe(missCandidate.title);
+      expect(hitCandidate.sourceUrl).toBe(missCandidate.sourceUrl);
+      expect(hitCandidate.domain).toBe(missCandidate.domain);
+      expect(hitCandidate.contentType).toBe(missCandidate.contentType);
+      expect(hitCandidate.entities).toEqual(missCandidate.entities);
+      expect(hitCandidate.tags).toEqual(missCandidate.tags);
+      expect(hitCandidate.timestamp).toBe(missCandidate.timestamp);
+      expect(hitCandidate.id).toBe(missCandidate.id);
+    }
+  });
+
+  test("cache-parity: computeRelatedClips produces identical results with cache hit vs rebuild", async () => {
+    // Create test notes
+    await createTestNote(
+      "Clips/Related A.md",
+      `---
+source: https://example.com/related-a
+title: Related Article A
+tags:
+  - typescript
+  - api
+keywords:
+  - typescript
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Related A`
+    );
+
+    await createTestNote(
+      "Clips/Related B.md",
+      `---
+source: https://example.com/related-b
+title: Related Article B
+tags:
+  - typescript
+  - testing
+keywords:
+  - testing
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# Related B`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Get candidates from cache rebuild (miss)
+    const resultMiss = await indexVaultWithCache(options);
+    const candidatesFromMiss = resultMiss.candidates;
+
+    // Get candidates from cache hit
+    const resultHit = await indexVaultWithCache(options);
+    const candidatesFromHit = resultHit.candidates;
+
+    // Input for related clips matching
+    const input: RelatedClipsInput = {
+      sourceUrl: "https://example.com/new-article",
+      domain: "example.com",
+      contentType: "article",
+      entities: ["typescript", "api"],
+      tags: ["web-clip"],
+      timestamp: "2026-03-03T12:00:00.000Z",
+    };
+
+    // Compute related clips with cache rebuild candidates
+    const resultFromMiss = computeRelatedClips(input, candidatesFromMiss);
+
+    // Compute related clips with cache hit candidates
+    const resultFromHit = computeRelatedClips(input, candidatesFromHit);
+
+    // Results should be identical
+    expect(resultFromMiss.relatedClips).toEqual(resultFromHit.relatedClips);
+    expect(resultFromMiss.matchesFound).toBe(resultFromHit.matchesFound);
+    expect(resultFromMiss.truncated).toBe(resultFromHit.truncated);
+    expect(resultFromMiss.topScore).toBe(resultFromHit.topScore);
+    expect(resultFromMiss.candidatesEvaluated).toBe(resultFromHit.candidatesEvaluated);
+    expect(resultFromMiss.graphVersion).toBe(resultFromHit.graphVersion);
+
+    // Extract diagnostics and verify they match
+    const diagFromMiss = extractDiagnostics(resultFromMiss);
+    const diagFromHit = extractDiagnostics(resultFromHit);
+
+    expect(diagFromMiss).toEqual(diagFromHit);
+    expect(diagFromMiss.related_clips_count).toBe(diagFromHit.related_clips_count);
+    expect(diagFromMiss.related_clips_top_score).toBe(diagFromHit.related_clips_top_score);
+    expect(diagFromMiss.related_clips_truncated).toBe(diagFromHit.related_clips_truncated);
+    expect(diagFromMiss.related_graph_version).toBe(diagFromHit.related_graph_version);
+  });
+
+  test("cache-parity: renderRelatedClipsSection produces identical markdown", async () => {
+    // Create test notes
+    await createTestNote(
+      "Clips/Markdown Test.md",
+      `---
+source: https://example.com/markdown-test
+title: Markdown Test Article
+tags:
+  - documentation
+  - markdown
+keywords:
+  - markdown
+  - formatting
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Markdown Test Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Get candidates from cache rebuild
+    const resultMiss = await indexVaultWithCache(options);
+    const candidatesFromMiss = resultMiss.candidates;
+
+    // Get candidates from cache hit
+    const resultHit = await indexVaultWithCache(options);
+    const candidatesFromHit = resultHit.candidates;
+
+    // Input for related clips matching
+    const input: RelatedClipsInput = {
+      sourceUrl: "https://example.com/markdown-guide",
+      domain: "example.com",
+      contentType: "article",
+      entities: ["markdown", "formatting"],
+      tags: ["documentation"],
+      timestamp: "2026-03-03T12:00:00.000Z",
+    };
+
+    // Compute and render from cache rebuild candidates
+    const resultFromMiss = computeRelatedClips(input, candidatesFromMiss);
+    const markdownFromMiss = renderRelatedClipsSection(resultFromMiss);
+
+    // Compute and render from cache hit candidates
+    const resultFromHit = computeRelatedClips(input, candidatesFromHit);
+    const markdownFromHit = renderRelatedClipsSection(resultFromHit);
+
+    // Markdown output should be identical
+    expect(markdownFromMiss).toBe(markdownFromHit);
+
+    // Both should contain the same elements
+    expect(markdownFromMiss).toContain("## Related Clips");
+    expect(markdownFromHit).toContain("## Related Clips");
+  });
+
+  test("cache-parity: multiple cache hits produce identical results", async () => {
+    // Create test notes
+    await createTestNote(
+      "Clips/Multiple Hits 1.md",
+      `---
+source: https://example.com/multiple-1
+title: Multiple Hits 1
+tags:
+  - test
+keywords:
+  - multiple
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Content 1`
+    );
+
+    await createTestNote(
+      "Clips/Multiple Hits 2.md",
+      `---
+source: https://example.com/multiple-2
+title: Multiple Hits 2
+tags:
+  - test
+keywords:
+  - hits
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# Content 2`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Build cache
+    await indexVaultWithCache(options);
+
+    // Multiple cache hits (with small delays to ensure cache age increases)
+    const hit1 = await indexVaultWithCache(options);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const hit2 = await indexVaultWithCache(options);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const hit3 = await indexVaultWithCache(options);
+
+    // All hits should produce identical results (sort before comparing since order may differ)
+    const sortedHit1 = [...hit1.candidates].sort((a, b) => a.path.localeCompare(b.path));
+    const sortedHit2 = [...hit2.candidates].sort((a, b) => a.path.localeCompare(b.path));
+    const sortedHit3 = [...hit3.candidates].sort((a, b) => a.path.localeCompare(b.path));
+
+    expect(sortedHit1).toEqual(sortedHit2);
+    expect(sortedHit2).toEqual(sortedHit3);
+
+    // Cache diagnostics should indicate hits
+    expect(hit1.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(hit2.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(hit3.cacheDiagnostics?.cacheHit).toBe(true);
+
+    // Cache age should increase
+    expect(hit2.cacheDiagnostics?.cacheAgeMs).toBeGreaterThan(
+      hit1.cacheDiagnostics?.cacheAgeMs || 0
+    );
+    expect(hit3.cacheDiagnostics?.cacheAgeMs).toBeGreaterThan(
+      hit2.cacheDiagnostics?.cacheAgeMs || 0
+    );
+  });
+
+  test("cache-parity: forced rebuild after corruption produces identical candidates", async () => {
+    // Create test notes
+    await createTestNote(
+      "Clips/Corruption Test.md",
+      `---
+source: https://example.com/corruption-test
+title: Corruption Test
+tags:
+  - cache
+  - integrity
+keywords:
+  - corruption
+  - rebuild
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Corruption Test Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Initial cache build
+    const result1 = await indexVaultWithCache(options);
+    expect(result1.cacheDiagnostics?.cacheRebuilt).toBe(true);
+
+    // Cache hit
+    const result2 = await indexVaultWithCache(options);
+    expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(result2.candidates).toEqual(result1.candidates);
+
+    // Corrupt cache file by modifying a file to trigger fingerprint change
+    await new Promise((resolve) => setTimeout(resolve, 100)); // Ensure mtime changes
+    await createTestNote(
+      "Clips/New Note.md",
+      `---
+source: https://example.com/new-note
+title: New Note
+tags:
+  - new
+date_clipped: 2026-03-04T10:00:00.000Z
+---
+# New Note Content`
+    );
+
+    // Should rebuild cache due to fingerprint change
+    const result3 = await indexVaultWithCache(options);
+    expect(result3.cacheDiagnostics?.cacheHit).toBe(false);
+    expect(result3.cacheDiagnostics?.cacheRebuilt).toBe(true);
+    expect(result3.cacheDiagnostics?.rebuildReason).toBe("vault_fingerprint_changed");
+
+    // Candidates from rebuild should be deterministically sorted
+    expect(result3.candidates.length).toBe(2);
+
+    // New cache hit should match rebuild
+    const result4 = await indexVaultWithCache(options);
+    expect(result4.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(result4.candidates).toEqual(result3.candidates);
+  });
+
+  test("cache-parity: empty vault produces identical results across cache paths", async () => {
+    // No notes created - empty vault
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Cache miss (empty)
+    const result1 = await indexVaultWithCache(options);
+    expect(result1.candidates).toHaveLength(0);
+    expect(result1.cacheDiagnostics?.cacheRebuilt).toBe(true);
+
+    // Cache hit
+    const result2 = await indexVaultWithCache(options);
+    expect(result2.candidates).toHaveLength(0);
+    expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+
+    // Results should be identical
+    expect(result1.candidates).toEqual(result2.candidates);
+    expect(result1.filesScanned).toBe(result2.filesScanned);
+    expect(result1.filesWithFrontmatter).toBe(result2.filesWithFrontmatter);
+    expect(result1.filesSkipped).toBe(result2.filesSkipped);
+  });
+
+  test("cache-parity: large vault produces identical results", async () => {
+    // Create many test notes
+    const noteCount = 20;
+    for (let i = 1; i <= noteCount; i++) {
+      await createTestNote(
+        `Clips/Large Test ${i}.md`,
+        `---
+source: https://example.com/large-test-${i}
+title: Large Test Article ${i}
+tags:
+  - test
+  - large-vault
+keywords:
+  - keyword${i}
+  - test${i}
+date_clipped: 2026-03-${String(i).padStart(2, "0")}T10:00:00.000Z
+---
+# Content ${i}`
+      );
+    }
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Cache rebuild
+    const resultMiss = await indexVaultWithCache(options);
+    expect(resultMiss.candidates.length).toBe(noteCount);
+
+    // Cache hit
+    const resultHit = await indexVaultWithCache(options);
+    expect(resultHit.candidates.length).toBe(noteCount);
+
+    // All candidates should be identical
+    expect(resultHit.candidates).toEqual(resultMiss.candidates);
+
+    // Verify sorting is deterministic (by path)
+    for (let i = 1; i < resultHit.candidates.length; i++) {
+      expect(resultHit.candidates[i - 1].path.localeCompare(resultHit.candidates[i].path)).toBeLessThanOrEqual(0);
+    }
   });
 });

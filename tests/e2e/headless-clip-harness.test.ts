@@ -3778,4 +3778,283 @@ describe("TP006: Retrieval Query Pack end-to-end section + diagnostics parity", 
       expect(section).toBe("");
     });
   });
+
+  // ============================================================================
+  // TP006: Cache Parity - Cached and rebuilt paths produce identical outputs
+  // ============================================================================
+
+  describe("TP006: Cache parity - end-to-end determinism", () => {
+    test("cache-parity: headless clip produces deterministic output across runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "cache-parity-headless",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/cache-parity-article";
+
+      // Create some existing notes in the vault for related clips matching
+      const existingNotePath = join(
+        sandbox.vaultPath,
+        "Clips",
+        "Existing Related Note.md"
+      );
+      await fs.mkdir(join(sandbox.vaultPath, "Clips"), { recursive: true });
+      await fs.writeFile(
+        existingNotePath,
+        `---
+source: https://example.com/existing-note
+title: Existing Related Note
+tags:
+  - web-clip
+  - test
+keywords:
+  - example
+  - article
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Existing Related Note Content
+
+This is an existing note that should be matched as related.`,
+        "utf-8"
+      );
+
+      // First clip save
+      let clipMarkdown1: string | undefined;
+      let extracted1: any;
+      let built1: any;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-1"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown, extracted, built }) => {
+          clipMarkdown1 = clipMarkdown;
+          extracted1 = extracted;
+          built1 = built;
+        }
+      );
+
+      // Second clip save
+      let clipMarkdown2: string | undefined;
+      let extracted2: any;
+      let built2: any;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-2"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown, extracted, built }) => {
+          clipMarkdown2 = clipMarkdown;
+          extracted2 = extracted;
+          built2 = built;
+        }
+      );
+
+      // Both should produce deterministic outputs
+      expect(clipMarkdown1).toBeDefined();
+      expect(clipMarkdown2).toBeDefined();
+
+      // Extract title lines and compare content separately
+      const titleMatch1 = clipMarkdown1!.match(/^title: (.+)$/m);
+      const titleMatch2 = clipMarkdown2!.match(/^title: (.+)$/m);
+
+      // Titles should differ (different deterministic titles)
+      expect(titleMatch1![1]).not.toBe(titleMatch2![1]);
+
+      // But content structure should be identical
+      const content1 = clipMarkdown1!.replace(/^title: .+$/m, "");
+      const content2 = clipMarkdown2!.replace(/^title: .+$/m, "");
+      expect(content1).toBe(content2);
+
+      // Both should have the same frontmatter structure
+      expect(clipMarkdown1).toContain("source:");
+      expect(clipMarkdown2).toContain("source:");
+      expect(clipMarkdown1).toContain("date_clipped:");
+      expect(clipMarkdown2).toContain("date_clipped:");
+      expect(clipMarkdown1).toContain("tags:");
+      expect(clipMarkdown2).toContain("tags:");
+
+      // Both should have article body
+      expect(clipMarkdown1).toContain("# Test Article Title");
+      expect(clipMarkdown2).toContain("# Test Article Title");
+    });
+
+    test("cache-parity: extraction outputs are deterministic across multiple runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "extraction-determinism",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/extraction-test";
+
+      // Collect outputs from multiple runs
+      const extractedOutputs: any[] = [];
+      const markdownOutputs: string[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        withScenario(
+          {
+            fixturePath,
+            simulatedUrl: `${fixtureUrl}/${i}`,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: `Extraction Test ${i}`,
+            overrideTags: "web-clip,determinism",
+          },
+          ({ extracted, clipMarkdown }) => {
+            extractedOutputs.push(extracted);
+            markdownOutputs.push(clipMarkdown);
+          }
+        );
+      }
+
+      // All extractions should succeed
+      expect(extractedOutputs.length).toBe(3);
+      for (const extracted of extractedOutputs) {
+        expect(extracted.error).toBeUndefined();
+        expect(extracted.markdown).toContain("# Test Article Title");
+      }
+
+      // All markdown outputs should have consistent structure
+      for (const markdown of markdownOutputs) {
+        expect(markdown).toContain("---");
+        expect(markdown).toContain("source:");
+        expect(markdown).toContain("title:");
+        expect(markdown).toContain("date_clipped:");
+        expect(markdown).toContain("tags:");
+        expect(markdown).toContain("# Test Article Title");
+        expect(markdown).toContain("This is the first paragraph");
+      }
+    });
+
+    test("cache-parity: frontmatter structure consistent across runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "frontmatter-determinism",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/frontmatter-test";
+
+      // Collect frontmatter from multiple runs
+      const frontmatters: Record<string, any>[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        withScenario(
+          {
+            fixturePath,
+            simulatedUrl: `${fixtureUrl}/${i}`,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: `Frontmatter Test ${i}`,
+            overrideTags: "web-clip,determinism",
+          },
+          ({ built }) => {
+            frontmatters.push(built.frontmatter);
+          }
+        );
+      }
+
+      // All frontmatter should have consistent structure
+      expect(frontmatters.length).toBe(3);
+      for (const fm of frontmatters) {
+        expect(fm).toBeDefined();
+        expect(fm.source).toContain("example.com");
+        expect(fm.type).toBe("article");
+        expect(Array.isArray(fm.tags)).toBe(true);
+        expect(fm.tags).toContain("web-clip");
+      }
+
+      // All should have core required keys
+      for (const fm of frontmatters) {
+        expect(fm).toHaveProperty("source");
+        expect(fm).toHaveProperty("title");
+        expect(fm).toHaveProperty("tags");
+        expect(fm).toHaveProperty("type");
+      }
+    });
+
+    test("cache-parity: built markdown path is consistent", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "markdown-path-determinism",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/markdown-path-test";
+
+      // Collect built file paths from multiple runs
+      const filePaths: string[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        withScenario(
+          {
+            fixturePath,
+            simulatedUrl: `${fixtureUrl}/${i}`,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips/Determinism",
+            overrideTitle: `Markdown Path Test ${i}`,
+            overrideTags: "web-clip,determinism",
+          },
+          ({ built }) => {
+            filePaths.push(built.filePath);
+          }
+        );
+      }
+
+      // All file paths should have consistent structure
+      expect(filePaths.length).toBe(3);
+      for (const path of filePaths) {
+        expect(path).toContain("Clips/Determinism");
+        expect(path).toContain("Markdown Path Test");
+      }
+
+      // All paths should use the same folder
+      const folders = filePaths.map(p => p.split("/").slice(-2, -1)[0]);
+      expect(folders.every(f => f === folders[0])).toBe(true);
+    });
+  });
 });

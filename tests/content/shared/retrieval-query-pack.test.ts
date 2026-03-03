@@ -10,9 +10,13 @@
  * - Full cases: Complete query generation with all artifact types
  * - Truncation: Behavior when queries exceed MAX_*_QUERIES bounds
  * - Tie-break determinism: Stable ordering when scores are equal
+ * - Cache parity: Cached and rebuilt vault contexts produce identical outputs
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { promises as fs } from "fs";
+import { tmpdir } from "os";
+import * as path from "path";
 import {
   QUERY_PACK_VERSION,
   MAX_EXACT_PHRASE_QUERIES,
@@ -30,7 +34,12 @@ import {
   isEmptyQueryPack,
   getNoQueryDiagnostics,
   validateQueryPack,
+  type VaultIndexContext,
 } from "../../../src/shared/retrievalQueryPackBuilder";
+import {
+  indexVaultWithCache,
+  type VaultIndexOptions,
+} from "../../../src/shared/vaultIndex";
 
 // =============================================================================
 // NO-QUERY CASES - Empty results when minimal/no artifacts
@@ -898,5 +907,484 @@ describe("INTEGRATION CASES - Full pipeline", () => {
 
     expect(isEmptyQueryPack(emptyPack)).toBe(true);
     expect(isEmptyQueryPack(fullPack)).toBe(false);
+  });
+});
+
+// =============================================================================
+// CACHE PARITY CASES - Cached and rebuilt vault contexts produce identical outputs
+// =============================================================================
+
+describe("CACHE PARITY CASES - Vault context determinism", () => {
+  let testVaultPath: string;
+
+  beforeEach(async () => {
+    // Create temporary test vault
+    testVaultPath = path.join(
+      tmpdir(),
+      `retrieval-query-pack-cache-parity-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    await fs.mkdir(testVaultPath, { recursive: true });
+  });
+
+  afterEach(async () => {
+    // Cleanup test vault
+    if (testVaultPath) {
+      await fs.rm(testVaultPath, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * Create a test note with frontmatter
+   */
+  async function createTestNote(
+    filename: string,
+    content: string
+  ): Promise<void> {
+    const filePath = path.join(testVaultPath, filename);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, "utf-8");
+  }
+
+  /**
+   * Create vault context from cache or rebuild
+   */
+  async function createVaultContext(
+    options: VaultIndexOptions
+  ): Promise<VaultIndexContext> {
+    const result = await indexVaultWithCache(options);
+
+    return {
+      candidates: result.candidates,
+      cacheDiagnostics: result.cacheDiagnostics,
+    };
+  }
+
+  test("cache-parity: query pack with cached vault context matches rebuild", async () => {
+    // Create test notes in vault
+    await createTestNote(
+      "Clips/TypeScript Guide.md",
+      `---
+source: https://example.com/typescript-guide
+title: TypeScript Guide
+tags:
+  - typescript
+  - programming
+keywords:
+  - typescript
+  - api
+  - types
+  - interfaces
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# TypeScript Guide Content`
+    );
+
+    await createTestNote(
+      "Clips/API Design.md",
+      `---
+source: https://example.com/api-design
+title: API Design Patterns
+tags:
+  - api
+  - design
+keywords:
+  - api
+  - rest
+  - graphql
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# API Design Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Build vault context from cache rebuild (miss)
+    const contextMiss = await createVaultContext(options);
+    expect(contextMiss.cacheDiagnostics?.cacheHit).toBe(false);
+    expect(contextMiss.cacheDiagnostics?.cacheRebuilt).toBe(true);
+
+    // Build vault context from cache hit
+    const contextHit = await createVaultContext(options);
+    expect(contextHit.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(contextHit.cacheDiagnostics?.cacheRebuilt).toBe(false);
+
+    // Input for query pack generation
+    const input: RetrievalQueryPackInput = {
+      title: "Advanced TypeScript API Design",
+      description: "Learn how to design robust APIs using TypeScript",
+      conceptTaxonomy: ["Technology", "Programming", "TypeScript", "API Design"],
+      knowledgeEntities: ["typescript", "api", "interfaces", "types"],
+      keywords: ["typescript", "api", "design"],
+      sourceUrl: "https://example.com/advanced-ts-api",
+      contentType: "article",
+      author: "Dev Expert",
+      publishedDate: "2026-02-15T00:00:00.000Z",
+    };
+
+    // Build query pack with rebuild context
+    const packMiss = buildRetrievalQueryPack(input, contextMiss);
+
+    // Build query pack with cache hit context
+    const packHit = buildRetrievalQueryPack(input, contextHit);
+
+    // Both should produce identical results
+    expect(packHit.exactPhrases).toEqual(packMiss.exactPhrases);
+    expect(packHit.keywordBooleans).toEqual(packMiss.keywordBooleans);
+    expect(packHit.entitySeeds).toEqual(packMiss.entitySeeds);
+    expect(packHit.totalGenerated).toBe(packMiss.totalGenerated);
+    expect(packHit.totalIncluded).toBe(packMiss.totalIncluded);
+    expect(packHit.truncated).toBe(packMiss.truncated);
+    expect(packHit.version).toBe(packMiss.version);
+
+    // Diagnostics should match
+    const diagHit = extractQueryPackDiagnostics(packHit);
+    const diagMiss = extractQueryPackDiagnostics(packMiss);
+
+    expect(diagHit).toEqual(diagMiss);
+    expect(diagHit.query_pack_exact_phrases).toBe(diagMiss.query_pack_exact_phrases);
+    expect(diagHit.query_pack_keyword_booleans).toBe(diagMiss.query_pack_keyword_booleans);
+    expect(diagHit.query_pack_entity_seeds).toBe(diagMiss.query_pack_entity_seeds);
+    expect(diagHit.query_pack_total_queries).toBe(diagMiss.query_pack_total_queries);
+    expect(diagHit.query_pack_truncated).toBe(diagMiss.query_pack_truncated);
+    expect(diagHit.query_pack_version).toBe(diagMiss.query_pack_version);
+  });
+
+  test("cache-parity: discriminative scoring consistent across cache paths", async () => {
+    // Create notes with varying term frequencies
+    // Create multiple notes with "common" to make it truly common
+    for (let i = 1; i <= 5; i++) {
+      await createTestNote(
+        `Clips/Common Term ${i}.md`,
+        `---
+source: https://example.com/common-term-${i}
+title: Common Term Article ${i}
+tags:
+  - common
+keywords:
+  - typescript
+  - common
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Common Term Content ${i}`
+      );
+    }
+
+    await createTestNote(
+      "Clips/Rare Term.md",
+      `---
+source: https://example.com/rare-term
+title: Rare Term Article
+tags:
+  - rare
+keywords:
+  - typescript
+  - specialized
+  - unique
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# Rare Term Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Get contexts from cache rebuild and hit
+    const contextMiss = await createVaultContext(options);
+    const contextHit = await createVaultContext(options);
+
+    // Input that includes both common and rare terms
+    const input: RetrievalQueryPackInput = {
+      title: "TypeScript Common and Rare Patterns",
+      knowledgeEntities: ["typescript", "specialized", "unique", "common"],
+      contentType: "article",
+    };
+
+    const packMiss = buildRetrievalQueryPack(input, contextMiss);
+    const packHit = buildRetrievalQueryPack(input, contextHit);
+
+    // Entity seeds should have identical discriminative scoring
+    // Sort for comparison since order may differ but content should be identical
+    const sortedEntitySeedsMiss = [...packMiss.entitySeeds].sort((a, b) =>
+      a.entity.localeCompare(b.entity)
+    );
+    const sortedEntitySeedsHit = [...packHit.entitySeeds].sort((a, b) =>
+      a.entity.localeCompare(b.entity)
+    );
+    expect(sortedEntitySeedsHit).toEqual(sortedEntitySeedsMiss);
+
+    // Rare terms should have higher scores than common terms (discriminative bonus)
+    const specializedSeed = packHit.entitySeeds.find(s => s.entity === "specialized");
+    const commonSeed = packHit.entitySeeds.find(s => s.entity === "common");
+
+    if (specializedSeed && commonSeed) {
+      // "specialized" appears in 1/6 notes (~17%) while "common" appears in 5/6 notes (~83%)
+      // So "specialized" should get a higher discriminative score
+      expect(specializedSeed.score).toBeGreaterThan(commonSeed.score);
+    }
+  });
+
+  test("cache-parity: renderRetrievalQueryPackSection produces identical markdown", async () => {
+    // Create test notes
+    await createTestNote(
+      "Clips/Markdown Render Test.md",
+      `---
+source: https://example.com/markdown-render-test
+title: Markdown Render Test
+tags:
+  - markdown
+  - formatting
+keywords:
+  - markdown
+  - formatting
+  - rendering
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Markdown Render Test`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Get contexts from cache rebuild and hit
+    const contextMiss = await createVaultContext(options);
+    const contextHit = await createVaultContext(options);
+
+    // Input for query pack generation
+    const input: RetrievalQueryPackInput = {
+      title: "Complete Guide to Markdown Formatting",
+      description: "Learn markdown syntax and best practices",
+      keywords: ["markdown", "formatting", "guide"],
+      contentType: "article",
+    };
+
+    const packMiss = buildRetrievalQueryPack(input, contextMiss);
+    const packHit = buildRetrievalQueryPack(input, contextHit);
+
+    // Render markdown from both
+    const markdownMiss = renderRetrievalQueryPackSection(packMiss);
+    const markdownHit = renderRetrievalQueryPackSection(packHit);
+
+    // Markdown should be identical
+    expect(markdownMiss).toBe(markdownHit);
+  });
+
+  test("cache-parity: empty vault context produces consistent results", async () => {
+    // No notes - empty vault
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    const contextMiss = await createVaultContext(options);
+    const contextHit = await createVaultContext(options);
+
+    // Both contexts should have no candidates
+    expect(contextMiss.candidates).toHaveLength(0);
+    expect(contextHit.candidates).toHaveLength(0);
+
+    // Build query pack with empty context
+    const input: RetrievalQueryPackInput = {
+      title: "Test with Empty Vault",
+      keywords: ["test", "empty"],
+      contentType: "article",
+    };
+
+    const packMiss = buildRetrievalQueryPack(input, contextMiss);
+    const packHit = buildRetrievalQueryPack(input, contextHit);
+
+    // Both should produce identical results
+    expect(packHit.exactPhrases).toEqual(packMiss.exactPhrases);
+    expect(packHit.keywordBooleans).toEqual(packMiss.keywordBooleans);
+    expect(packHit.entitySeeds).toEqual(packMiss.entitySeeds);
+  });
+
+  test("cache-parity: multiple cache hits produce identical query packs", async () => {
+    // Create test notes
+    await createTestNote(
+      "Clips/Multiple Cache Hits.md",
+      `---
+source: https://example.com/multiple-cache-hits
+title: Multiple Cache Hits Test
+tags:
+  - test
+  - cache
+keywords:
+  - multiple
+  - hits
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Multiple Cache Hits Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Build cache
+    await createVaultContext(options);
+
+    // Multiple cache hits (with small delays)
+    const context1 = await createVaultContext(options);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const context2 = await createVaultContext(options);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const context3 = await createVaultContext(options);
+
+    // All should be cache hits
+    expect(context1.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(context2.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(context3.cacheDiagnostics?.cacheHit).toBe(true);
+
+    // Build query packs from each context
+    const input: RetrievalQueryPackInput = {
+      title: "Cache Consistency Test",
+      keywords: ["cache", "consistency"],
+      contentType: "article",
+    };
+
+    const pack1 = buildRetrievalQueryPack(input, context1);
+    const pack2 = buildRetrievalQueryPack(input, context2);
+    const pack3 = buildRetrievalQueryPack(input, context3);
+
+    // All should be identical
+    expect(pack1).toEqual(pack2);
+    expect(pack2).toEqual(pack3);
+
+    // Cache age should increase
+    expect(context2.cacheDiagnostics?.cacheAgeMs).toBeGreaterThan(
+      context1.cacheDiagnostics?.cacheAgeMs || 0
+    );
+    expect(context3.cacheDiagnostics?.cacheAgeMs).toBeGreaterThan(
+      context2.cacheDiagnostics?.cacheAgeMs || 0
+    );
+  });
+
+  test("cache-parity: vault rebuild after modification produces consistent context", async () => {
+    // Create initial notes
+    await createTestNote(
+      "Clips/Initial Note.md",
+      `---
+source: https://example.com/initial-note
+title: Initial Note
+tags:
+  - initial
+keywords:
+  - initial
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Initial Content`
+    );
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Initial cache build
+    const context1 = await createVaultContext(options);
+    expect(context1.cacheDiagnostics?.cacheRebuilt).toBe(true);
+    expect(context1.candidates.length).toBe(1);
+
+    // Cache hit
+    const context2 = await createVaultContext(options);
+    expect(context2.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(context2.candidates).toEqual(context1.candidates);
+
+    // Add new note to trigger rebuild
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await createTestNote(
+      "Clips/New Note.md",
+      `---
+source: https://example.com/new-note
+title: New Note
+tags:
+  - new
+keywords:
+  - new
+date_clipped: 2026-03-04T10:00:00.000Z
+---
+# New Content`
+    );
+
+    // Should rebuild cache
+    const context3 = await createVaultContext(options);
+    expect(context3.cacheDiagnostics?.cacheHit).toBe(false);
+    expect(context3.cacheDiagnostics?.cacheRebuilt).toBe(true);
+    expect(context3.cacheDiagnostics?.rebuildReason).toBe("vault_fingerprint_changed");
+    expect(context3.candidates.length).toBe(2);
+
+    // New cache hit should match rebuild
+    const context4 = await createVaultContext(options);
+    expect(context4.cacheDiagnostics?.cacheHit).toBe(true);
+    expect(context4.candidates).toEqual(context3.candidates);
+
+    // Query packs from rebuild contexts should be consistent
+    const input: RetrievalQueryPackInput = {
+      title: "Rebuild Consistency Test",
+      keywords: ["consistency", "test"],
+      contentType: "article",
+    };
+
+    const packFromInitialRebuild = buildRetrievalQueryPack(input, context1);
+    const packFromNewRebuild = buildRetrievalQueryPack(input, context3);
+
+    // New rebuild includes additional candidate, so discriminative scores may differ
+    // But both should be valid and deterministic
+    expect(validateQueryPack(packFromInitialRebuild)).toBe(true);
+    expect(validateQueryPack(packFromNewRebuild)).toBe(true);
+  });
+
+  test("cache-parity: large vault produces identical discriminative scores", async () => {
+    // Create many notes with varying term frequencies
+    const noteCount = 25;
+    for (let i = 1; i <= noteCount; i++) {
+      const isRare = i <= 5; // First 5 are "rare"
+      await createTestNote(
+        `Clips/Large Vault Note ${i}.md`,
+        `---
+source: https://example.com/large-vault-${i}
+title: Large Vault Note ${i}
+tags:
+  - test
+  - large-vault
+keywords:
+  - keyword${i}
+  - ${isRare ? "rare-term" : "common-term"}
+date_clipped: 2026-03-${String(i).padStart(2, "0")}T10:00:00.000Z
+---
+# Content ${i}`
+      );
+    }
+
+    const options: VaultIndexOptions = {
+      vaultPath: testVaultPath,
+    };
+
+    // Get contexts from cache rebuild and hit
+    const contextMiss = await createVaultContext(options);
+    const contextHit = await createVaultContext(options);
+
+    // Build query pack
+    const input: RetrievalQueryPackInput = {
+      title: "Testing Rare and Common Terms in Large Vault",
+      knowledgeEntities: ["rare-term", "common-term", "keyword1"],
+      contentType: "article",
+    };
+
+    const packMiss = buildRetrievalQueryPack(input, contextMiss);
+    const packHit = buildRetrievalQueryPack(input, contextHit);
+
+    // Both should produce identical results
+    expect(packHit.entitySeeds).toEqual(packMiss.entitySeeds);
+
+    // Rare term should have higher discriminative score than common term
+    const rareSeed = packHit.entitySeeds.find(s => s.entity === "rare-term");
+    const commonSeed = packHit.entitySeeds.find(s => s.entity === "common-term");
+
+    if (rareSeed && commonSeed) {
+      expect(rareSeed.score).toBeGreaterThan(commonSeed.score);
+    }
   });
 });
