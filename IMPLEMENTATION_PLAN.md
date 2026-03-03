@@ -52,7 +52,7 @@
 
 ### Task Graph
 - [x] **TP001**: Specify Key Takeaways Inbox contract (entry schema, deterministic insight fingerprinting, dedupe precedence, ranking/tie-break rules, truncation policy, diagnostics defaults).
-- [ ] **TP002**: Implement shared inbox builder utilities that parse `## Clip Brief` takeaway bullets from clips, normalize assertions, and merge duplicates with stable source-link ordering.
+- [x] **TP002**: Implement shared inbox builder utilities that parse `## Clip Brief` takeaway bullets from clips, normalize assertions, and merge duplicates with stable source-link ordering.
 - [ ] **TP003**: Implement deterministic `key-takeaways-inbox.md` renderer/export path with bounded section layout and explicit empty-state behavior.
 - [ ] **TP004**: Integrate inbox refresh into save pipeline (`src/popup/save.ts`) with deterministic fallback behavior when vault reads/parsing fail.
 - [ ] **TP005**: Add `tests/content/shared/key-takeaways-inbox.test.ts` coverage for dedupe, ranking, linkbacks, truncation, and empty-state determinism.
