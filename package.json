@@ -25,6 +25,7 @@
     "taskpad:intake:autoplan": "bun run tools/taskpad-intake-autoplan.ts",
     "taskpad:plan-seed": "bun run tools/taskpad-plan-seed.ts",
     "taskpad:plan-prune": "bun run tools/taskpad-plan-prune.ts",
+    "taskpad:work-queue-prune": "bun run tools/taskpad-work-queue-prune.ts",
     "taskpad:write-preflight": "bun run tools/taskpad-write-preflight.ts",
     "taskpad:planned-command-parity": "bun run tools/taskpad-planned-command-parity.ts",
     "taskpad:github-regression-contract-parity": "bun run tools/taskpad-github-regression-contract-parity.ts",
