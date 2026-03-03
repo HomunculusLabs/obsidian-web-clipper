@@ -9,6 +9,70 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Deterministic Key Takeaways Inbox export for reusable knowledge synthesis
+
+### Distilled Scope
+**Problem**
+- The clip pipeline captures `## Clip Brief` takeaway bullets per note, but those insights stay fragmented and are hard to reuse across AI coding/writing sessions.
+- Existing cross-note aggregation now covers open questions and execution tasks, but there is no equivalent insight-first surface for “what we already learned.”
+- With no unchecked intake queue items, the highest-impact next product slice is a deterministic inbox that centralizes reusable key takeaways with source linkbacks.
+
+**In scope**
+- Add deterministic cross-note `key-takeaways-inbox.md` export that aggregates per-clip `## Clip Brief` takeaway bullets.
+- Define stable dedupe/ranking/linkback contract with bounded metadata (`insight_id`, `source_clip_refs`, `insight_status`, `inbox_version`, `inbox_truncated`).
+- Integrate inbox generation into existing save flow so new clips incrementally refresh insights without nondeterministic ordering drift.
+- Add focused contract + end-to-end tests for dedupe, ordering, truncation, and empty-state behavior.
+
+**Out of scope**
+- LLM-based summarization/rewrite of takeaways.
+- New provider-specific clipping behavior.
+- Broad knowledge-hub redesign outside this single inbox artifact.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic cross-note `key-takeaways-inbox.md` export + linkbacks to centralize reusable knowledge assertions from Clip Brief takeaways. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:artifact-refresh-parity` gate to fail when configured inbox artifacts drift from save-flow refresh coverage.
+3. **[OBSERVABILITY]** Add inbox telemetry history (`insights_total`, `new_insights`, `merged_insights`, `truncated`) for vault-scale drift tracking.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "knowledge-bundle|context-pack|open-questions-inbox|execution-backlog-inbox|knowledge-hub-index|clip quality|follow-up prompt" src tests tools docs README.md`
+  - `search "review queue|daily digest|inbox.md|triage|stale clip|quality inbox|clip review" src tests tools docs README.md`
+  - `search "Clip Brief|Open Questions|Action Items|render.*open questions|markdown section" src/shared src/popup tests/content/shared`
+  - `select set IMPLEMENTATION_PLAN.md src/popup/save.ts src/shared/markdown.ts src/shared/openQuestionsInboxContract.ts src/shared/openQuestionsInboxExporter.ts tests/content/shared/open-questions-inbox.test.ts tests/e2e/headless-clip-harness.test.ts`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `IMPLEMENTATION_PLAN.md`
+  - `src/popup/save.ts`
+  - `src/shared/markdown.ts`
+  - `src/shared/openQuestionsInboxContract.ts`
+  - `src/shared/openQuestionsInboxExporter.ts`
+  - `tests/content/shared/open-questions-inbox.test.ts`
+  - `tests/e2e/headless-clip-harness.test.ts`
+
+### Task Graph
+- [x] **TP001**: Specify Key Takeaways Inbox contract (entry schema, deterministic insight fingerprinting, dedupe precedence, ranking/tie-break rules, truncation policy, diagnostics defaults).
+- [ ] **TP002**: Implement shared inbox builder utilities that parse `## Clip Brief` takeaway bullets from clips, normalize assertions, and merge duplicates with stable source-link ordering.
+- [ ] **TP003**: Implement deterministic `key-takeaways-inbox.md` renderer/export path with bounded section layout and explicit empty-state behavior.
+- [ ] **TP004**: Integrate inbox refresh into save pipeline (`src/popup/save.ts`) with deterministic fallback behavior when vault reads/parsing fail.
+- [ ] **TP005**: Add `tests/content/shared/key-takeaways-inbox.test.ts` coverage for dedupe, ranking, linkbacks, truncation, and empty-state determinism.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end key-takeaways inbox artifact refresh and stable rerun parity.
+
+### Acceptance Criteria
+- Clip saves can produce/update `key-takeaways-inbox.md` deterministically from existing `## Clip Brief` takeaway bullets.
+- Inbox entries preserve stable IDs/order/source-linkbacks across reruns with unchanged inputs.
+- Dedupe/truncation behavior is explicit, test-locked, and reflected in deterministic metadata fields.
+- Shared-contract + headless e2e tests catch drift and pass on stable output.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/key-takeaways-inbox.test.ts
+bun test tests/content/shared/clip-brief-contract.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Deterministic Open Questions Inbox export for unresolved research capture
 
 ### Distilled Scope
