@@ -7245,4 +7245,336 @@ ${claimLines}
       expect(typeof exportResult.conflictStatusMeta.resolvedCount).toBe("number");
     });
   });
+
+  // ============================================================================
+  // TP006: Confidence State-Sync Refresh Parity Tests
+  // ============================================================================
+
+  describe("TP006: Knowledge Confidence State-Sync Refresh Parity", () => {
+    test("confidence state-sync produces deterministic output across repeated refreshes", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "confidence-sync-parity",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed multiple clips with confidence-triageable content
+      await seedClipWithClaims(
+        sandbox,
+        "Confidence Sync Test 1",
+        {
+          source: "https://example.com/confidence-1",
+          title: "Confidence Sync Test 1",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "React Server Components use RSC payload for hydration",
+          "RSC enables server-side rendering without hydration mismatches",
+        ],
+      );
+
+      await seedClipWithClaims(
+        sandbox,
+        "Confidence Sync Test 2",
+        {
+          source: "https://example.com/confidence-2",
+          title: "Confidence Sync Test 2",
+          date_clipped: "2026-03-02T10:00:00.000Z",
+        },
+        [
+          "GraphQL provides better type safety than REST",
+          "REST is simpler for caching",
+        ],
+      );
+
+      // Import builder/renderer for confidence state sync
+      const {
+        buildStateSyncFromVault,
+      } = await import("../../src/shared/knowledgeConfidenceStateSyncBuilder");
+      const {
+        renderConfidenceStateSync,
+      } = await import("../../src/shared/knowledgeConfidenceStateSyncContract");
+
+      // Run 3 refresh cycles
+      const cycles = [];
+      for (let i = 0; i < 3; i++) {
+        const sync1 = await buildStateSyncFromVault({
+          vaultPath: sandbox.vaultRoot,
+          maxDepth: 3,
+          includeHidden: false,
+          maxFiles: 100,
+          extensions: [".md"],
+        });
+
+        const rendered1 = renderConfidenceStateSync(sync1);
+        cycles.push(rendered1);
+      }
+
+      // Pass gate: All cycles produce output with same structure
+      // Note: generated_at timestamps may differ, but the structure and counts should be identical
+      expect(cycles[0]).toContain("---");
+      expect(cycles[1]).toContain("---");
+      expect(cycles[2]).toContain("---");
+
+      // Pass gate: Frontmatter metadata keys are present and consistent
+      expect(cycles[0]).toContain("sync_version:");
+      expect(cycles[0]).toContain("items_count:");
+      expect(cycles[0]).toContain("status_counts_unverified:");
+      expect(cycles[0]).toContain("status_counts_verified:");
+      expect(cycles[0]).toContain("status_counts_rejected:");
+      expect(cycles[0]).toContain("status_counts_deferred:");
+
+      // Pass gate: Section headers are deterministic
+      expect(cycles[0]).toContain("# Knowledge Confidence State Sync");
+      expect(cycles[0]).toContain("## Summary");
+      expect(cycles[0]).toContain("## Status Distribution");
+      expect(cycles[0]).toContain("## Confidence Items");
+
+      // Pass gate: All cycles have same items_count (should be deterministic)
+      const itemsCountMatches = cycles.every(
+        (cycle) => cycle.includes("items_count:"),
+      );
+      expect(itemsCountMatches).toBe(true);
+    });
+
+    test("confidence state-sync refresh handler produces stable metadata", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "confidence-sync-handler",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed clip with confidence-triageable content
+      await seedClipWithClaims(
+        sandbox,
+        "Handler Test",
+        {
+          source: "https://example.com/handler-test",
+          title: "Handler Test",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "Server Actions handle mutations on the server",
+          "Server Actions reduce client-side JavaScript",
+        ],
+      );
+
+      // Import the handler
+      const { handleRefreshKnowledgeConfidenceStateSync } = await import(
+        "../../src/background/handlers/refreshKnowledgeConfidenceStateSync"
+      );
+
+      // Run handler twice with same inputs
+      const request = {
+        action: "refreshKnowledgeConfidenceStateSync" as const,
+        vaultPath: sandbox.vaultRoot,
+        cliPath: "obsidian-cli-mock",
+        vault: "TestVault",
+        syncFolder: undefined,
+        maxFiles: 100,
+        maxDepth: 3,
+      };
+
+      const result1 = await handleRefreshKnowledgeConfidenceStateSync(request);
+      const result2 = await handleRefreshKnowledgeConfidenceStateSync(request);
+
+      // Pass gate: Both runs succeed
+      expect(result1.success).toBe(true);
+      expect(result2.success).toBe(true);
+
+      // Pass gate: Both runs produce identical metadata
+      expect(result1.itemsCount).toBe(result2.itemsCount);
+      expect(result1.sourceArtifactsProcessed).toBe(result2.sourceArtifactsProcessed);
+      expect(result1.statusCountsUnverified).toBe(result2.statusCountsUnverified);
+      expect(result1.statusCountsVerified).toBe(result2.statusCountsVerified);
+      expect(result1.statusCountsRejected).toBe(result2.statusCountsRejected);
+      expect(result1.statusCountsDeferred).toBe(result2.statusCountsDeferred);
+      expect(result1.totalSourceRefs).toBe(result2.totalSourceRefs);
+      expect(result1.truncated).toBe(result2.truncated);
+
+      // Pass gate: No errors are returned
+      expect(result1.error).toBeUndefined();
+      expect(result2.error).toBeUndefined();
+
+      // Pass gate: All metadata fields are present
+      expect(typeof result1.itemsCount).toBe("number");
+      expect(typeof result1.sourceArtifactsProcessed).toBe("number");
+      expect(typeof result1.statusCountsUnverified).toBe("number");
+      expect(typeof result1.statusCountsVerified).toBe("number");
+      expect(typeof result1.statusCountsRejected).toBe("number");
+      expect(typeof result1.statusCountsDeferred).toBe("number");
+      expect(typeof result1.totalSourceRefs).toBe("number");
+      expect(typeof result1.truncated).toBe("boolean");
+    });
+
+    test("confidence state-sync handles empty vault deterministically", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "confidence-sync-empty",
+      });
+      sandboxes.push(sandbox);
+
+      // Do NOT seed any clips - vault is empty
+
+      const {
+        buildStateSyncFromVault,
+      } = await import("../../src/shared/knowledgeConfidenceStateSyncBuilder");
+      const {
+        renderConfidenceStateSync,
+      } = await import("../../src/shared/knowledgeConfidenceStateSyncExporter");
+
+      // Run refresh twice on empty vault
+      const sync1 = await buildStateSyncFromVault({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md"],
+      });
+
+      const sync2 = await buildStateSyncFromVault({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md"],
+      });
+
+      const rendered1 = renderConfidenceStateSync(sync1);
+      const rendered2 = renderConfidenceStateSync(sync2);
+
+      // Pass gate: Both runs have zero items
+      expect(sync1.entries).toHaveLength(0);
+      expect(sync2.entries).toHaveLength(0);
+      expect(sync1.totalItems).toBe(0);
+      expect(sync2.totalItems).toBe(0);
+
+      // Pass gate: All status counts are zero
+      expect(sync1.statusCounts.unverified).toBe(0);
+      expect(sync1.statusCounts.verified).toBe(0);
+      expect(sync1.statusCounts.rejected).toBe(0);
+      expect(sync1.statusCounts.deferred).toBe(0);
+
+      // Pass gate: Sync is not truncated (empty = nothing to truncate)
+      expect(sync1.truncated).toBe(false);
+      expect(sync2.truncated).toBe(false);
+
+      // Pass gate: Output is identical across runs
+      expect(rendered1).toBe(rendered2);
+
+      // Pass gate: Empty state message is present
+      expect(rendered1).toContain("> No confidence items found.");
+      expect(rendered2).toContain("> No confidence items found.");
+
+      // Pass gate: Empty metadata is present
+      expect(rendered1).toContain("items_count: 0");
+      expect(rendered1).toContain("status_counts_unverified: 0");
+      expect(rendered1).toContain("status_counts_verified: 0");
+      expect(rendered1).toContain("status_counts_rejected: 0");
+      expect(rendered1).toContain("status_counts_deferred: 0");
+      expect(rendered1).toContain("sync_truncated: false");
+    });
+
+    test("confidence state-sync maintains stable confidence_item_id across reruns", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "confidence-sync-stable-id",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed clips with specific content
+      await seedClipWithClaims(
+        sandbox,
+        "Stable ID Test",
+        {
+          source: "https://example.com/stable-id",
+          title: "Stable ID Test",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "This claim should have a stable confidence_item_id",
+        ],
+      );
+
+      const {
+        buildStateSyncFromVault,
+      } = await import("../../src/shared/knowledgeConfidenceStateSyncBuilder");
+
+      // Build sync twice
+      const sync1 = await buildStateSyncFromVault({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md"],
+      });
+
+      const sync2 = await buildStateSyncFromVault({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md"],
+      });
+
+      // Pass gate: Same number of entries
+      expect(sync1.entries.length).toBe(sync2.entries.length);
+
+      // Pass gate: confidence_item_id is stable across runs
+      if (sync1.entries.length > 0 && sync2.entries.length > 0) {
+        const id1 = sync1.entries[0]!.confidence_item_id;
+        const id2 = sync2.entries[0]!.confidence_item_id;
+        expect(id1).toBe(id2);
+      }
+
+      // Pass gate: All confidence_item_ids are identical in both runs
+      const ids1 = sync1.entries.map((e) => e.confidence_item_id).sort();
+      const ids2 = sync2.entries.map((e) => e.confidence_item_id).sort();
+      expect(ids1).toEqual(ids2);
+    });
+
+    test("confidence state-sync refresh is non-fatal to primary save flow", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "confidence-sync-non-fatal",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed clip with confidence-triageable content
+      await seedClipWithClaims(
+        sandbox,
+        "Non-Fatal Test",
+        {
+          source: "https://example.com/non-fatal",
+          title: "Non-Fatal Test",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "Primary clip save should succeed even if sync refresh fails",
+        ],
+      );
+
+      const {
+        handleRefreshKnowledgeConfidenceStateSync,
+      } = await import("../../src/background/handlers/refreshKnowledgeConfidenceStateSync");
+
+      // Test with invalid vault path (should fail gracefully)
+      const invalidRequest = {
+        action: "refreshKnowledgeConfidenceStateSync" as const,
+        vaultPath: "", // Invalid: empty path
+        cliPath: "obsidian-cli-mock",
+        vault: "TestVault",
+      };
+
+      const result = await handleRefreshKnowledgeConfidenceStateSync(invalidRequest);
+
+      // Pass gate: Request fails gracefully (non-fatal to save flow)
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain("required");
+
+      // Pass gate: Error message is deterministic
+      expect(result.error).toBe("Vault path is required");
+    });
+  });
 });

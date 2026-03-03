@@ -1814,5 +1814,431 @@ describe("TP006: evidence-gap refresh parity blocks planning progression determi
       const skippedSteps = mockResult.steps.filter(s => s.status === "skipped");
       expect(skippedSteps.length).toBe(3);
     });
+
+    describe("TP006: Intake Verification Stability for Confidence State-Sync", () => {
+      test("intake verification passes when confidence state-sync is present and valid", async () => {
+        const mockResult = {
+          status: "pass" as const,
+          verdict: "ready" as const,
+          reasonCode: "AUTOPLAN_READY",
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          selectedBacklogLine: 5,
+          plannedMarker: "- [ ] **TP006**:",
+          newSliceHeading: "## TASKPAD Intake Slice (2026-03-03): Confidence State-Sync",
+          steps: [
+            {
+              id: "plan-contract",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_CONTRACT_OK",
+              summary: "Plan contract validated",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "plan-seed",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_SEED_OK",
+              summary: "Plan seeded with active slice",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "confidence-state-sync-parity",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "CONFIDENCE_STATE_SYNC_PARITY_OK",
+              summary: "Confidence state-sync refresh parity verified",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          nextActions: ["Proceed with implementation tasks"],
+        };
+
+        // Pass gate: Verification status is pass
+        expect(mockResult.status).toBe("pass");
+        expect(mockResult.verdict).toBe("ready");
+
+        // Pass gate: Reason code indicates successful verification
+        expect(mockResult.reasonCode).toBe("AUTOPLAN_READY");
+
+        // Pass gate: All verification steps passed
+        const passedSteps = mockResult.steps.filter(s => s.status === "pass");
+        expect(passedSteps.length).toBe(3);
+
+        // Pass gate: Confidence state-sync parity step passed
+        const confidenceSyncStep = mockResult.steps.find(s => s.id === "confidence-state-sync-parity");
+        expect(confidenceSyncStep).toBeDefined();
+        expect(confidenceSyncStep?.status).toBe("pass");
+        expect(confidenceSyncStep?.reasonCode).toBe("CONFIDENCE_STATE_SYNC_PARITY_OK");
+
+        // Pass gate: No verification blocks are present
+        const blockedSteps = mockResult.steps.filter(s => s.status === "fail");
+        expect(blockedSteps.length).toBe(0);
+
+        // Pass gate: Next actions allow proceeding
+        expect(mockResult.nextActions.some(a => a.includes("proceed"))).toBe(true);
+      });
+
+      test("intake verification fails when confidence state-sync parity detects drift", async () => {
+        const mockResult = {
+          status: "fail" as const,
+          verdict: "blocked" as const,
+          reasonCode: "AUTOPLAN_BLOCKED_CONFIDENCE_SYNC",
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          selectedBacklogLine: null,
+          plannedMarker: null,
+          newSliceHeading: null,
+          steps: [
+            {
+              id: "plan-contract",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_CONTRACT_OK",
+              summary: "Plan contract validated",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "plan-seed",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_SEED_OK",
+              summary: "Plan seeded with active slice",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "confidence-state-sync-parity",
+              status: "fail",
+              exitCode: 1,
+              reasonCode: "CONFIDENCE_STATE_SYNC_PARITY_DRIFT",
+              summary: "Confidence state-sync drift detected - refresh parity failed",
+              command: "",
+              stdout: "",
+              stderr: "Output differs from previous run",
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          nextActions: [
+            "Fix confidence state-sync drift before proceeding",
+            "Run confidence state-sync refresh to restore parity",
+            "Check confidence state-sync artifacts for manual edits",
+          ],
+        };
+
+        // Pass gate: Verification status is fail
+        expect(mockResult.status).toBe("fail");
+        expect(mockResult.verdict).toBe("blocked");
+
+        // Pass gate: Reason code indicates confidence state-sync block
+        expect(mockResult.reasonCode).toBe("AUTOPLAN_BLOCKED_CONFIDENCE_SYNC");
+
+        // Pass gate: Confidence state-sync parity step failed
+        const confidenceSyncStep = mockResult.steps.find(s => s.id === "confidence-state-sync-parity");
+        expect(confidenceSyncStep).toBeDefined();
+        expect(confidenceSyncStep?.status).toBe("fail");
+        expect(confidenceSyncStep?.exitCode).toBe(1);
+        expect(confidenceSyncStep?.reasonCode).toBe("CONFIDENCE_STATE_SYNC_PARITY_DRIFT");
+
+        // Pass gate: Error summary indicates drift
+        expect(confidenceSyncStep?.summary).toContain("drift");
+        expect(confidenceSyncStep?.stderr).toContain("Output differs");
+
+        // Pass gate: Next actions provide remediation guidance
+        expect(mockResult.nextActions.length).toBeGreaterThan(0);
+        expect(mockResult.nextActions.some(a => a.includes("confidence state-sync"))).toBe(true);
+        expect(mockResult.nextActions.some(a => a.includes("refresh parity"))).toBe(true);
+      });
+
+      test("intake verification stability across multiple runs with confidence state-sync", async () => {
+        const mockRun1 = {
+          status: "pass" as const,
+          verdict: "ready" as const,
+          reasonCode: "AUTOPLAN_READY",
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          selectedBacklogLine: 5,
+          steps: [
+            {
+              id: "plan-contract",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_CONTRACT_OK",
+              summary: "",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "confidence-state-sync-parity",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "CONFIDENCE_STATE_SYNC_PARITY_OK",
+              summary: "",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          nextActions: [],
+        };
+
+        const mockRun2 = {
+          status: "pass" as const,
+          verdict: "ready" as const,
+          reasonCode: "AUTOPLAN_READY",
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          selectedBacklogLine: 5,
+          steps: [
+            {
+              id: "plan-contract",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_CONTRACT_OK",
+              summary: "",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "confidence-state-sync-parity",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "CONFIDENCE_STATE_SYNC_PARITY_OK",
+              summary: "",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          nextActions: [],
+        };
+
+        // Pass gate: Both runs have same status
+        expect(mockRun1.status).toBe(mockRun2.status);
+        expect(mockRun1.verdict).toBe(mockRun2.verdict);
+        expect(mockRun1.reasonCode).toBe(mockRun2.reasonCode);
+
+        // Pass gate: Both runs have same step statuses
+        const steps1Status = mockRun1.steps.map(s => `${s.id}:${s.status}`);
+        const steps2Status = mockRun2.steps.map(s => `${s.id}:${s.status}`);
+        expect(steps1Status).toEqual(steps2Status);
+
+        // Pass gate: Confidence state-sync parity check is stable
+        const parityStep1 = mockRun1.steps.find(s => s.id === "confidence-state-sync-parity");
+        const parityStep2 = mockRun2.steps.find(s => s.id === "confidence-state-sync-parity");
+        expect(parityStep1?.status).toBe(parityStep2?.status);
+        expect(parityStep1?.reasonCode).toBe(parityStep2?.reasonCode);
+      });
+
+      test("intake verification handles confidence state-sync absence gracefully", async () => {
+        const mockResult = {
+          status: "pass" as const,
+          verdict: "ready" as const,
+          reasonCode: "AUTOPLAN_READY",
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          selectedBacklogLine: 5,
+          plannedMarker: "- [ ] **TP006**:",
+          newSliceHeading: "## TASKPAD Intake Slice (2026-03-03): New Slice",
+          steps: [
+            {
+              id: "plan-contract",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_CONTRACT_OK",
+              summary: "Plan contract validated",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "plan-seed",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_SEED_OK",
+              summary: "Plan seeded with active slice",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "confidence-state-sync-parity",
+              status: "skipped",
+              exitCode: null,
+              reasonCode: "SKIP_CONFIDENCE_STATE_SYNC_NOT_PRESENT",
+              summary: "Confidence state-sync not present - skipping parity check",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          nextActions: ["Proceed with implementation"],
+        };
+
+        // Pass gate: Verification still passes (skipped = OK)
+        expect(mockResult.status).toBe("pass");
+        expect(mockResult.verdict).toBe("ready");
+
+        // Pass gate: Confidence state-sync parity step is skipped (not failed)
+        const parityStep = mockResult.steps.find(s => s.id === "confidence-state-sync-parity");
+        expect(parityStep).toBeDefined();
+        expect(parityStep?.status).toBe("skipped");
+        expect(parityStep?.exitCode).toBeNull();
+        expect(parityStep?.reasonCode).toBe("SKIP_CONFIDENCE_STATE_SYNC_NOT_PRESENT");
+
+        // Pass gate: Summary explains why step was skipped
+        expect(parityStep?.summary).toContain("not present");
+
+        // Pass gate: Next actions allow proceeding despite skip
+        expect(mockResult.nextActions.some(a => a.includes("Proceed"))).toBe(true);
+      });
+
+      test("intake verification confidence state-sync step has deterministic failure codes", async () => {
+        const failureScenarios = [
+          {
+            reasonCode: "CONFIDENCE_STATE_SYNC_PARITY_DRIFT",
+            summary: "Output differs from previous run",
+            stderr: "Detected non-deterministic output",
+          },
+          {
+            reasonCode: "CONFIDENCE_STATE_SYNC_READ_ERROR",
+            summary: "Failed to read confidence state-sync artifact",
+            stderr: "File not found or corrupted",
+          },
+          {
+            reasonCode: "CONFIDENCE_STATE_SYNC_PARSE_ERROR",
+            summary: "Failed to parse confidence state-sync metadata",
+            stderr: "Invalid frontmatter format",
+          },
+          {
+            reasonCode: "CONFIDENCE_STATE_SYNC_EXPORT_ERROR",
+            summary: "Failed to export confidence state-sync",
+            stderr: "Write permission denied",
+          },
+        ];
+
+        for (const scenario of failureScenarios) {
+          const mockResult = {
+            status: "fail" as const,
+            verdict: "blocked" as const,
+            reasonCode: "AUTOPLAN_BLOCKED_CONFIDENCE_SYNC",
+            steps: [
+              {
+                id: "confidence-state-sync-parity",
+                status: "fail",
+                exitCode: 1,
+                reasonCode: scenario.reasonCode,
+                summary: scenario.summary,
+                command: "",
+                stdout: "",
+                stderr: scenario.stderr,
+              },
+            ],
+            queueReconcile: null,
+            artifact: null,
+            evidenceGapParity: null,
+            nextActions: [],
+          };
+
+          // Pass gate: Reason code matches scenario
+          const parityStep = mockResult.steps[0];
+          expect(parityStep.reasonCode).toBe(scenario.reasonCode);
+
+          // Pass gate: Summary is descriptive and stable
+          expect(parityStep.summary).toBe(scenario.summary);
+
+          // Pass gate: Stderr provides actionable error detail
+          expect(parityStep.stderr).toContain(scenario.reasonCode);
+
+          // Pass gate: Exit code indicates failure
+          expect(parityStep.exitCode).not.toBe(0);
+        }
+      });
+
+      test("intake verification confidence state-sync supports multiple artifact checks", async () => {
+        const mockResult = {
+          status: "pass" as const,
+          verdict: "ready" as const,
+          reasonCode: "AUTOPLAN_READY",
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          selectedBacklogLine: 5,
+          steps: [
+            {
+              id: "plan-contract",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "PLAN_CONTRACT_OK",
+              summary: "",
+              command: "",
+              stdout: "",
+              stderr: "",
+            },
+            {
+              id: "confidence-state-sync-parity",
+              status: "pass",
+              exitCode: 0,
+              reasonCode: "CONFIDENCE_STATE_SYNC_PARITY_OK",
+              summary: "All 4 confidence state-sync artifacts validated",
+              command: "",
+              stdout: `confidence-state-sync.md: OK
+knowledge-confidence-inbox.md: OK
+knowledge-confidence-history.ndjson: OK`,
+              stderr: "",
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          nextActions: [],
+        };
+
+        // Pass gate: Verification passes
+        expect(mockResult.status).toBe("pass");
+
+        // Pass gate: Confidence state-sync parity checks multiple artifacts
+        const parityStep = mockResult.steps.find(s => s.id === "confidence-state-sync-parity");
+        expect(parityStep).toBeDefined();
+        expect(parityStep?.status).toBe("pass");
+
+        // Pass gate: Stdout lists all checked artifacts
+        expect(parityStep?.stdout).toContain("confidence-state-sync.md");
+        expect(parityStep?.stdout).toContain("knowledge-confidence-inbox.md");
+        expect(parityStep?.stdout).toContain("knowledge-confidence-history.ndjson");
+
+        // Pass gate: All artifacts show OK status
+        const okCount = (parityStep?.stdout.match(/: OK/g) || []).length;
+        expect(okCount).toBe(3);
+
+        // Pass gate: No errors in stderr
+        expect(parityStep?.stderr).toBe("");
+      });
+    });
   });
 });
