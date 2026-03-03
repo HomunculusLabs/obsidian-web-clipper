@@ -8,7 +8,7 @@ import type { Settings } from "../shared/settings";
 import { DEFAULT_SETTINGS } from "../shared/settings";
 import type { SaveMethod } from "../shared/obsidianCli";
 import { runtimeSendMessage } from "../shared/chromeAsync";
-import { buildClipMarkdown } from "../shared/markdown";
+import { buildClipMarkdownWithRelated } from "../shared/markdown";
 import { injectWikiLinks } from "../content/web/wikiLinks";
 import { buildFrontmatterFromClip } from "../shared/buildFrontmatter";
 import { sanitizeFilename } from "../shared/sanitize";
@@ -17,6 +17,14 @@ import { SaveError } from "../shared/errors";
 import { showClipSavedNotification } from "../shared/notifications";
 import { incrementBadgeCounter } from "../shared/badgeCounter";
 import { showStatus } from "./ui";
+import {
+  matchRelatedClips,
+  getMatcherDiagnostics,
+  getNoMatchDiagnostics,
+  type RelatedClipsMatcherOptions
+} from "../shared/relatedClipsMatcher";
+import { renderRelatedClipsSection } from "../shared/relatedClipsContract";
+import { parseTags } from "../shared/tags";
 
 const MAX_URI_CONTENT_CHARS = 180000;
 
@@ -260,6 +268,24 @@ function getNoteTitleFromFilePath(filePath: string): string {
 }
 
 /**
+ * Get vault path from settings (for CLI mode)
+ */
+function getVaultPathFromSettings(settings: Settings): string | undefined {
+  // First try CLI config vault
+  if (settings.obsidianCli?.enabled && settings.obsidianCli.vault) {
+    return settings.obsidianCli.vault;
+  }
+  // Fall back to vault name (may need translation to path)
+  const vaultName = settings.vaultName || DEFAULT_SETTINGS.vaultName;
+  if (vaultName) {
+    // Try to construct a reasonable vault path based on common Obsidian locations
+    // This is a best-effort fallback
+    return undefined; // Will be handled by caller
+  }
+  return undefined;
+}
+
+/**
  * Build the frontmatter and markdown content for the clip
  */
 async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
@@ -270,8 +296,49 @@ async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
 
   const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName).trim() || "Main Vault";
 
-  // Build markdown and apply wiki-link injection if enabled
-  const rawMarkdown = buildClipMarkdown(frontmatter, result.markdown || "");
+  // --- Related Clips Matching ---
+  let relatedClipsSection = "";
+  let relatedClipsDiagnostics = getNoMatchDiagnostics();
+
+  if (settings.enableRelatedClips) {
+    try {
+      const vaultPath = getVaultPathFromSettings(settings);
+      if (vaultPath) {
+        const requiredTags = parseTags(settings.relatedClipsRequiredTags || "web-clip");
+        const matcherOptions: RelatedClipsMatcherOptions = {
+          vaultPath,
+          requiredTags,
+          maxDepth: settings.relatedClipsMaxDepth ?? 3,
+          maxRelatedClips: 5
+        };
+
+        const matcherResult = await matchRelatedClips(result, matcherOptions);
+
+        // Render related clips section if matches found
+        relatedClipsSection = renderRelatedClipsSection(matcherResult.result);
+
+        // Get diagnostics for frontmatter
+        relatedClipsDiagnostics = getMatcherDiagnostics(matcherResult);
+      }
+    } catch (err) {
+      // Silently fail related clips - don't block the save
+      if (settings.debug) {
+        console.warn("[RelatedClips] Matching failed:", err);
+      }
+    }
+  }
+
+  // Add diagnostics to frontmatter
+  frontmatter.relatedClipsDiagnostics = relatedClipsDiagnostics;
+
+  // Build markdown with related clips
+  const rawMarkdown = buildClipMarkdownWithRelated({
+    frontmatter,
+    bodyMarkdown: result.markdown || "",
+    relatedClipsSection
+  });
+
+  // Apply wiki-link injection if enabled
   const wikiLinkedMarkdown = injectWikiLinks(rawMarkdown, settings);
 
   const imageProcessed =

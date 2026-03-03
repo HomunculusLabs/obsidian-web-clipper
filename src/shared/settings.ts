@@ -91,6 +91,11 @@ export interface Settings {
   // --- Title template settings ---
   titleTemplates: TitleTemplateSettings;
 
+  // --- Related clips settings ---
+  enableRelatedClips: boolean;
+  relatedClipsRequiredTags: string;
+  relatedClipsMaxDepth: number;
+
   // --- Debug settings ---
   debug: boolean; // Enable debug logging to console
 
@@ -202,6 +207,11 @@ export const DEFAULT_SETTINGS: Settings = {
     customTemplates: []
   },
 
+  // --- Related clips settings ---
+  enableRelatedClips: false,
+  relatedClipsRequiredTags: "web-clip",
+  relatedClipsMaxDepth: 3,
+
   // --- Debug settings ---
   debug: false, // Disabled by default
 
@@ -262,6 +272,10 @@ export const SETTINGS_KEYS = [
   "preferTitleCase",
   // Title templates
   "titleTemplates",
+  // Related clips
+  "enableRelatedClips",
+  "relatedClipsRequiredTags",
+  "relatedClipsMaxDepth",
   // Debug
   "debug",
   // Schema version

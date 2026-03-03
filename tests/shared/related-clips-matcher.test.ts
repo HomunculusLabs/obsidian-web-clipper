@@ -308,11 +308,18 @@ date_clipped: 2026-03-02T10:00:00Z
     expect(result.index.filesScanned).toBe(2);
     expect(result.index.filesWithFrontmatter).toBe(2);
     expect(result.matching.positiveMatches).toBeGreaterThan(0);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("finds exact URL match", async () => {
-    const existingPath = path.join(tempDir, "existing.md");
-    await fs.writeFile(existingPath, `---
+    const tempDir = path.join(tmpdir(), `matcher-test-exact-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      const existingPath = path.join(tempDir, "existing.md");
+      await fs.writeFile(existingPath, `---
 source: https://example.com/same-url
 title: Existing Note
 type: article
@@ -323,58 +330,72 @@ date_clipped: 2026-03-01T10:00:00Z
 
 # Existing Note`);
 
-    const newClip: ClipResult = {
-      url: "https://example.com/same-url",
-      title: "New Clip",
-      markdown: "# New Clip",
-      metadata: {
+      const newClip: ClipResult = {
         url: "https://example.com/same-url",
         title: "New Clip",
-        type: "article"
-      }
-    };
+        markdown: "# New Clip",
+        metadata: {
+          url: "https://example.com/same-url",
+          title: "New Clip",
+          type: "article"
+        }
+      };
 
-    const options: RelatedClipsMatcherOptions = {
-      vaultPath: tempDir,
-      requiredTags: ["clip"],
-      excludePath: existingPath
-    };
+      const options: RelatedClipsMatcherOptions = {
+        vaultPath: tempDir,
+        requiredTags: ["clip"],
+        excludePath: existingPath
+      };
 
-    const result = await matchRelatedClips(newClip, options);
+      const result = await matchRelatedClips(newClip, options);
 
-    // Should find the existing note if not excluded
-    // When excluded, should return no matches
-    expect(result.result.relatedClips.length).toBe(0);
+      // Should find the existing note if not excluded
+      // When excluded, should return no matches
+      expect(result.result.relatedClips.length).toBe(0);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("returns no matches when vault is empty", async () => {
-    const newClip: ClipResult = {
-      url: "https://example.com/article",
-      title: "New Article",
-      markdown: "# New Article",
-      metadata: {
+    const tempDir = path.join(tmpdir(), `matcher-test-empty-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      const newClip: ClipResult = {
         url: "https://example.com/article",
         title: "New Article",
-        type: "article"
-      }
-    };
+        markdown: "# New Article",
+        metadata: {
+          url: "https://example.com/article",
+          title: "New Article",
+          type: "article"
+        }
+      };
 
-    const options: RelatedClipsMatcherOptions = {
-      vaultPath: tempDir
-    };
+      const options: RelatedClipsMatcherOptions = {
+        vaultPath: tempDir
+      };
 
-    const result = await matchRelatedClips(newClip, options);
+      const result = await matchRelatedClips(newClip, options);
 
-    expect(result.result.relatedClips.length).toBe(0);
-    expect(result.result.topScore).toBe(0);
-    expect(result.index.filesScanned).toBe(0);
+      expect(result.result.relatedClips.length).toBe(0);
+      expect(result.result.topScore).toBe(0);
+      expect(result.index.filesScanned).toBe(0);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("respects maxRelatedClips limit", async () => {
-    // Create multiple related notes
-    for (let i = 1; i <= 10; i++) {
-      const notePath = path.join(tempDir, `note${i}.md`);
-      await fs.writeFile(notePath, `---
+    const tempDir = path.join(tmpdir(), `matcher-test-limit-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Create multiple related notes
+      for (let i = 1; i <= 10; i++) {
+        const notePath = path.join(tempDir, `note${i}.md`);
+        await fs.writeFile(notePath, `---
 source: https://example.com/article${i}
 title: Note ${i}
 type: article
@@ -386,35 +407,42 @@ date_clipped: 2026-03-${String(i).padStart(2, "0")}T10:00:00Z
 ---
 
 # Note ${i}`);
-    }
+      }
 
-    const newClip: ClipResult = {
-      url: "https://example.com/new",
-      title: "New Article",
-      markdown: "# New Article",
-      metadata: {
+      const newClip: ClipResult = {
         url: "https://example.com/new",
         title: "New Article",
-        type: "article",
-        keywords: ["typescript"]
-      }
-    };
+        markdown: "# New Article",
+        metadata: {
+          url: "https://example.com/new",
+          title: "New Article",
+          type: "article",
+          keywords: ["typescript"]
+        }
+      };
 
-    const options: RelatedClipsMatcherOptions = {
-      vaultPath: tempDir,
-      requiredTags: ["clip"],
-      maxRelatedClips: 3
-    };
+      const options: RelatedClipsMatcherOptions = {
+        vaultPath: tempDir,
+        requiredTags: ["clip"],
+        maxRelatedClips: 3
+      };
 
-    const result = await matchRelatedClips(newClip, options);
+      const result = await matchRelatedClips(newClip, options);
 
-    expect(result.result.relatedClips.length).toBeLessThanOrEqual(3);
-    expect(result.result.truncated).toBe(true);
+      expect(result.result.relatedClips.length).toBeLessThanOrEqual(3);
+      expect(result.result.truncated).toBe(true);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("filters candidates by required tags", async () => {
-    const note1Path = path.join(tempDir, "note1.md");
-    await fs.writeFile(note1Path, `---
+    const tempDir = path.join(tmpdir(), `matcher-test-tags-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      const note1Path = path.join(tempDir, "note1.md");
+      await fs.writeFile(note1Path, `---
 source: https://example.com/1
 title: With Tag
 type: article
@@ -425,8 +453,8 @@ date_clipped: 2026-03-01T10:00:00Z
 
 # Note 1`);
 
-    const note2Path = path.join(tempDir, "note2.md");
-    await fs.writeFile(note2Path, `---
+      const note2Path = path.join(tempDir, "note2.md");
+      await fs.writeFile(note2Path, `---
 source: https://example.com/2
 title: Without Tag
 type: article
@@ -437,26 +465,29 @@ date_clipped: 2026-03-02T10:00:00Z
 
 # Note 2`);
 
-    const newClip: ClipResult = {
-      url: "https://example.com/new",
-      title: "New Article",
-      markdown: "# New Article",
-      metadata: {
+      const newClip: ClipResult = {
         url: "https://example.com/new",
         title: "New Article",
-        type: "article"
-      }
-    };
+        markdown: "# New Article",
+        metadata: {
+          url: "https://example.com/new",
+          title: "New Article",
+          type: "article"
+        }
+      };
 
-    const options: RelatedClipsMatcherOptions = {
-      vaultPath: tempDir,
-      requiredTags: ["clip"]
-    };
+      const options: RelatedClipsMatcherOptions = {
+        vaultPath: tempDir,
+        requiredTags: ["clip"]
+      };
 
-    const result = await matchRelatedClips(newClip, options);
+      const result = await matchRelatedClips(newClip, options);
 
-    expect(result.candidatesEvaluated).toBeLessThan(2);
-    expect(result.matching.input.sourceUrl).toBe("https://example.com/new");
+      expect(result.index.candidatesEvaluated).toBeLessThan(2);
+      expect(result.matching.input.sourceUrl).toBe("https://example.com/new");
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 });
 
