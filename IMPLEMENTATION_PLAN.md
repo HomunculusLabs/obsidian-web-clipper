@@ -55,7 +55,7 @@
 - [x] **TP003**: Integrate query-pack synthesis into save pipeline/template assembly and render a bounded `## Retrieval Query Pack` section only when non-empty.
 - [x] **TP004**: Extend frontmatter construction to emit `query_pack_version` + `query_pack_truncated` with explicit no-query defaults.
 - [x] **TP005**: Add `tests/content/shared/retrieval-query-pack.test.ts` coverage for no-query/minimal/full/truncation/tie-break determinism cases.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` scenario assertions to validate end-to-end query-pack section + diagnostics parity across representative providers.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` scenario assertions to validate end-to-end query-pack section + diagnostics parity across representative providers.
 
 ### Acceptance Criteria
 - Saved notes can include deterministic `## Retrieval Query Pack` content generated from existing clip artifacts with no external model dependency.

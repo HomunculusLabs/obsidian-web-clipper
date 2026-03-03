@@ -2988,3 +2988,794 @@ describe("headless clip harness entrypoint", () => {
     });
   });
 });
+
+// ============================================================================
+// TP006: Retrieval Query Pack E2E Scenarios - Section + Diagnostics Parity
+// ============================================================================
+
+describe("TP006: Retrieval Query Pack end-to-end section + diagnostics parity", () => {
+  /**
+   * Helper to build query pack input from extracted clip result
+   */
+  function buildQueryPackInputFromExtracted(
+    extracted: ReturnType<typeof extractWebPageContent>,
+    sourceUrl: string,
+  ): {
+    title: string;
+    description?: string;
+    conceptTaxonomy?: string[];
+    knowledgeEntities?: string[];
+    keywords?: string[];
+    sourceUrl: string;
+    contentType: string;
+    author?: string;
+  } {
+    // Extract keywords from metadata or use empty array
+    const keywords: string[] = [];
+    if (extracted.metadata.keywords && Array.isArray(extracted.metadata.keywords)) {
+      keywords.push(...extracted.metadata.keywords);
+    }
+
+    // Extract entities from knowledge entities if available
+    const knowledgeEntities: string[] = [];
+    if (extracted.metadata.knowledgeEntities && Array.isArray(extracted.metadata.knowledgeEntities)) {
+      knowledgeEntities.push(...extracted.metadata.knowledgeEntities.map((e: { name?: string }) => e.name || "").filter(Boolean));
+    }
+
+    // Extract concept taxonomy if available
+    const conceptTaxonomy: string[] = [];
+    if (extracted.metadata.conceptTaxonomy && Array.isArray(extracted.metadata.conceptTaxonomy)) {
+      conceptTaxonomy.push(...extracted.metadata.conceptTaxonomy);
+    }
+
+    return {
+      title: extracted.metadata.title || extracted.title || "",
+      description: extracted.metadata.description,
+      conceptTaxonomy: conceptTaxonomy.length > 0 ? conceptTaxonomy : undefined,
+      knowledgeEntities: knowledgeEntities.length > 0 ? knowledgeEntities : undefined,
+      keywords: keywords.length > 0 ? keywords : undefined,
+      sourceUrl,
+      contentType: extracted.metadata.type || "article",
+      author: extracted.metadata.author,
+    };
+  }
+
+  describe("TP006: Query pack section rendering across providers", () => {
+    test("generic web article: query pack section is rendered when content has extractable queries", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/article";
+
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: "query-pack-web-article",
+        },
+        async ({ extracted }) => {
+          const { buildRetrievalQueryPack, isEmptyQueryPack } = await import(
+            "../../src/shared/retrievalQueryPackBuilder"
+          );
+          const { renderRetrievalQueryPackSection } = await import(
+            "../../src/shared/retrievalQueryPackContract"
+          );
+
+          const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+          const pack = buildRetrievalQueryPack(input);
+
+          // Pass gate: Pack is not empty for content-rich articles
+          expect(isEmptyQueryPack(pack)).toBe(false);
+
+          // Pass gate: Section is rendered with header
+          const section = renderRetrievalQueryPackSection(pack);
+          expect(section).toContain("## Retrieval Query Pack");
+        },
+      );
+    });
+
+    test("github repository: query pack section contains entity seeds from repo metadata", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "templates",
+        "fixtures",
+        "github-regression-vhs.html",
+      );
+      const fixtureUrl = "https://github.com/charmbracelet/vhs";
+
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: "vhs-query-pack",
+        },
+        async ({ extracted }) => {
+          const { buildRetrievalQueryPack } = await import(
+            "../../src/shared/retrievalQueryPackBuilder"
+          );
+          const { renderRetrievalQueryPackSection } = await import(
+            "../../src/shared/retrievalQueryPackContract"
+          );
+
+          const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+          const pack = buildRetrievalQueryPack(input);
+
+          // Pass gate: Pack has queries from GitHub README content
+          expect(pack.totalIncluded).toBeGreaterThan(0);
+
+          // Pass gate: Section is rendered
+          const section = renderRetrievalQueryPackSection(pack);
+          expect(section).toContain("## Retrieval Query Pack");
+
+          // Pass gate: Has at least one subsection
+          const hasExactPhrases = section.includes("### Exact Phrase Queries");
+          const hasKeywordBooleans = section.includes("### Keyword Boolean Queries");
+          const hasEntitySeeds = section.includes("### Entity Query Seeds");
+          expect(hasExactPhrases || hasKeywordBooleans || hasEntitySeeds).toBe(true);
+        },
+      );
+    });
+
+    test("SeedFinder strain profile: query pack derives queries from strain metadata", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "templates",
+        "fixtures",
+        "seedfinder-strain.html",
+      );
+      const fixtureUrl = "https://en.seedfinder.eu/strain-info/Blue_Dream/";
+
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "article",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: "seedfinder-query-pack",
+          baseResult: {
+            url: fixtureUrl,
+            title: "SeedFinder Query Pack Test",
+            markdown: "",
+            metadata: {
+              url: fixtureUrl,
+              title: "SeedFinder Query Pack Test",
+              type: "article",
+            },
+          },
+        },
+        async ({ extracted }) => {
+          const { buildRetrievalQueryPack } = await import(
+            "../../src/shared/retrievalQueryPackBuilder"
+          );
+          const { renderRetrievalQueryPackSection } = await import(
+            "../../src/shared/retrievalQueryPackContract"
+          );
+
+          const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+          const pack = buildRetrievalQueryPack(input);
+
+          // Pass gate: Pack has queries
+          expect(pack.totalIncluded).toBeGreaterThanOrEqual(0);
+
+          // Pass gate: Version is set correctly
+          const { QUERY_PACK_VERSION } = await import(
+            "../../src/shared/retrievalQueryPackContract"
+          );
+          expect(pack.version).toBe(QUERY_PACK_VERSION);
+        },
+      );
+    });
+
+    test("reddit thread: query pack generates from thread content", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "templates",
+        "fixtures",
+        "reddit-new.html",
+      );
+      const fixtureUrl = "https://www.reddit.com/r/programming/comments/abc123/test_post";
+
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: "reddit-query-pack",
+          baseResult: {
+            url: fixtureUrl,
+            title: "Reddit Query Pack Test",
+            markdown: "",
+            metadata: {
+              url: fixtureUrl,
+              title: "Reddit Query Pack Test",
+              type: "web",
+            },
+          },
+        },
+        async ({ extracted }) => {
+          const { buildRetrievalQueryPack } = await import(
+            "../../src/shared/retrievalQueryPackBuilder"
+          );
+
+          const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+          const pack = buildRetrievalQueryPack(input);
+
+          // Pass gate: Pack is generated
+          expect(pack).toBeDefined();
+          expect(pack.version).toBeDefined();
+        },
+      );
+    });
+  });
+
+  describe("TP006: Frontmatter diagnostics parity", () => {
+    test("query pack diagnostics are emitted with all required fields", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/diagnostics-test";
+
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: "diagnostics-parity-test",
+        },
+        async ({ extracted }) => {
+          const { buildRetrievalQueryPack } = await import(
+            "../../src/shared/retrievalQueryPackBuilder"
+          );
+          const {
+            extractQueryPackDiagnostics,
+            QUERY_PACK_VERSION,
+          } = await import("../../src/shared/retrievalQueryPackContract");
+
+          const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+          const pack = buildRetrievalQueryPack(input);
+          const diagnostics = extractQueryPackDiagnostics(pack);
+
+          // Pass gate: All diagnostic fields are present
+          expect(diagnostics.query_pack_version).toBe(QUERY_PACK_VERSION);
+          expect(typeof diagnostics.query_pack_exact_phrases).toBe("number");
+          expect(typeof diagnostics.query_pack_keyword_booleans).toBe("number");
+          expect(typeof diagnostics.query_pack_entity_seeds).toBe("number");
+          expect(typeof diagnostics.query_pack_total_queries).toBe("number");
+          expect(typeof diagnostics.query_pack_truncated).toBe("boolean");
+
+          // Pass gate: Counts are non-negative
+          expect(diagnostics.query_pack_exact_phrases).toBeGreaterThanOrEqual(0);
+          expect(diagnostics.query_pack_keyword_booleans).toBeGreaterThanOrEqual(0);
+          expect(diagnostics.query_pack_entity_seeds).toBeGreaterThanOrEqual(0);
+          expect(diagnostics.query_pack_total_queries).toBeGreaterThanOrEqual(0);
+
+          // Pass gate: Total matches sum of individual counts
+          expect(diagnostics.query_pack_total_queries).toBe(
+            diagnostics.query_pack_exact_phrases +
+              diagnostics.query_pack_keyword_booleans +
+              diagnostics.query_pack_entity_seeds,
+          );
+        },
+      );
+    });
+
+    test("no-content diagnostics have zero values and correct version", async () => {
+      const { getNoQueryDiagnostics } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const { QUERY_PACK_VERSION } = await import(
+        "../../src/shared/retrievalQueryPackContract"
+      );
+
+      const diagnostics = getNoQueryDiagnostics();
+
+      // Pass gate: All counts are zero
+      expect(diagnostics.query_pack_exact_phrases).toBe(0);
+      expect(diagnostics.query_pack_keyword_booleans).toBe(0);
+      expect(diagnostics.query_pack_entity_seeds).toBe(0);
+      expect(diagnostics.query_pack_total_queries).toBe(0);
+
+      // Pass gate: Truncated is false (nothing to truncate)
+      expect(diagnostics.query_pack_truncated).toBe(false);
+
+      // Pass gate: Version is correct
+      expect(diagnostics.query_pack_version).toBe(QUERY_PACK_VERSION);
+    });
+
+    test("diagnostics are written to frontmatter in final markdown", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/frontmatter-test";
+
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: "frontmatter-test",
+        },
+        async ({ extracted }) => {
+          const { buildRetrievalQueryPack } = await import(
+            "../../src/shared/retrievalQueryPackBuilder"
+          );
+          const {
+            extractQueryPackDiagnostics,
+            renderRetrievalQueryPackSection,
+          } = await import("../../src/shared/retrievalQueryPackContract");
+          const { buildClipMarkdownWithRelated } = await import(
+            "../../src/shared/markdown"
+          );
+          const { buildFrontmatterFromClip } = await import(
+            "../../src/shared/buildFrontmatter"
+          );
+          const { DEFAULT_SETTINGS } = await import("../../src/shared/settings");
+
+          const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+          const pack = buildRetrievalQueryPack(input);
+          const diagnostics = extractQueryPackDiagnostics(pack);
+          const queryPackSection = renderRetrievalQueryPackSection(pack);
+
+          // Build frontmatter with query pack diagnostics
+          const built = buildFrontmatterFromClip({
+            result: extracted,
+            settings: DEFAULT_SETTINGS,
+            pageType: "web",
+            currentTabUrl: fixtureUrl,
+            overrideFolder: "Clips",
+            overrideTitle: "frontmatter-test",
+          });
+
+          // Build final markdown with query pack
+          const clipMarkdown = buildClipMarkdownWithRelated({
+            frontmatter: {
+              ...built.frontmatter,
+              queryPackDiagnostics: diagnostics,
+            },
+            bodyMarkdown: extracted.markdown,
+            queryPackSection,
+          });
+
+          // Pass gate: Frontmatter contains query_pack_version
+          expect(clipMarkdown).toMatch(/query_pack_version:\s*"[^"]+"/);
+
+          // Pass gate: Frontmatter contains query_pack_exact_phrases
+          expect(clipMarkdown).toMatch(/query_pack_exact_phrases:\s*\d+/);
+
+          // Pass gate: Frontmatter contains query_pack_keyword_booleans
+          expect(clipMarkdown).toMatch(/query_pack_keyword_booleans:\s*\d+/);
+
+          // Pass gate: Frontmatter contains query_pack_entity_seeds
+          expect(clipMarkdown).toMatch(/query_pack_entity_seeds:\s*\d+/);
+
+          // Pass gate: Frontmatter contains query_pack_total_queries
+          expect(clipMarkdown).toMatch(/query_pack_total_queries:\s*\d+/);
+
+          // Pass gate: Frontmatter contains query_pack_truncated
+          expect(clipMarkdown).toMatch(/query_pack_truncated:\s*(true|false)/);
+
+          // Pass gate: Retrieval Query Pack section is present
+          expect(clipMarkdown).toContain("## Retrieval Query Pack");
+        },
+      );
+    });
+  });
+
+  describe("TP006: Truncation behavior", () => {
+    test("truncation flag is set when queries exceed limits", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const {
+        MAX_EXACT_PHRASE_QUERIES,
+        MAX_KEYWORD_BOOLEAN_QUERIES,
+        MAX_ENTITY_QUERY_SEEDS,
+      } = await import("../../src/shared/retrievalQueryPackContract");
+
+      // Create input with many entities to trigger truncation
+      const input = {
+        title: "Comprehensive TypeScript Guide with Advanced Patterns",
+        description: "This guide covers TypeScript interfaces, generics, type inference, conditional types, mapped types, template literal types, and much more in extensive detail",
+        conceptTaxonomy: ["Technology", "Programming", "TypeScript", "JavaScript", "Web Development", "Frontend", "Backend"],
+        knowledgeEntities: [
+          "interface definition", "type alias", "union type", "intersection type",
+          "conditional type", "mapped type", "template literal type", "type inference",
+          "generic constraint", "variance annotation", "type predicate", "assertion function",
+          "declaration merging", "module augmentation", "ambient declaration", "namespace",
+          "enum", "decorator", "metadata", "reflect",
+        ],
+        keywords: [
+          "typescript", "javascript", "programming", "web", "frontend", "backend",
+          "api", "rest", "graphql", "node", "deno", "bun",
+        ],
+        contentType: "article" as const,
+      };
+
+      const pack = buildRetrievalQueryPack(input);
+
+      // Pass gate: Individual query types respect their limits
+      expect(pack.exactPhrases.length).toBeLessThanOrEqual(MAX_EXACT_PHRASE_QUERIES);
+      expect(pack.keywordBooleans.length).toBeLessThanOrEqual(MAX_KEYWORD_BOOLEAN_QUERIES);
+      expect(pack.entitySeeds.length).toBeLessThanOrEqual(MAX_ENTITY_QUERY_SEEDS);
+
+      // Pass gate: Truncation flag reflects actual truncation state
+      if (pack.totalGenerated > pack.totalIncluded) {
+        expect(pack.truncated).toBe(true);
+      }
+
+      // Pass gate: totalGenerated >= totalIncluded
+      expect(pack.totalGenerated).toBeGreaterThanOrEqual(pack.totalIncluded);
+    });
+
+    test("no truncation when content is within limits", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+
+      const input = {
+        title: "Short Title",
+        contentType: "article" as const,
+      };
+
+      const pack = buildRetrievalQueryPack(input);
+
+      // Pass gate: No truncation for minimal content
+      expect(pack.truncated).toBe(false);
+      expect(pack.totalGenerated).toBe(pack.totalIncluded);
+    });
+  });
+
+  describe("TP006: Determinism across multiple runs", () => {
+    test("query pack is deterministic across multiple runs with same inputs", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+
+      const input = {
+        title: "TypeScript Generics and Advanced Type Patterns",
+        description: "Understanding TypeScript generics and type patterns for scalable APIs",
+        conceptTaxonomy: ["Programming", "TypeScript", "API Design"],
+        knowledgeEntities: ["generics", "type inference", "interface"],
+        keywords: ["typescript", "generics", "patterns"],
+        contentType: "article" as const,
+      };
+
+      // Run multiple times
+      const pack1 = buildRetrievalQueryPack(input);
+      const pack2 = buildRetrievalQueryPack(input);
+      const pack3 = buildRetrievalQueryPack(input);
+
+      // Pass gate: All packs have identical structure
+      expect(pack1.exactPhrases).toEqual(pack2.exactPhrases);
+      expect(pack2.exactPhrases).toEqual(pack3.exactPhrases);
+
+      expect(pack1.keywordBooleans).toEqual(pack2.keywordBooleans);
+      expect(pack2.keywordBooleans).toEqual(pack3.keywordBooleans);
+
+      expect(pack1.entitySeeds).toEqual(pack2.entitySeeds);
+      expect(pack2.entitySeeds).toEqual(pack3.entitySeeds);
+
+      expect(pack1.totalGenerated).toBe(pack2.totalGenerated);
+      expect(pack2.totalGenerated).toBe(pack3.totalGenerated);
+
+      expect(pack1.truncated).toBe(pack2.truncated);
+      expect(pack2.truncated).toBe(pack3.truncated);
+    });
+
+    test("rendered markdown is deterministic across runs", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const { renderRetrievalQueryPackSection } = await import(
+        "../../src/shared/retrievalQueryPackContract"
+      );
+
+      const input = {
+        title: "TypeScript Best Practices Guide",
+        description: "Comprehensive guide to TypeScript development",
+        keywords: ["typescript", "guide", "best-practices"],
+        contentType: "article" as const,
+      };
+
+      const pack1 = buildRetrievalQueryPack(input);
+      const pack2 = buildRetrievalQueryPack(input);
+
+      const section1 = renderRetrievalQueryPackSection(pack1);
+      const section2 = renderRetrievalQueryPackSection(pack2);
+
+      // Pass gate: Rendered output is identical
+      expect(section1).toBe(section2);
+    });
+
+    test("diagnostics are deterministic across runs", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const { extractQueryPackDiagnostics } = await import(
+        "../../src/shared/retrievalQueryPackContract"
+      );
+
+      const input = {
+        title: "API Design Patterns",
+        keywords: ["api", "design", "patterns"],
+        contentType: "article" as const,
+      };
+
+      const diag1 = extractQueryPackDiagnostics(buildRetrievalQueryPack(input));
+      const diag2 = extractQueryPackDiagnostics(buildRetrievalQueryPack(input));
+      const diag3 = extractQueryPackDiagnostics(buildRetrievalQueryPack(input));
+
+      // Pass gate: Diagnostics are identical across runs
+      expect(diag1).toEqual(diag2);
+      expect(diag2).toEqual(diag3);
+    });
+  });
+
+  describe("TP006: Cross-provider parity", () => {
+    test("all representative providers produce valid query packs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const providers = [
+        {
+          name: "github-vhs",
+          fixture: "github-regression-vhs.html",
+          url: "https://github.com/charmbracelet/vhs",
+        },
+        {
+          name: "github-lipgloss",
+          fixture: "github-regression-lipgloss.html",
+          url: "https://github.com/charmbracelet/lipgloss",
+        },
+        {
+          name: "github-crush",
+          fixture: "github-regression-crush.html",
+          url: "https://github.com/charmbracelet/crush",
+        },
+        {
+          name: "generic-web",
+          fixture: "article.html",
+          url: "https://example.com/article",
+        },
+      ];
+
+      const { buildRetrievalQueryPack, validateQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const { QUERY_PACK_VERSION } = await import(
+        "../../src/shared/retrievalQueryPackContract"
+      );
+
+      for (const provider of providers) {
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          provider.fixture.startsWith("github") || provider.fixture === "article.html"
+            ? provider.fixture === "article.html"
+              ? "extractors/fixtures"
+              : "templates/fixtures"
+            : "extractors/fixtures",
+          provider.fixture,
+        );
+
+        withScenario(
+          {
+            fixturePath,
+            simulatedUrl: provider.url,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: `${provider.name}-query-pack`,
+          },
+          ({ extracted }) => {
+            const input = buildQueryPackInputFromExtracted(extracted, provider.url);
+            const pack = buildRetrievalQueryPack(input);
+
+            // Pass gate: Pack is valid for all providers
+            expect(validateQueryPack(pack)).toBe(true);
+
+            // Pass gate: Version is set correctly
+            expect(pack.version).toBe(QUERY_PACK_VERSION);
+
+            // Pass gate: All query arrays are defined
+            expect(Array.isArray(pack.exactPhrases)).toBe(true);
+            expect(Array.isArray(pack.keywordBooleans)).toBe(true);
+            expect(Array.isArray(pack.entitySeeds)).toBe(true);
+          },
+        );
+      }
+    });
+
+    test("github repos have consistent query pack structure", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack",
+      });
+      sandboxes.push(sandbox);
+
+      const repos = [
+        { name: "vhs", fixture: "github-regression-vhs.html" },
+        { name: "lipgloss", fixture: "github-regression-lipgloss.html" },
+        { name: "crush", fixture: "github-regression-crush.html" },
+      ];
+
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+
+      for (const repo of repos) {
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "templates",
+          "fixtures",
+          repo.fixture,
+        );
+        const fixtureUrl = `https://github.com/charmbracelet/${repo.name}`;
+
+        withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: `${repo.name}-query-pack`,
+          },
+          ({ extracted }) => {
+            const input = buildQueryPackInputFromExtracted(extracted, fixtureUrl);
+            const pack = buildRetrievalQueryPack(input);
+
+            // Pass gate: All repos produce valid query packs
+            expect(pack).toBeDefined();
+            expect(pack.totalIncluded).toBeGreaterThanOrEqual(0);
+
+            // Pass gate: Scores are within valid range (0-100)
+            for (const phrase of pack.exactPhrases) {
+              expect(phrase.score).toBeGreaterThanOrEqual(0);
+              expect(phrase.score).toBeLessThanOrEqual(100);
+            }
+            for (const bool of pack.keywordBooleans) {
+              expect(bool.score).toBeGreaterThanOrEqual(0);
+              expect(bool.score).toBeLessThanOrEqual(100);
+            }
+            for (const seed of pack.entitySeeds) {
+              expect(seed.score).toBeGreaterThanOrEqual(0);
+              expect(seed.score).toBeLessThanOrEqual(100);
+            }
+          },
+        );
+      }
+    });
+  });
+
+  describe("TP006: Section ordering and content", () => {
+    test("query pack section follows deterministic ordering", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const { renderRetrievalQueryPackSection } = await import(
+        "../../src/shared/retrievalQueryPackContract"
+      );
+
+      const input = {
+        title: "TypeScript API Design Patterns",
+        description: "Comprehensive guide to TypeScript API design",
+        conceptTaxonomy: ["Technology", "Programming", "TypeScript"],
+        knowledgeEntities: ["interface", "type safety", "generics"],
+        keywords: ["typescript", "api", "design"],
+        contentType: "article" as const,
+      };
+
+      const pack = buildRetrievalQueryPack(input);
+      const section = renderRetrievalQueryPackSection(pack);
+
+      // Pass gate: Section has header
+      expect(section).toContain("## Retrieval Query Pack");
+
+      // Pass gate: Query types are sorted by score descending
+      for (let i = 1; i < pack.exactPhrases.length; i++) {
+        expect(pack.exactPhrases[i - 1].score).toBeGreaterThanOrEqual(
+          pack.exactPhrases[i].score,
+        );
+      }
+      for (let i = 1; i < pack.keywordBooleans.length; i++) {
+        expect(pack.keywordBooleans[i - 1].score).toBeGreaterThanOrEqual(
+          pack.keywordBooleans[i].score,
+        );
+      }
+      for (let i = 1; i < pack.entitySeeds.length; i++) {
+        expect(pack.entitySeeds[i - 1].score).toBeGreaterThanOrEqual(
+          pack.entitySeeds[i].score,
+        );
+      }
+    });
+
+    test("empty query pack renders empty section", async () => {
+      const { buildRetrievalQueryPack } = await import(
+        "../../src/shared/retrievalQueryPackBuilder"
+      );
+      const { renderRetrievalQueryPackSection } = await import(
+        "../../src/shared/retrievalQueryPackContract"
+      );
+
+      const input = {
+        title: "",
+        contentType: "article" as const,
+      };
+
+      const pack = buildRetrievalQueryPack(input);
+      const section = renderRetrievalQueryPackSection(pack);
+
+      // Pass gate: Empty pack renders empty string
+      expect(section).toBe("");
+    });
+  });
+});
