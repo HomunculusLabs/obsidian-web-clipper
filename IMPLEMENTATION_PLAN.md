@@ -9,6 +9,80 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Deterministic contradiction inbox for cross-clip claim conflict triage
+
+### Distilled Scope
+**Problem**
+- Current knowledge surfaces (`key-takeaways-inbox.md`, `open-questions-inbox.md`, `knowledge-triage-state-sync.md`) are deterministic, but they do not flag when multiple clips assert conflicting guidance.
+- AI coding/writing sessions can over-trust stale or contradictory takeaways, causing execution churn and low-confidence decisions.
+- With intake queues empty and planning running in ideation mode, the highest-impact product slice is a deterministic conflict surface that turns contradiction detection into an explicit triage queue.
+
+**In scope**
+- Define a deterministic `contradiction-inbox.md` contract that detects conflicting claim pairs/clusters from existing key takeaways + triage status artifacts.
+- Implement conflict fingerprinting/provenance fields (`conflict_id`, `claim_fingerprint`, `source_clip_refs`, `conflict_status`, `conflict_version`, `conflict_truncated`) with stable ordering/tie-breaks.
+- Add save-flow/background refresh wiring (message types, router dispatch, handler, popup trigger) following existing inbox/state-sync refresh patterns.
+- Add focused shared-contract + e2e tests validating conflict detection, dedupe, status handling, truncation, and rerun determinism.
+
+**Out of scope**
+- LLM-based contradiction inference or semantic debate scoring.
+- UI/editor workflows beyond deterministic markdown artifact generation.
+- Changes to existing key takeaways/open questions ranking algorithms outside conflict detection inputs.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic cross-note `contradiction-inbox.md` export + incremental refresh to surface conflicting claims before execution. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:inbox-refresh-handler-parity` extension that enforces contradiction-inbox save-flow/router/message contract wiring.
+3. **[OBSERVABILITY]** Add `knowledge-conflict-history.ndjson` telemetry (`conflict_id`, `first_seen_at`, `resolved_at`, `source_ref_delta`) for drift analysis.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "session-kickoff-brief|knowledge-delta-digest|knowledge-triage-state-sync|clip-recovery-state-sync|execution-task-state-sync" src tests tools docs README.md`
+  - `search "refresh.*Inbox|refreshKnowledgeTriageStateSync|DEFAULT_.*FILENAME|writeFile" src/background src/shared src/popup`
+  - `search "keyTakeawaysInbox|openQuestionsInbox|executionBacklog|knowledgeTriage" src/shared tests/content/shared tests/e2e`
+  - `select set IMPLEMENTATION_PLAN.md src/popup/save.ts src/shared/messages.ts src/background/router.ts src/background/handlers/refreshOpenQuestionsInbox.ts src/background/handlers/refreshKeyTakeawaysInbox.ts src/background/handlers/refreshKnowledgeTriageStateSync.ts src/shared/openQuestionsInboxContract.ts src/shared/openQuestionsInboxBuilder.ts src/shared/openQuestionsInboxExporter.ts src/shared/keyTakeawaysInboxContract.ts src/shared/keyTakeawaysInboxBuilder.ts src/shared/keyTakeawaysInboxExporter.ts src/shared/knowledgeTriageStateSyncContract.ts src/shared/knowledgeTriageStateSyncBuilder.ts src/shared/knowledgeTriageStateSyncExporter.ts src/shared/settings.ts tests/content/shared/open-questions-inbox.test.ts tests/content/shared/key-takeaways-inbox.test.ts tests/content/shared/knowledge-triage-state-sync.test.ts tests/e2e/headless-clip-harness.test.ts`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `IMPLEMENTATION_PLAN.md`
+  - `src/popup/save.ts`
+  - `src/shared/messages.ts`
+  - `src/background/router.ts`
+  - `src/background/handlers/refreshOpenQuestionsInbox.ts`
+  - `src/background/handlers/refreshKeyTakeawaysInbox.ts`
+  - `src/background/handlers/refreshKnowledgeTriageStateSync.ts`
+  - `src/shared/keyTakeawaysInboxContract.ts`
+  - `src/shared/keyTakeawaysInboxBuilder.ts`
+  - `src/shared/keyTakeawaysInboxExporter.ts`
+  - `src/shared/knowledgeTriageStateSyncContract.ts`
+  - `src/shared/knowledgeTriageStateSyncBuilder.ts`
+  - `src/shared/knowledgeTriageStateSyncExporter.ts`
+  - `tests/content/shared/key-takeaways-inbox.test.ts`
+  - `tests/content/shared/knowledge-triage-state-sync.test.ts`
+  - `tests/e2e/headless-clip-harness.test.ts`
+
+### Task Graph
+- [x] **TP001**: Specify `contradiction-inbox.md` contract (conflict schema, deterministic claim fingerprinting, contradiction match rules, ordering/tie-breakers, truncation policy, diagnostics defaults).
+- [ ] **TP002**: Implement shared contradiction detector/builder that ingests existing takeaway + triage artifacts and emits stable conflict entries with provenance linkbacks.
+- [ ] **TP003**: Implement deterministic exporter/renderer for `contradiction-inbox.md` with explicit empty-state behavior and bounded conflict-status metadata.
+- [ ] **TP004**: Wire refresh flow through runtime contracts (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshContradictionInbox.ts`, `src/popup/save.ts`, `src/shared/settings.ts`) using non-fatal save-path behavior.
+- [ ] **TP005**: Add `tests/content/shared/contradiction-inbox.test.ts` contract coverage for contradictory-pair detection, dedupe, resolved-status handling, truncation, and rerun determinism.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end contradiction inbox refresh parity across repeated clip/save cycles.
+
+### Acceptance Criteria
+- Clip save flows can deterministically produce/update `contradiction-inbox.md` from existing knowledge artifacts without external model calls.
+- Conflict entries include stable IDs/provenance and do not reorder on unchanged inputs.
+- Refresh failures are observable but do not block primary clip note save.
+- Shared-contract + e2e tests detect contradiction-inbox drift and pass with stable output.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/contradiction-inbox.test.ts
+bun test tests/content/shared/key-takeaways-inbox.test.ts
+bun test tests/content/shared/knowledge-triage-state-sync.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Deterministic Knowledge Triage state-sync to suppress resurfaced resolved work
 
 ### Distilled Scope
