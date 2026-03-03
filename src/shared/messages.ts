@@ -74,6 +74,19 @@ export type RuntimeRequest =
       /** Maximum depth to recurse when scanning (optional) */
       maxDepth?: number;
     }
+  | {
+      action: "refreshContradictionInbox";
+      /** Vault path on filesystem */
+      vaultPath: string;
+      /** CLI path for saving the inbox */
+      cliPath: string;
+      /** Vault name */
+      vault: string;
+      /** Folder to save the inbox (optional, defaults to vault root) */
+      inboxFolder?: string;
+      /** Maximum files to scan (optional) */
+      maxFiles?: number;
+    }
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
@@ -148,6 +161,18 @@ export type RefreshKnowledgeTriageStateSyncResponse =
       statusCountsInProgress: number;
       statusCountsBlocked: number;
       statusCountsDone: number;
+      truncated: boolean;
+    }
+  | { success: false; error: string };
+
+export type RefreshContradictionInboxResponse =
+  | {
+      success: true;
+      conflictsCount: number;
+      sourceClipsProcessed: number;
+      openConflicts: number;
+      resolvedConflicts: number;
+      falsePositiveConflicts: number;
       truncated: boolean;
     }
   | { success: false; error: string };

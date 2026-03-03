@@ -39,7 +39,7 @@ import {
   type RetrievalQueryPackInput,
   type QueryPackDiagnostics
 } from "../shared/retrievalQueryPackContract";
-import type { RefreshOpenQuestionsInboxResponse, RefreshKnowledgeTriageStateSyncResponse } from "../shared/messages";
+import type { RefreshOpenQuestionsInboxResponse, RefreshKnowledgeTriageStateSyncResponse, RefreshContradictionInboxResponse } from "../shared/messages";
 
 const MAX_URI_CONTENT_CHARS = 180000;
 
@@ -752,6 +752,78 @@ async function refreshKeyTakeawaysInbox(
 }
 
 /**
+ * Refresh the Contradiction Inbox after a successful save.
+ *
+ * This is a fire-and-forget operation that:
+ * 1. Scans the vault for claims from Key Takeaways and other knowledge surfaces
+ * 2. Detects contradictions deterministically
+ * 3. Builds and saves the inbox via CLI
+ *
+ * On any error, logs and continues (does not block or corrupt).
+ */
+async function refreshContradictionInbox(
+  settings: Settings,
+  vault: string
+): Promise<void> {
+  // Skip if inbox is disabled
+  if (!settings.enableContradictionInbox) {
+    return;
+  }
+
+  // Skip if CLI is not configured (inbox requires CLI for file write)
+  if (!settings.obsidianCli?.enabled || !settings.obsidianCli.cliPath) {
+    if (settings.debug) {
+      console.warn("[ContradictionInbox] CLI not configured, skipping inbox refresh");
+    }
+    return;
+  }
+
+  // Get vault path (required for scanning)
+  const vaultPath = getVaultPathFromSettings(settings);
+  if (!vaultPath) {
+    if (settings.debug) {
+      console.warn("[ContradictionInbox] Vault path not available, skipping inbox refresh");
+    }
+    return;
+  }
+
+  try {
+    const response = await runtimeSendMessage<
+      RuntimeRequest,
+      RefreshContradictionInboxResponse
+    >({
+      action: "refreshContradictionInbox",
+      vaultPath,
+      cliPath: settings.obsidianCli.cliPath,
+      vault,
+      inboxFolder: settings.contradictionInboxFolder || undefined,
+      maxFiles: settings.contradictionInboxMaxFiles || 100,
+    });
+
+    if (response?.success) {
+      if (settings.debug) {
+        console.log(
+          "[ContradictionInbox] Refreshed inbox:",
+          `${response.conflictsCount} conflicts from ${response.sourceClipsProcessed} clips`
+        );
+      }
+    } else {
+      if (settings.debug) {
+        console.warn(
+          "[ContradictionInbox] Refresh failed:",
+          response?.error || "Unknown error"
+        );
+      }
+    }
+  } catch (err) {
+    // Deterministic fallback: log error and continue
+    if (settings.debug) {
+      console.warn("[ContradictionInbox] Refresh error:", err);
+    }
+  }
+}
+
+/**
  * Main save function with method routing and fallback chain.
  *
  * Fallback chain: CLI → URI → clipboard
@@ -840,6 +912,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
 
         // Refresh Knowledge Triage State Sync (fire-and-forget, non-blocking)
         void refreshKnowledgeTriageStateSync(settings, prepared.vault);
+
+        // Refresh Contradiction Inbox (fire-and-forget, non-blocking)
+        void refreshContradictionInbox(settings, prepared.vault);
 
         return { usedClipboardFallback, usedMethod: method };
       }

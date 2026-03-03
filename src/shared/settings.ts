@@ -106,6 +106,11 @@ export interface Settings {
   keyTakeawaysInboxMaxFiles: number;
   keyTakeawaysInboxFolder: string;
 
+  // --- Contradiction Inbox settings ---
+  enableContradictionInbox: boolean;
+  contradictionInboxMaxFiles: number;
+  contradictionInboxFolder: string;
+
   // --- Debug settings ---
   debug: boolean; // Enable debug logging to console
 
@@ -232,6 +237,11 @@ export const DEFAULT_SETTINGS: Settings = {
   keyTakeawaysInboxMaxFiles: 100,
   keyTakeawaysInboxFolder: "",
 
+  // --- Contradiction Inbox settings ---
+  enableContradictionInbox: false,
+  contradictionInboxMaxFiles: 100,
+  contradictionInboxFolder: "",
+
   // --- Debug settings ---
   debug: false, // Disabled by default
 
@@ -303,6 +313,10 @@ export const SETTINGS_KEYS = [
   "enableKeyTakeawaysInbox",
   "keyTakeawaysInboxMaxFiles",
   "keyTakeawaysInboxFolder",
+  // Contradiction Inbox
+  "enableContradictionInbox",
+  "contradictionInboxMaxFiles",
+  "contradictionInboxFolder",
   // Debug
   "debug",
   // Schema version
