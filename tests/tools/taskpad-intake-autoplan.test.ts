@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { countQueueHealth } from "../../tools/taskpad-queue-health";
+import {
+  computeQueueParityStatus,
+  type BacklogInsertionResult,
+  type TargetQueue,
+} from "../../tools/taskpad-auto-ideation";
 
 // ============================================================================
 // TP004: Focused tests for queue-health and intake-autoplan fixture coverage
@@ -794,6 +799,397 @@ describe("TP004: intake-autoplan fixture-based queue state tests", () => {
       expect(counts.intakeQueueTotal).toBe(3);
 
       expect(counts.totalUnchecked).toBe(4);
+    });
+  });
+});
+
+// ============================================================================
+// TP004: Downstream parity integrity tests for --target-queue work
+// ============================================================================
+
+describe("TP004: downstream parity integrity when auto-ideation uses --target-queue work", () => {
+  describe("empty Work Queue returns parity-fail-empty", () => {
+    test("Work Queue empty with no intake items reports parity-fail-empty", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed work item A
+
+## Execution Queue
+(empty)
+
+## Autonomous Kickoff Queue
+(empty)
+
+## Self-Improvement Backlog
+- [x] done
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Empty Work Queue should report parity-fail-empty
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+    });
+
+    test("Work Queue empty with intake items still reports parity-fail-empty", () => {
+      // This is the key regression case: intake queues have items,
+      // but Work Queue is empty, so parity should be fail-empty
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed item
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+- [ ] self-improvement item 2
+- [ ] self-improvement item 3
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Only Work Queue counts matter for work target, not intake queues
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+    });
+
+    test("Work Queue empty with Execution Queue items reports parity-fail-empty", () => {
+      // Execution Queue items don't count for Work Queue target parity
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed item
+
+## Execution Queue
+- [ ] execution task A
+- [ ] execution task B
+
+## Autonomous Kickoff Queue
+(empty)
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Only Work Queue counts (0), Execution Queue doesn't count
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+    });
+  });
+
+  describe("seeded Work Queue returns parity-pass with correct count", () => {
+    test("inserted Work Queue item increments count to 1", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed item
+
+## Self-Improvement Backlog
+- [x] done
+`;
+
+      // Simulate insertion result (action: "inserted")
+      const insertionResult: BacklogInsertionResult = {
+        action: "inserted",
+        updatedTaskpadMarkdown: taskpad, // Would be updated in real execution
+        insertedLine: 3,
+        matchedExistingLine: null,
+        canonicalInsertedBullet: "- [ ] planned-2026-03-03 test bullet Verify: bun test",
+        semanticDedupe: {
+          decision: "inserted",
+          candidateSemanticKey: "test:bullet",
+          matchedSemanticKey: null,
+          rationale: "no semantic-equivalent unchecked backlog bullet found in ## Work Queue",
+        },
+      };
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", insertionResult, true);
+
+      // wasTriggered=true with inserted item: count = 0 + 1 = 1
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(1);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+
+    test("inserted item with existing Work Queue items increments correctly", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] existing item A
+- [ ] existing item B
+`;
+
+      const insertionResult: BacklogInsertionResult = {
+        action: "inserted",
+        updatedTaskpadMarkdown: taskpad,
+        insertedLine: 5,
+        matchedExistingLine: null,
+        canonicalInsertedBullet: "- [ ] planned-2026-03-03 new item Verify: bun test",
+        semanticDedupe: {
+          decision: "inserted",
+          candidateSemanticKey: "new:item",
+          matchedSemanticKey: null,
+          rationale: "no semantic-equivalent unchecked backlog bullet found in ## Work Queue",
+        },
+      };
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", insertionResult, true);
+
+      // Original count 2, inserted 1, total 3
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(3);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+  });
+
+  describe("no-op scenarios maintain existing Work Queue counts", () => {
+    test("Work Queue with existing items returns parity-pass", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] planned-2026-02-27 existing work item A
+- [ ] planned-2026-02-28 existing work item B
+
+## Self-Improvement Backlog
+- [x] done
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // No insertion triggered, count is existing items (2)
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(2);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+
+    test("deduped insertion does not increment count", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] existing item Verify: bun test
+`;
+
+      const insertionResult: BacklogInsertionResult = {
+        action: "deduped",
+        updatedTaskpadMarkdown: taskpad,
+        insertedLine: null,
+        matchedExistingLine: 3,
+        canonicalInsertedBullet: "- [ ] existing item Verify: bun test",
+        semanticDedupe: {
+          decision: "deduped",
+          candidateSemanticKey: "existing:item",
+          matchedSemanticKey: "existing:item",
+          rationale: "semantic-equivalent unchecked backlog bullet already exists at line 3",
+        },
+      };
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", insertionResult, true);
+
+      // Deduped: wasTriggered=true but action="deduped", count stays at 1
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(1);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+  });
+
+  describe("Work Queue parity uses workQueueUncheckedCount (TP002 fix validation)", () => {
+    test("intake queue items are ignored for Work Queue target", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] work item A
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+- [ ] self-improvement item 2
+- [ ] self-improvement item 3
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Only Work Queue items count (1), intake queues ignored
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(1);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+
+    test("empty Work Queue with many intake items still reports 0", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed item
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+- [ ] autonomous item 3
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+- [ ] self-improvement item 2
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Only Work Queue counts (0), intake queues don't count
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+    });
+
+    test("checked Work Queue items don't count toward unchecked count", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed item 1
+- [ ] unchecked item 2
+- [x] completed item 3
+- [ ] unchecked item 4
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Only unchecked items count (2)
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(2);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+  });
+
+  describe("regression detection for parity-count correctness", () => {
+    test("detects if Work Queue parity incorrectly uses intake queue counts", () => {
+      // Regression case: if computeQueueParityStatus was incorrectly using
+      // intake queue counts instead of workQueueUncheckedCount, this would fail
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] work item A
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Correct: Work Queue has 1 item, targetQueueUncheckedCount should be 1
+      // Incorrect (buggy): targetQueueUncheckedCount would be 4 (including intake queues)
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(1);
+      expect(queueParityStatus.targetQueueUncheckedCount).not.toBe(4);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+
+    test("detects if empty Work Queue incorrectly reports parity-pass", () => {
+      // Regression case: if Work Queue is empty but intake queues have items,
+      // buggy implementation might incorrectly report parity-pass
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [x] completed item
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "work", null, false);
+
+      // Correct: Work Queue is empty, should be parity-fail-empty
+      // Incorrect (buggy): might report parity-pass because intake queues have items
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+      expect(queueParityStatus.parityStatus).not.toBe("parity-pass");
+    });
+  });
+
+  describe("Self-Improvement target queue uses selfImprovementUncheckedCount", () => {
+    test("Self-Improvement target counts only Self-Improvement Backlog items", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] work item A
+- [ ] work item B
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "self-improvement", null, false);
+
+      // Self-Improvement target uses selfImprovementUncheckedCount (1)
+      // Work Queue items don't count
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(1);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+
+    test("Self-Improvement target with empty backlog returns parity-fail-empty", () => {
+      const taskpad = `# TASKPAD
+
+## Work Queue
+- [ ] work item A
+- [ ] work item B
+
+## Self-Improvement Backlog
+- [x] completed item
+`;
+
+      const queueParityStatus = computeQueueParityStatus(taskpad, "self-improvement", null, false);
+
+      // Self-Improvement Backlog is empty
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+    });
+  });
+
+  describe("fixture-based parity validation for downstream orchestration", () => {
+    test("executable-empty fixture validates Work Queue parity-fail-empty", () => {
+      const fixtureContent = readFixtureFile("taskpad-queue-health-executable-empty.md");
+
+      const queueParityStatus = computeQueueParityStatus(fixtureContent, "work", null, false);
+
+      // Work Queue should be empty (parity-fail-empty)
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
+    });
+
+    test("executable-ready fixture validates Work Queue parity-pass", () => {
+      const fixtureContent = readFixtureFile("taskpad-queue-health-executable-ready.md");
+
+      const queueParityStatus = computeQueueParityStatus(fixtureContent, "work", null, false);
+
+      // Work Queue should have items (parity-pass)
+      expect(queueParityStatus.hasExecutableItems).toBe(true);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBeGreaterThan(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-pass");
+    });
+
+    test("work-only-checked fixture validates Work Queue parity-fail-empty", () => {
+      const fixtureContent = readFixtureFile("taskpad-queue-health-work-only-checked.md");
+
+      const queueParityStatus = computeQueueParityStatus(fixtureContent, "work", null, false);
+
+      // Work Queue has only checked items, so unchecked count = 0
+      expect(queueParityStatus.hasExecutableItems).toBe(false);
+      expect(queueParityStatus.targetQueueUncheckedCount).toBe(0);
+      expect(queueParityStatus.parityStatus).toBe("parity-fail-empty");
     });
   });
 });
