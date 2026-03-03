@@ -23,7 +23,7 @@ import type {
   VaultIndexOptions,
   VaultIndexResult
 } from "./vaultIndex";
-import { indexVault } from "./vaultIndex";
+import { indexVaultWithCache } from "./vaultIndex";
 
 /**
  * Options for related clips matching
@@ -257,8 +257,8 @@ export async function matchRelatedClips(
   // Convert clip to matching input
   const input = clipResultToInput(clip);
 
-  // Index vault
-  const indexResult: VaultIndexResult = await indexVault({
+  // Index vault with cache support
+  const indexResult: VaultIndexResult = await indexVaultWithCache({
     vaultPath: options.vaultPath,
     maxDepth,
     includeHidden,

@@ -5,12 +5,23 @@
  * metadata needed for related clips matching. It scans markdown files,
  * parses frontmatter, and builds CandidateNote objects for use with
  * the related clips matching algorithm.
+ *
+ * Cache Integration:
+ * - `indexVaultWithCache()`: Use cache-aware indexing for production
+ * - `indexVault()`: Direct indexing (no cache) for testing/debugging
  */
 
 import { promises as fs } from "fs";
 import * as path from "path";
 
 import type { CandidateNote } from "./relatedClipsContract";
+import {
+  resolveVaultIndexCache,
+  fromCachedCandidateNote,
+  type VaultIndexCacheResult,
+  type CacheDiagnostics,
+  VAULT_INDEX_CACHE_VERSION,
+} from "./vaultIndexCache";
 
 /**
  * Simple YAML parser for frontmatter
@@ -153,6 +164,8 @@ export interface VaultIndexResult {
   filesSkipped: number;
   /** Errors encountered during indexing */
   errors: IndexError[];
+  /** Cache diagnostics (optional, only present when using cache) */
+  cacheDiagnostics?: CacheDiagnostics;
 }
 
 /**
@@ -661,6 +674,78 @@ export async function indexVault(
 }
 
 /**
+ * Index a vault with cache support
+ *
+ * This is the recommended entry point for vault indexing in production.
+ * It attempts to load cached index data, falling back to a full rebuild
+ * if the cache is missing, invalid, or corrupted.
+ *
+ * Cache behavior:
+ * - **Cache hit**: Returns cached candidates if vault is unchanged
+ * - **Cache miss**: Rebuilds index and caches the result
+ * - **Error**: Returns empty candidates on rebuild failure
+ *
+ * @param options - Indexing options
+ * @returns VaultIndexResult with candidates, metadata, and cache diagnostics
+ *
+ * @example
+ * ```ts
+ * const result = await indexVaultWithCache({
+ *   vaultPath: "/Users/t3rpz/Documents/Obsidian Vault",
+ *   includeHidden: false,
+ *   requiredTags: ["clip"]
+ * });
+ *
+ * console.log(`Found ${result.candidates.length} candidate notes`);
+ *
+ * if (result.cacheDiagnostics) {
+ *   console.log(`Cache hit: ${result.cacheDiagnostics.cacheHit}`);
+ *   console.log(`Cache age: ${result.cacheDiagnostics.cacheAgeMs}ms`);
+ *   if (result.cacheDiagnostics.rebuildReason) {
+ *     console.log(`Rebuild reason: ${result.cacheDiagnostics.rebuildReason}`);
+ *   }
+ * }
+ * ```
+ */
+export async function indexVaultWithCache(
+  options: VaultIndexOptions
+): Promise<VaultIndexResult> {
+  // Use cache resolution
+  const cacheResult: VaultIndexCacheResult = await resolveVaultIndexCache(
+    options.vaultPath,
+    options
+  );
+
+  // Handle error case
+  if (cacheResult.status === "error") {
+    console.error("[VaultIndex] Cache resolution failed:", cacheResult.error?.message);
+    return {
+      candidates: [],
+      filesScanned: 0,
+      filesWithFrontmatter: 0,
+      filesSkipped: 0,
+      errors: [],
+      cacheDiagnostics: cacheResult.diagnostics,
+    };
+  }
+
+  // Convert CachedCandidateNote[] to CandidateNote[]
+  const candidates: CandidateNote[] = cacheResult.candidates.map(fromCachedCandidateNote);
+
+  // Build result with cache diagnostics
+  const result: VaultIndexResult = {
+    candidates,
+    filesScanned: cacheResult.metadata.filesScanned,
+    filesWithFrontmatter: cacheResult.metadata.filesWithFrontmatter,
+    filesSkipped: cacheResult.metadata.filesSkipped,
+    errors: cacheResult.metadata.errors,
+    cacheDiagnostics: cacheResult.diagnostics,
+  };
+
+  return result;
+}
+
+/**
  * Index a single note file
  *
  * Useful for incremental indexing or testing.
@@ -694,3 +779,27 @@ export async function indexSingleNote(
     return null;
   }
 }
+
+// =============================================================================
+// Cache Module Re-Exports
+// =============================================================================
+
+/**
+ * Export cache module constants and types for convenience
+ * Consumers can import these from vaultIndex.ts directly
+ */
+export {
+  VAULT_INDEX_CACHE_VERSION,
+  type CacheDiagnostics,
+  type VaultIndexCacheResult,
+  type VaultIndexCacheSnapshot,
+  type CacheRebuildReason,
+  type CacheError,
+  type CacheValidationResult,
+  type CacheCorruptionDetails,
+  type CacheCorruptionType,
+  type ValidationError,
+  computeVaultFingerprint,
+  getCacheFilePath,
+  safeDelete,
+} from "./vaultIndexCache";

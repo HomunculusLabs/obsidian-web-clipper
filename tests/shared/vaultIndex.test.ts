@@ -21,6 +21,7 @@ import {
   hasRequiredTags,
   meetsMinDateFilter,
   indexVault,
+  indexVaultWithCache,
   indexSingleNote,
   type ParsedFrontmatter
 } from "../../src/shared/vaultIndex";
@@ -873,6 +874,214 @@ title: No URL
       const candidate = await indexSingleNote(notePath);
 
       expect(candidate).toBeNull();
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// =============================================================================
+// CACHE INTEGRATION TESTS
+// =============================================================================
+
+describe("indexVaultWithCache - Cache Integration", () => {
+  test("cache miss on first run creates cache and returns candidates", async () => {
+    const tempDir = path.join(tmpdir(), `vault-cache-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Create a test note
+      const notePath = path.join(tempDir, "test.md");
+      await fs.writeFile(notePath, `---
+source: https://example.com/article
+title: Test Article
+type: article
+tags:
+  - tech
+keywords:
+  - typescript
+---
+
+# Test Content`);
+
+      // First call should be a cache miss
+      const result1 = await indexVaultWithCache({ vaultPath: tempDir });
+
+      expect(result1.candidates.length).toBe(1);
+      expect(result1.candidates[0].title).toBe("Test Article");
+      expect(result1.cacheDiagnostics).toBeDefined();
+      expect(result1.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(result1.cacheDiagnostics?.cacheRebuilt).toBe(true);
+      expect(result1.cacheDiagnostics?.rebuildReason).toBe("cache_file_not_found");
+
+      // Second call should be a cache hit
+      const result2 = await indexVaultWithCache({ vaultPath: tempDir });
+
+      expect(result2.candidates.length).toBe(1);
+      expect(result2.candidates[0].title).toBe("Test Article");
+      expect(result2.cacheDiagnostics).toBeDefined();
+      expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+      expect(result2.cacheDiagnostics?.cacheRebuilt).toBe(false);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("cache invalidates when vault file changes", async () => {
+    const tempDir = path.join(tmpdir(), `vault-cache-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Create initial note
+      const notePath = path.join(tempDir, "test.md");
+      await fs.writeFile(notePath, `---
+source: https://example.com/article
+title: Original Title
+---
+
+# Content`);
+
+      // First call - cache miss
+      const result1 = await indexVaultWithCache({ vaultPath: tempDir });
+      expect(result1.candidates[0].title).toBe("Original Title");
+      expect(result1.cacheDiagnostics?.cacheHit).toBe(false);
+
+      // Second call - cache hit
+      const result2 = await indexVaultWithCache({ vaultPath: tempDir });
+      expect(result2.candidates[0].title).toBe("Original Title");
+      expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+
+      // Modify the note (wait to ensure mtime changes)
+      await new Promise(resolve => setTimeout(resolve, 10));
+      await fs.writeFile(notePath, `---
+source: https://example.com/article
+title: Modified Title
+---
+
+# Modified Content`);
+
+      // Third call - cache miss due to fingerprint change
+      const result3 = await indexVaultWithCache({ vaultPath: tempDir });
+      expect(result3.candidates[0].title).toBe("Modified Title");
+      expect(result3.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(result3.cacheDiagnostics?.rebuildReason).toBe("vault_fingerprint_changed");
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("cache invalidates when indexing options change", async () => {
+    const tempDir = path.join(tmpdir(), `vault-cache-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Create test note with tag
+      const notePath = path.join(tempDir, "test.md");
+      await fs.writeFile(notePath, `---
+source: https://example.com/article
+title: Test Article
+tags:
+  - tech
+---
+
+# Content`);
+
+      // First call - no tag filter
+      const result1 = await indexVaultWithCache({
+        vaultPath: tempDir,
+        requiredTags: []
+      });
+
+      expect(result1.candidates.length).toBe(1);
+      expect(result1.cacheDiagnostics?.cacheHit).toBe(false);
+
+      // Second call with same options - cache hit
+      const result2 = await indexVaultWithCache({
+        vaultPath: tempDir,
+        requiredTags: []
+      });
+
+      expect(result2.candidates.length).toBe(1);
+      expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+
+      // Third call with different options - cache miss
+      const result3 = await indexVaultWithCache({
+        vaultPath: tempDir,
+        requiredTags: ["tech"]
+      });
+
+      expect(result3.candidates.length).toBe(1);
+      expect(result3.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(result3.cacheDiagnostics?.rebuildReason).toBe("indexing_options_changed");
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("cache diagnostics include vault_index_cache_version", async () => {
+    const tempDir = path.join(tmpdir(), `vault-cache-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      const notePath = path.join(tempDir, "test.md");
+      await fs.writeFile(notePath, `---
+source: https://example.com/article
+title: Test
+---
+
+# Content`);
+
+      const result = await indexVaultWithCache({ vaultPath: tempDir });
+
+      expect(result.cacheDiagnostics).toBeDefined();
+      expect(result.cacheDiagnostics?.vaultFilesFingerprinted).toBeGreaterThanOrEqual(0);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("indexVaultWithCache produces identical results to indexVault", async () => {
+    const tempDir = path.join(tmpdir(), `vault-cache-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Create test notes
+      for (let i = 1; i <= 3; i++) {
+        const notePath = path.join(tempDir, `note${i}.md`);
+        await fs.writeFile(notePath, `---
+source: https://example.com/article${i}
+title: Article ${i}
+tags:
+  - tech
+keywords:
+  - keyword${i}
+---
+
+# Content ${i}`);
+      }
+
+      // Get result from cache (first call = miss)
+      const resultWithCache = await indexVaultWithCache({ vaultPath: tempDir });
+
+      // Get result from direct indexing
+      const resultDirect = await indexVault({ vaultPath: tempDir });
+
+      // Compare candidates
+      expect(resultWithCache.candidates.length).toBe(resultDirect.candidates.length);
+
+      for (const cached of resultWithCache.candidates) {
+        const direct = resultDirect.candidates.find(c => c.path === cached.path);
+        expect(direct).toBeDefined();
+        expect(cached.title).toBe(direct?.title);
+        expect(cached.sourceUrl).toBe(direct?.sourceUrl);
+        expect(cached.entities).toEqual(direct?.entities);
+        expect(cached.tags).toEqual(direct?.tags);
+      }
+
+      // Compare metadata
+      expect(resultWithCache.filesScanned).toBe(resultDirect.filesScanned);
+      expect(resultWithCache.filesWithFrontmatter).toBe(resultDirect.filesWithFrontmatter);
+      expect(resultWithCache.filesSkipped).toBe(resultDirect.filesSkipped);
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
     }

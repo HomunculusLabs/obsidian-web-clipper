@@ -517,6 +517,43 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
+ * Find existing cache files for a vault
+ *
+ * Looks for any vault-index cache files in the cache directory,
+ * regardless of fingerprint. This is used to detect if a previous
+ * cache existed when the current fingerprint doesn't match.
+ *
+ * @param vaultPath - Vault root path
+ * @returns Array of cache file paths, or empty array if none found
+ */
+async function findExistingCacheFiles(vaultPath: string): Promise<string[]> {
+  const cacheDir = path.join(vaultPath, CACHE_DIR_NAME);
+
+  try {
+    await fs.access(cacheDir);
+  } catch {
+    // Cache directory doesn't exist
+    return [];
+  }
+
+  try {
+    const entries = await fs.readdir(cacheDir, { withFileTypes: true });
+    const cacheFiles: string[] = [];
+
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.startsWith(CACHE_FILE_PREFIX) && entry.name.endsWith(CACHE_FILE_EXTENSION)) {
+        cacheFiles.push(path.join(cacheDir, entry.name));
+      }
+    }
+
+    return cacheFiles;
+  } catch (error) {
+    console.warn(`[VaultIndexCache] Failed to read cache directory ${cacheDir}:`, error);
+    return [];
+  }
+}
+
+/**
  * Safely delete a file (ignores errors)
  *
  * Used to clean up temp files or corrupted cache files.
@@ -548,20 +585,20 @@ export async function writeCacheAtomically(
   const tempFilePath = `${cacheFilePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   try {
-    // 1. Serialize cache deterministically
+    // 1. Ensure cache directory exists (must be before temp file write)
+    const cacheDir = path.dirname(cacheFilePath);
+    await fs.mkdir(cacheDir, { recursive: true });
+
+    // 2. Serialize cache deterministically
     const cacheJson = serializeCacheDeterministically(cache);
 
-    // 2. Write to temp file
+    // 3. Write to temp file
     await fs.writeFile(tempFilePath, cacheJson, "utf-8");
 
-    // 3. Sync temp file to disk (fsync)
+    // 4. Sync temp file to disk (fsync)
     const fd = await fs.open(tempFilePath, "r");
     await fd.sync();
     await fd.close();
-
-    // 4. Ensure cache directory exists
-    const cacheDir = path.dirname(cacheFilePath);
-    await fs.mkdir(cacheDir, { recursive: true });
 
     // 5. Atomic rename (temp → target)
     await fs.rename(tempFilePath, cacheFilePath);
@@ -1032,7 +1069,13 @@ export async function resolveVaultIndexCache(
   // 4. Check if cache file exists
   const cacheExists = await fileExists(cacheFilePath);
   if (!cacheExists) {
-    return await rebuildCache(vaultPath, options, "cache_file_not_found", currentVaultFingerprint);
+    // Check if any previous cache existed for this vault
+    const existingCacheFiles = await findExistingCacheFiles(vaultPath);
+    const rebuildReason = existingCacheFiles.length > 0
+      ? "vault_fingerprint_changed"
+      : "cache_file_not_found";
+
+    return await rebuildCache(vaultPath, options, rebuildReason, currentVaultFingerprint);
   }
 
   // 5. Load and parse cache
