@@ -238,6 +238,32 @@ bun run taskpad:work-queue-archive-parity -- \
 
 For full contract documentation, see: `docs/quality/taskpad-work-queue-prune.md`
 
+**Execution Queue Pruning Contract:**
+
+Execution Queue pruning (`taskpad:execution-queue-prune`) and archive parity (`taskpad:execution-queue-archive-parity`) are now part of the canonical intake-auto verification flow. These commands ensure:
+
+- **Auditability**: Completed/planned Execution Queue bullets are archived to `docs/archive/TASKPAD_ARCHIVE_YYYY-MM.md` with deterministic fingerprints
+- **Lean runtime context**: Archived items are removed from active TASKPAD, keeping runtime/ops tracking readable
+- **Parity guarantees**: Archive parity gate validates one-to-one fingerprint matching for Execution Queue entries, detecting drift with actionable rule IDs (`EQAP001_PARITY_OK`, `EQAP006_PARITY_MISSING_FROM_ARCHIVE`, `EQAP007_PARITY_EXTRA_IN_ARCHIVE`, `EQAP008_PARITY_MUTATED_FINGERPRINT`)
+
+**Canonical Execution Queue maintenance commands:**
+
+```bash
+# Prune completed/planned Execution Queue items to monthly archive
+bun run taskpad:execution-queue-prune -- \
+  --taskpad "8 - Projects/.../TASKPAD.md" \
+  --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" \
+  --format json
+
+# Validate archive↔TASKPAD fingerprint parity for Execution Queue
+bun run taskpad:execution-queue-archive-parity -- \
+  --taskpad "8 - Projects/.../TASKPAD.md" \
+  --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" \
+  --format json
+```
+
+For full contract documentation, see: `docs/quality/taskpad-execution-queue-prune.md`
+
 ### Decision Matrix
 
 | `executableQueueTotal` | `intakeQueueTotal` | Ideation Triggered | Verdict |

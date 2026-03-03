@@ -709,16 +709,38 @@ bun run taskpad:work-queue-archive-parity -- \
   --format json
 ```
 
+**Canonical Execution Queue maintenance flow:**
+
+```bash
+# 1) Prune completed/planned Execution Queue items to monthly archive
+bun run taskpad:execution-queue-prune -- \
+  --taskpad "/absolute/path/to/TASKPAD.md" \
+  --archive "docs/archive/TASKPAD_ARCHIVE_$(date +%Y-%m).md" \
+  --format json
+
+# 2) Verify archive parity (deterministic audit gate)
+bun run taskpad:execution-queue-archive-parity -- \
+  --taskpad "/absolute/path/to/TASKPAD.md" \
+  --archive "docs/archive/TASKPAD_ARCHIVE_$(date +%Y-%m).md" \
+  --format json
+```
+
+`taskpad:execution-queue-prune` archives checked/planned Execution Queue bullets into monthly archive files (`docs/archive/TASKPAD_ARCHIVE_YYYY-MM.md`) while preserving unchecked executable items in-place. This keeps the active TASKPAD lean for runtime/ops task tracking while maintaining auditability of completed execution work.
+
+`taskpad:execution-queue-archive-parity` validates one-to-one fingerprint parity between pruned TASKPAD Execution Queue bullets and archive entries, detecting drift with actionable diagnostics (rule IDs: `EQAP001_PARITY_OK`, `EQAP006_PARITY_MISSING_FROM_ARCHIVE`, `EQAP007_PARITY_EXTRA_IN_ARCHIVE`, `EQAP008_PARITY_MUTATED_FINGERPRINT`).
+
 **Integration with intake-auto flow:**
 
-The `verify:taskpad:intake:auto` command now automatically runs Work Queue prune and archive parity as part of the canonical intake verification sequence:
+The `verify:taskpad:intake:auto` command now automatically runs both Work Queue and Execution Queue prune and archive parity as part of the canonical intake verification sequence:
 
 1. Queue health check (triggers ideation if empty)
-2. **Work Queue prune** (archives completed/planned bullets)
-3. **Work Queue archive parity** (validates fingerprint parity)
-4. Full intake verification (`verify:taskpad:intake:full`)
+2. **Work Queue prune** (archives completed/planned Work Queue bullets)
+3. **Work Queue archive parity** (validates Work Queue fingerprint parity)
+4. **Execution Queue prune** (archives completed/planned Execution Queue bullets)
+5. **Execution Queue archive parity** (validates Execution Queue fingerprint parity)
+6. Full intake verification (`verify:taskpad:intake:full`)
 
-This ensures completed Work Queue history is archived without losing auditability on every autonomous intake run.
+This ensures completed Work Queue and Execution Queue history is archived without losing auditability on every autonomous intake run.
 
 ### TASKPAD Auto-Intake Recovery (`verify:taskpad:intake:auto`)
 
