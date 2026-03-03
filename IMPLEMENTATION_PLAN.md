@@ -56,7 +56,7 @@
 - [x] **TP002**: Implement `tools/taskpad-evidence-gap-refresh-contract-parity.ts` to parse newest planned Work Queue evidence-gap items and verify save-flow wiring parity across popup/messages/router/handler surfaces.
 - [x] **TP003**: Add deterministic fixture corpus + tests in `tests/tools/taskpad-evidence-gap-refresh-contract-parity.test.ts` for pass/missing-handler/missing-router/missing-message/missing-save-trigger drift states.
 - [x] **TP004**: Wire `package.json` script + README/docs quality contract entry for gate usage and expected JSON output semantics.
-- [ ] **TP005**: Integrate gate into intake verification flow (`verify:taskpad:intake:auto` and/or nearest canonical contract path) with stable failure ordering and actionable next actions.
+- [x] **TP005**: Integrate gate into intake verification flow (`verify:taskpad:intake:auto` and/or nearest canonical contract path) with stable failure ordering and actionable next actions.
 - [ ] **TP006**: Extend intake-autoplan/tooling regression tests to ensure evidence-gap refresh parity failures block planning progression deterministically.
 
 ### Acceptance Criteria
