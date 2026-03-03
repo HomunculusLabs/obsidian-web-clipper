@@ -57,7 +57,7 @@
 - [x] **TP002**: Implement parser updates in `tools/taskpad-queue-health.ts` to count unchecked items across all required sections with stable JSON/human output ordering.
 - [x] **TP003**: Update intake orchestration (`tools/taskpad-intake-autoplan.ts` and related callsites) to use executable-queue-aware readiness checks for auto-ideation/autoplan branching.
 - [x] **TP004**: Add/extend fixtures and tests for queue-health and intake-autoplan to cover fully-empty executable queues, partial coverage, and non-regression on legacy autonomous/self-improvement-only cases.
-- [ ] **TP005**: Update README/quality docs with the new executable queue-health contract and canonical verification flow.
+- [x] **TP005**: Update README/quality docs with the new executable queue-health contract and canonical verification flow.
 
 ### Acceptance Criteria
 - Queue-health outputs include deterministic unchecked counts for `Work Queue` and `Execution Queue` in addition to existing intake queues.

@@ -686,7 +686,7 @@ The `verify:taskpad:intake:auto` command provides deterministic autonomous recov
 **Purpose:** Automatically detect empty intake queues and seed an immediately plannable Work Queue item, then run full intake verification. This eliminates the need for manual queue promotion when autonomous loops encounter empty state.
 
 **Enforced Behavior:**
-- When `taskpad:queue-health` reports no unchecked executable items (`totalUnchecked === 0`):
+- When `taskpad:queue-health` reports no unchecked executable items (`executableQueueTotal === 0`):
   - Automatically invokes `taskpad:auto-ideation --target-queue work` to seed Work Queue
   - Runs full intake verification (`verify:taskpad:intake:full`) post-ideation
 - When queues already have unchecked items:
@@ -783,9 +783,13 @@ bun run verify:taskpad:intake:full -- \
     "ruleId": "TQR004_WORK_QUEUE_PATH"
   },
   "queueHealth": {
+    "workQueueUncheckedCount": 1,
+    "executionQueueUncheckedCount": 0,
     "autonomousUncheckedCount": 1,
     "selfImprovementUncheckedCount": 0,
-    "totalUnchecked": 1
+    "executableQueueTotal": 1,
+    "intakeQueueTotal": 1,
+    "totalUnchecked": 2
   },
   "selectedOutcome": {
     "action": "inserted|deduped",
@@ -805,7 +809,7 @@ bun run verify:taskpad:intake:full -- \
 
 **Verification guidance:**
 
-- After `--target-queue work` ideation, confirm `queueHealth.autonomousUncheckedCount >= 1`
+- After `--target-queue work` ideation, confirm `queueHealth.workQueueUncheckedCount >= 1` and `queueHealth.executableQueueTotal >= 1`
 - Queue health re-check should reflect at least one unchecked Work Queue item
 - The inserted bullet follows canonical format: `- [ ] planned-YYYY-MM-DD <actionable next step>`
 - Full intake verification (`verify:taskpad:intake:full`) must pass before Builder handoff

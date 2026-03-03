@@ -89,8 +89,8 @@ bun run verify:taskpad:intake:auto -- \
 **Deterministic Execution Flow:**
 
 1. **Queue Health Check** - Run `taskpad:queue-health` first
-   - If queues have unchecked items (`totalUnchecked >= 1`): Skip auto-ideation, go to step 3
-   - If queues are empty (`totalUnchecked === 0`): Continue to step 2
+   - If executable queues have unchecked items (`executableQueueTotal >= 1`): Skip auto-ideation, go to step 3
+   - If executable queues are empty (`executableQueueTotal === 0`): Continue to step 2
 
 2. **Auto-Ideation with Work Queue Routing** - Run `taskpad:auto-ideation --target-queue work`
    - Enforced routing: MUST use `--target-queue work` for empty queues
@@ -143,8 +143,12 @@ Expected auto-ideation output when queues are empty:
     "ruleId": "TQR004_WORK_QUEUE_PATH"
   },
   "queueHealth": {
+    "workQueueUncheckedCount": 0,
+    "executionQueueUncheckedCount": 0,
     "autonomousUncheckedCount": 0,
     "selfImprovementUncheckedCount": 0,
+    "executableQueueTotal": 0,
+    "intakeQueueTotal": 0,
     "totalUnchecked": 0
   }
 }
@@ -169,9 +173,9 @@ Expected behavior: No auto-ideation output, full intake verification runs direct
 
 When documenting `verify:taskpad:intake:auto` runs:
 
-- [ ] Capture pre-command queue health showing empty state (`totalUnchecked: 0`)
+- [ ] Capture pre-command queue health showing empty executable state (`executableQueueTotal: 0`)
 - [ ] Confirm auto-ideation was triggered and output includes `targetQueueRouting.ruleId: "TQR004_WORK_QUEUE_PATH"`
-- [ ] Capture post-ideation queue health showing `autonomousUncheckedCount >= 1`
+- [ ] Capture post-ideation queue health showing `workQueueUncheckedCount >= 1` and `executableQueueTotal >= 1`
 - [ ] Confirm full intake verification passes after recovery
 - [ ] For non-empty queue runs, confirm auto-ideation was skipped (no auto-ideation output)
 - [ ] Keep compact command + JSON snippets in `docs/quality/taskpad-auto-ideation-report.md`
@@ -187,7 +191,7 @@ When documenting `verify:taskpad:intake:auto` runs:
 
 The `verify:taskpad:intake:auto` orchestration command enforces Work Queue routing when queue-health reports no unchecked executable queue items. This ensures autonomous empty-queue recovery always produces an immediately plannable Work Queue item without requiring manual queue promotion.
 
-**Contract requirement:** When `taskpad:queue-health` detects empty queues (`totalUnchecked === 0`), the `verify:taskpad:intake:auto` flow MUST invoke `taskpad:auto-ideation --target-queue work` before running the full intake verification gate.
+**Contract requirement:** When `taskpad:queue-health` detects empty executable queues (`executableQueueTotal === 0`), the `verify:taskpad:intake:auto` flow MUST invoke `taskpad:auto-ideation --target-queue work` before running the full intake verification gate.
 
 **Diagnostic observability:** The auto-ideation output includes deterministic routing metadata under `targetQueueRouting`:
 - `targetQueue`: "work"
@@ -227,14 +231,18 @@ bun run taskpad:queue-health -- \
   --format json
 ```
 
-Expected output when queues are empty:
+Expected output when executable queues are empty:
 ```json
 {
   "status": "fail",
-  "reasonCode": "QH001_QUEUE_EMPTY",
+  "reasonCode": "QH001_EXECUTABLE_QUEUES_EMPTY",
   "queueHealth": {
+    "workQueueUncheckedCount": 0,
+    "executionQueueUncheckedCount": 0,
     "autonomousUncheckedCount": 0,
     "selfImprovementUncheckedCount": 0,
+    "executableQueueTotal": 0,
+    "intakeQueueTotal": 0,
     "totalUnchecked": 0
   }
 }
@@ -263,9 +271,13 @@ Expected output includes `targetQueueRouting` metadata:
     "ruleId": "TQR004_WORK_QUEUE_PATH"
   },
   "queueHealth": {
+    "workQueueUncheckedCount": 1,
+    "executionQueueUncheckedCount": 0,
     "autonomousUncheckedCount": 0,
     "selfImprovementUncheckedCount": 0,
-    "totalUnchecked": 0
+    "executableQueueTotal": 1,
+    "intakeQueueTotal": 0,
+    "totalUnchecked": 1
   },
   "selectedOutcome": {
     "action": "inserted",
@@ -290,9 +302,14 @@ Expected output when Work Queue is now populated:
 ```json
 {
   "status": "pass",
+  "reasonCode": "QH002_QUEUE_READY",
   "queueHealth": {
-    "autonomousUncheckedCount": 1,
+    "workQueueUncheckedCount": 1,
+    "executionQueueUncheckedCount": 0,
+    "autonomousUncheckedCount": 0,
     "selfImprovementUncheckedCount": 0,
+    "executableQueueTotal": 1,
+    "intakeQueueTotal": 0,
     "totalUnchecked": 1
   }
 }
@@ -352,10 +369,10 @@ The `taskpad:intake:recover` orchestrator automatically handles empty queues by 
 
 When documenting Work Queue-target ideation runs:
 
-- [ ] Capture pre-ideation queue health showing `totalUnchecked: 0`
+- [ ] Capture pre-ideation queue health showing `executableQueueTotal: 0`
 - [ ] Capture `taskpad:auto-ideation` output with `targetQueueRouting.targetQueue: "work"`
 - [ ] Confirm `targetQueueRouting.ruleId: "TQR004_WORK_QUEUE_PATH"`
-- [ ] Capture post-ideation queue health showing `autonomousUncheckedCount >= 1`
+- [ ] Capture post-ideation queue health showing `workQueueUncheckedCount >= 1` and `executableQueueTotal >= 1`
 - [ ] Confirm `selectedOutcome.action: "inserted"` or `"deduped"` (both are valid)
 - [ ] Confirm inserted bullet follows canonical format: `- [ ] planned-YYYY-MM-DD <text>`
 - [ ] Confirm full intake verification passes before proceeding to Builder dispatch
@@ -416,12 +433,11 @@ The CLI result includes `targetQueueRouting` metadata:
 Auto-ideation MUST evaluate queue health using the same section semantics as `taskpad-queue-health`.
 
 ### Run condition
-Execute ideation only when both counts are zero:
-- `autonomousUncheckedCount === 0`
-- `selfImprovementUncheckedCount === 0`
+Execute ideation only when executable queues are empty:
+- `executableQueueTotal === 0` (no unchecked items in Work Queue or Execution Queue)
 
 ### No-op condition
-If either queue has unchecked work (`totalUnchecked >= 1`), auto-ideation MUST:
+If executable queues have unchecked work (`executableQueueTotal >= 1`), auto-ideation MUST:
 - make no TASKPAD edits,
 - return a deterministic no-op result,
 - exit success (`0`) so orchestrators can continue normal intake.
@@ -768,8 +784,8 @@ The orchestrator MUST execute steps in this exact order:
 Any step that is skipped by branch rules MUST be emitted as `status=skipped` with deterministic `reasonCode`.
 
 ### Branching Rules (deterministic)
-- If initial queue health passes (`totalUnchecked >= 1`), skip steps 2-4 and continue to steps 5-6.
-- If initial queue health fails due empty queues, run step 2 (`taskpad:auto-ideation`).
+- If initial queue health passes (`executableQueueTotal >= 1`), skip steps 2-4 and continue to steps 5-6.
+- If initial queue health fails due empty executable queues, run step 2 (`taskpad:auto-ideation`).
 - If step 2 returns `seeded|deduped`, skip step 3 and run step 4.
 - If step 2 returns `fallback`:
   - require `artifactPath` to exist,
@@ -1104,8 +1120,12 @@ Tool output MUST include a machine-readable JSON object with this schema shape:
   "status": "seeded|deduped|noop|fallback",
   "triggered": true,
   "queueHealth": {
+    "workQueueUncheckedCount": 0,
+    "executionQueueUncheckedCount": 0,
     "autonomousUncheckedCount": 0,
     "selfImprovementUncheckedCount": 0,
+    "executableQueueTotal": 0,
+    "intakeQueueTotal": 0,
     "totalUnchecked": 0
   },
   "preflight": {
