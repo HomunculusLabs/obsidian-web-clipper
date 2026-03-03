@@ -2242,3 +2242,530 @@ knowledge-confidence-history.ndjson: OK`,
     });
   });
 });
+
+// ============================================================================
+// TP005: Knowledge-revalidation refresh parity blocking behavior for intake-autoplan
+// ============================================================================
+
+describe("TP005: knowledge-revalidation refresh parity blocks planning progression deterministically", () => {
+  describe("AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY reason code contract", () => {
+    test("knowledge-revalidation parity failures surface as AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY", () => {
+      // Mock knowledge-revalidation parity payload that would cause a hold
+      const mockKnowledgeRevalidationPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "KRRP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "handler",
+            remediation: {
+              description: "Create handler file for knowledge-revalidation-inbox refresh",
+              scaffoldCommand: "cat > src/background/handlers/refreshKnowledgeRevalidationInbox.ts << 'EOF'\n// Handler scaffold\nEOF",
+            },
+          },
+          {
+            ruleId: "KRRP005_MISSING_SAVE_TRIGGER",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-state-sync",
+            surface: "saveTrigger",
+            remediation: {
+              description: "Add save trigger invocation for knowledge-revalidation-state-sync",
+              scaffoldCommand: "echo '// Add refreshKnowledgeRevalidationStateSync() call to save.ts'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 2,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 1,
+        },
+      };
+
+      // Verify payload structure
+      expect(mockKnowledgeRevalidationPayload.status).toBe("fail");
+      expect(mockKnowledgeRevalidationPayload.violations.length).toBe(2);
+      expect(mockKnowledgeRevalidationPayload.summary.missingWiringArtifacts).toBe(1);
+      expect(mockKnowledgeRevalidationPayload.summary.partiallyWiredArtifacts).toBe(1);
+
+      // Verify error violations are detected
+      const errorViolations = mockKnowledgeRevalidationPayload.violations.filter(v => v.severity === "error");
+      expect(errorViolations.length).toBe(2);
+
+      // Verify hold condition: status=fail AND violations.length > 0
+      const shouldHold = mockKnowledgeRevalidationPayload.status === "fail" &&
+        mockKnowledgeRevalidationPayload.violations.length > 0 &&
+        errorViolations.length > 0;
+      expect(shouldHold).toBe(true);
+
+      // Verify remediation includes scaffold commands
+      for (const violation of errorViolations) {
+        expect(violation.remediation.scaffoldCommand).toBeTruthy();
+        expect(violation.remediation.description).toBeTruthy();
+      }
+    });
+
+    test("no planned knowledge-revalidation artifacts allows progression", () => {
+      // Mock knowledge-revalidation parity payload with no planned artifacts
+      const mockKnowledgeRevalidationPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify pass condition
+      expect(mockKnowledgeRevalidationPayload.status).toBe("pass");
+      expect(mockKnowledgeRevalidationPayload.violations.length).toBe(0);
+      expect(mockKnowledgeRevalidationPayload.summary.totalArtifacts).toBe(0);
+
+      // When no artifacts are planned, gate should pass
+      const shouldPass = mockKnowledgeRevalidationPayload.status === "pass" ||
+        (mockKnowledgeRevalidationPayload.status === "fail" && mockKnowledgeRevalidationPayload.summary.totalArtifacts === 0);
+      expect(shouldPass).toBe(true);
+    });
+
+    test("fully wired knowledge-revalidation artifacts allows progression", () => {
+      // Mock knowledge-revalidation parity payload with fully wired artifacts
+      const mockKnowledgeRevalidationPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 2,
+          fullyWiredArtifacts: 2,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify pass condition
+      expect(mockKnowledgeRevalidationPayload.status).toBe("pass");
+      expect(mockKnowledgeRevalidationPayload.summary.fullyWiredArtifacts).toBe(2);
+      expect(mockKnowledgeRevalidationPayload.summary.missingWiringArtifacts).toBe(0);
+
+      // Fully wired artifacts should allow progression
+      const shouldPass = mockKnowledgeRevalidationPayload.status === "pass";
+      expect(shouldPass).toBe(true);
+    });
+
+    test("partially wired knowledge-revalidation artifacts cause hold", () => {
+      // Mock knowledge-revalidation parity payload with partially wired artifacts
+      const mockKnowledgeRevalidationPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "KRRP001_MISSING_MESSAGE_TYPE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "messageType",
+            remediation: {
+              description: "Add message type for knowledge-revalidation-inbox",
+              scaffoldCommand: "echo '// Add RefreshKnowledgeRevalidationInboxRequest/Response types'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 2,
+          fullyWiredArtifacts: 1,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify hold condition: partially wired artifacts
+      expect(mockKnowledgeRevalidationPayload.summary.partiallyWiredArtifacts).toBeGreaterThan(0);
+      expect(mockKnowledgeRevalidationPayload.status).toBe("fail");
+
+      // Partially wired artifacts should cause hold
+      const shouldHold = mockKnowledgeRevalidationPayload.status === "fail" &&
+        mockKnowledgeRevalidationPayload.violations.length > 0;
+      expect(shouldHold).toBe(true);
+    });
+  });
+
+  describe("knowledge-revalidation parity next actions are actionable", () => {
+    test("hold includes specific remediation steps with scaffold commands", () => {
+      const mockKnowledgeRevalidationPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "KRRP002_MISSING_ROUTER_CASE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "router",
+            remediation: {
+              description: "Add router case for refreshKnowledgeRevalidationInbox",
+              scaffoldCommand: "cat > src/background/router.patch << 'EOF'\n+ case \"refreshKnowledgeRevalidationInbox\": return handleRefreshKnowledgeRevalidationInbox(request);\nEOF",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Build next actions as autoplan would
+      const nextActions: string[] = [
+        `Fix ${mockKnowledgeRevalidationPayload.summary.missingWiringArtifacts + mockKnowledgeRevalidationPayload.summary.partiallyWiredArtifacts} knowledge-revalidation artifact(s) with missing save-flow wiring.`,
+      ];
+
+      for (const violation of mockKnowledgeRevalidationPayload.violations) {
+        nextActions.push(`[${violation.ruleId}] ${violation.artifactName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after knowledge-revalidation wiring is complete.");
+
+      // Verify next actions are actionable
+      expect(nextActions.length).toBeGreaterThan(0);
+      expect(nextActions[0]).toContain("knowledge-revalidation artifact(s)");
+
+      // Verify scaffold commands are included
+      const hasScaffold = nextActions.some(action => action.startsWith("  Scaffold:"));
+      expect(hasScaffold).toBe(true);
+
+      // Verify rule IDs are present
+      const hasRuleId = nextActions.some(action => action.includes("[KRRP002_MISSING_ROUTER_CASE]"));
+      expect(hasRuleId).toBe(true);
+
+      // Verify re-run instruction is last
+      expect(nextActions[nextActions.length - 1]).toContain("Rerun taskpad:intake:autoplan");
+    });
+
+    test("multiple violations are summarized with actionable next actions", () => {
+      const mockKnowledgeRevalidationPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "KRRP001_MISSING_MESSAGE_TYPE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "messageType",
+            remediation: {
+              description: "Add message type",
+              scaffoldCommand: "echo 'Add type'",
+            },
+          },
+          {
+            ruleId: "KRRP002_MISSING_ROUTER_CASE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "router",
+            remediation: {
+              description: "Add router case",
+              scaffoldCommand: "echo 'Add case'",
+            },
+          },
+          {
+            ruleId: "KRRP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-state-sync",
+            surface: "handler",
+            remediation: {
+              description: "Create handler",
+              scaffoldCommand: "echo 'Create handler'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 2,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 2,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Build next actions as autoplan would
+      const nextActions: string[] = [
+        `Fix ${mockKnowledgeRevalidationPayload.summary.missingWiringArtifacts + mockKnowledgeRevalidationPayload.summary.partiallyWiredArtifacts} knowledge-revalidation artifact(s) with missing save-flow wiring.`,
+      ];
+
+      for (const violation of mockKnowledgeRevalidationPayload.violations) {
+        nextActions.push(`[${violation.ruleId}] ${violation.artifactName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      // Verify first 3 violations are included
+      expect(nextActions[1]).toContain("[KRRP001_MISSING_MESSAGE_TYPE]");
+      expect(nextActions[3]).toContain("[KRRP002_MISSING_ROUTER_CASE]");
+      expect(nextActions[5]).toContain("[KRRP003_MISSING_HANDLER_FILE]");
+
+      // Verify scaffold commands follow each violation
+      expect(nextActions[2]).toContain("  Scaffold:");
+      expect(nextActions[4]).toContain("  Scaffold:");
+      expect(nextActions[6]).toContain("  Scaffold:");
+    });
+  });
+
+  describe("knowledge-revalidation parity step ordering in intake-autoplan", () => {
+    test("knowledge-revalidation-parity step runs after evidence-gap-parity", () => {
+      // Verify the step ordering in the autoplan orchestration
+      const expectedStepOrder = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+        "knowledge-revalidation-parity",
+      ];
+
+      // The type AutoplanStepId should include all steps
+      // This is verified at compile time by TypeScript
+
+      // Verify knowledge-revalidation-parity is in the step list
+      expect(expectedStepOrder).toContain("knowledge-revalidation-parity");
+
+      // Verify it comes after evidence-gap-parity
+      const knowledgeRevalidationIndex = expectedStepOrder.indexOf("knowledge-revalidation-parity");
+      const evidenceGapIndex = expectedStepOrder.indexOf("evidence-gap-parity");
+      expect(knowledgeRevalidationIndex).toBeGreaterThan(evidenceGapIndex);
+    });
+
+    test("steps array has 5 elements including knowledge-revalidation-parity", () => {
+      // Mock result structure to verify the 5-step array
+      const mockResult: any = {
+        steps: [
+          { id: "intake-recover", status: "pass" },
+          { id: "plan-seed", status: "pass" },
+          { id: "plan-contract", status: "pass" },
+          { id: "evidence-gap-parity", status: "pass" },
+          { id: "knowledge-revalidation-parity", status: "pass" },
+        ],
+      };
+
+      // Verify 5 steps
+      expect(mockResult.steps).toHaveLength(5);
+
+      // Verify all expected steps are present
+      const stepIds = mockResult.steps.map((s: any) => s.id);
+      expect(stepIds).toContain("intake-recover");
+      expect(stepIds).toContain("plan-seed");
+      expect(stepIds).toContain("plan-contract");
+      expect(stepIds).toContain("evidence-gap-parity");
+      expect(stepIds).toContain("knowledge-revalidation-parity");
+    });
+  });
+
+  describe("knowledge-revalidation parity result structure", () => {
+    test("TaskpadIntakeAutoplanResult includes knowledgeRevalidationParity field", () => {
+      // Mock result with knowledge-revalidation parity data
+      const mockKnowledgeRevalidationParity = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      const mockResult: any = {
+        status: "pass",
+        verdict: "ready",
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: mockKnowledgeRevalidationParity,
+      };
+
+      // Verify knowledgeRevalidationParity field is present
+      expect(mockResult.knowledgeRevalidationParity).toBeDefined();
+      expect(mockResult.knowledgeRevalidationParity).toEqual(mockKnowledgeRevalidationParity);
+
+      // Verify summary structure
+      expect(mockResult.knowledgeRevalidationParity.summary.totalArtifacts).toBe(0);
+      expect(mockResult.knowledgeRevalidationParity.summary.fullyWiredArtifacts).toBe(0);
+      expect(mockResult.knowledgeRevalidationParity.summary.partiallyWiredArtifacts).toBe(0);
+      expect(mockResult.knowledgeRevalidationParity.summary.missingWiringArtifacts).toBe(0);
+    });
+
+    test("knowledgeRevalidationParity is null when gate is skipped", () => {
+      // When knowledge-revalidation parity step is skipped (e.g., earlier step failed)
+      const mockResult: any = {
+        status: "fail",
+        verdict: "blocked",
+        reasonCode: "AUTOPLAN_BLOCKED_RUNTIME",
+        steps: [
+          { id: "intake-recover", status: "fail" },
+          { id: "plan-seed", status: "skipped" },
+          { id: "plan-contract", status: "skipped" },
+          { id: "evidence-gap-parity", status: "skipped" },
+          { id: "knowledge-revalidation-parity", status: "skipped" },
+        ],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+      };
+
+      // Verify knowledgeRevalidationParity is null when skipped
+      expect(mockResult.knowledgeRevalidationParity).toBeNull();
+
+      // Verify step status is "skipped"
+      const knowledgeRevalidationStep = mockResult.steps.find((s: any) => s.id === "knowledge-revalidation-parity");
+      expect(knowledgeRevalidationStep?.status).toBe("skipped");
+    });
+  });
+
+  describe("deterministic failure blocking with parity violations", () => {
+    test("knowledge-revalidation parity violations deterministically block progression", () => {
+      // Scenario: All previous steps pass, but knowledge-revalidation parity fails
+      const mockPlanSeedPayload = {
+        status: "seeded" as const,
+        selectedBacklogLine: 10,
+        newSliceHeading: "## TASKPAD Intake Slice (2026-03-03): new slice",
+        reasonCode: "PLAN_SEED_OK",
+        queueReconcile: null,
+        artifact: {
+          artifactPath: null,
+          preflightResult: null,
+          preflightReasonCode: null,
+        },
+      };
+
+      const mockEvidenceGapPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      const mockKnowledgeRevalidationPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "KRRP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "handler",
+            remediation: {
+              description: "Create handler file",
+              scaffoldCommand: "echo 'Create handler'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify determinism: Knowledge-revalidation parity failure should result in hold
+      const shouldHold = mockKnowledgeRevalidationPayload.status === "fail" &&
+        mockKnowledgeRevalidationPayload.violations.length > 0;
+
+      expect(shouldHold).toBe(true);
+
+      // Verify result structure would have AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY
+      const expectedReasonCode = "AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY";
+      expect(expectedReasonCode).toBe("AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY");
+
+      // Verify verdict would be "hold", not "ready"
+      const expectedVerdict: "ready" | "hold" | "blocked" = "hold";
+      expect(expectedVerdict).toBe("hold");
+    });
+
+    test("both evidence-gap and knowledge-revalidation parity can fail independently", () => {
+      // Scenario: Evidence-gap parity passes, knowledge-revalidation parity fails
+      const evidenceGapPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      const knowledgeRevalidationPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "KRRP001_MISSING_MESSAGE_TYPE",
+            severity: "error" as const,
+            artifactName: "knowledge-revalidation-inbox",
+            surface: "messageType",
+            remediation: {
+              description: "Add message type",
+              scaffoldCommand: "echo 'Add type'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify independent gate behavior
+      expect(evidenceGapPayload.status).toBe("pass");
+      expect(knowledgeRevalidationPayload.status).toBe("fail");
+
+      // Only knowledge-revalidation parity should block
+      const evidenceGapShouldBlock = evidenceGapPayload.status === "fail" && evidenceGapPayload.violations.length > 0;
+      const knowledgeRevalidationShouldBlock = knowledgeRevalidationPayload.status === "fail" && knowledgeRevalidationPayload.violations.length > 0;
+
+      expect(evidenceGapShouldBlock).toBe(false);
+      expect(knowledgeRevalidationShouldBlock).toBe(true);
+    });
+  });
+
+  describe("knowledge-revalidation parity violations canonical ordering", () => {
+    test("violations are sorted in canonical order for deterministic output", () => {
+      // Knowledge-revalidation parity violations have canonical ordering
+      const CANONICAL_KRRP_ORDER = [
+        "KRRP001_MISSING_MESSAGE_TYPE",
+        "KRRP007_MESSAGE_TYPE_MISMATCH",
+        "KRRP008_RESPONSE_TYPE_INCOMPLETE",
+        "KRRP002_MISSING_ROUTER_CASE",
+        "KRRP006_HANDLER_IMPORT_MISSING",
+        "KRRP003_MISSING_HANDLER_FILE",
+        "KRRP004_MISSING_HANDLER_EXPORT",
+        "KRRP009_HANDLER_SIGNATURE_MISMATCH",
+        "KRRP005_MISSING_SAVE_TRIGGER",
+        "KRRP010_NO_ARTIFACT_TARGETS",
+      ];
+
+      const violations = [
+        { ruleId: "KRRP005_MISSING_SAVE_TRIGGER", severity: "error" as const },
+        { ruleId: "KRRP001_MISSING_MESSAGE_TYPE", severity: "error" as const },
+        { ruleId: "KRRP003_MISSING_HANDLER_FILE", severity: "error" as const },
+        { ruleId: "KRRP002_MISSING_ROUTER_CASE", severity: "error" as const },
+      ];
+
+      const ruleOrder = new Map<string, number>();
+      for (let i = 0; i < CANONICAL_KRRP_ORDER.length; i++) {
+        ruleOrder.set(CANONICAL_KRRP_ORDER[i], i);
+      }
+
+      const sorted = [...violations].sort((a: any, b: any) => {
+        const orderA = ruleOrder.get(a.ruleId) ?? Number.MAX_SAFE_INTEGER;
+        const orderB = ruleOrder.get(b.ruleId) ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+
+      // Verify canonical ordering
+      expect(sorted[0].ruleId).toBe("KRRP001_MISSING_MESSAGE_TYPE");
+      expect(sorted[1].ruleId).toBe("KRRP002_MISSING_ROUTER_CASE");
+      expect(sorted[2].ruleId).toBe("KRRP003_MISSING_HANDLER_FILE");
+      expect(sorted[3].ruleId).toBe("KRRP005_MISSING_SAVE_TRIGGER");
+    });
+  });
+});

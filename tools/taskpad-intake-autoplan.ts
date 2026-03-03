@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import type { QueueReconcileResult } from "./lib/taskpad-queue-reconcile";
 import type { TaskpadWritePreflightResult, TaskpadWritePreflightReasonCode } from "./taskpad-write-preflight";
 
-type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity";
+type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity" | "knowledge-revalidation-parity";
 type AutoplanStepStatus = "pass" | "fail" | "skipped";
 type AutoplanVerdict = "ready" | "hold" | "blocked";
 
@@ -40,7 +40,29 @@ interface EvidenceGapParityPayload {
   };
 }
 
+interface KnowledgeRevalidationParityPayload {
+  status: "pass" | "fail";
+  violations: KnowledgeRevalidationParityViolation[];
+  summary: {
+    totalArtifacts: number;
+    fullyWiredArtifacts: number;
+    partiallyWiredArtifacts: number;
+    missingWiringArtifacts: number;
+  };
+}
+
 interface EvidenceGapParityViolation {
+  ruleId: string;
+  severity: "error" | "warning";
+  artifactName: string;
+  surface: string;
+  remediation: {
+    description: string;
+    scaffoldCommand: string;
+  };
+}
+
+interface KnowledgeRevalidationParityViolation {
   ruleId: string;
   severity: "error" | "warning";
   artifactName: string;
@@ -60,10 +82,11 @@ interface TaskpadIntakeAutoplanResult {
   selectedBacklogLine: number | null;
   plannedMarker: string | null;
   newSliceHeading: string | null;
-  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
+  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
   queueReconcile: QueueReconcileResult | null;
   artifact: PlanSeedArtifactMetadata;
   evidenceGapParity: EvidenceGapParityPayload | null;
+  knowledgeRevalidationParity: KnowledgeRevalidationParityPayload | null;
   nextActions: string[];
 }
 
@@ -129,6 +152,7 @@ const AUTOPLAN_HOLD_RECOVERY = "AUTOPLAN_HOLD_RECOVERY";
 const AUTOPLAN_HOLD_PLAN_CONTRACT = "AUTOPLAN_HOLD_PLAN_CONTRACT";
 const AUTOPLAN_HOLD_STRICT_ACTIVE_SLICE = "AUTOPLAN_HOLD_STRICT_ACTIVE_SLICE";
 const AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY = "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY";
+const AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY = "AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY";
 const AUTOPLAN_BLOCKED_RUNTIME = "AUTOPLAN_BLOCKED_RUNTIME";
 
 const STRICT_MODE_RULE_NO_UNCHECKED = "PLI009_NO_UNCHECKED_TP_TASKS";
@@ -437,6 +461,57 @@ function parseEvidenceGapParityPayload(stdout: string): EvidenceGapParityPayload
   }
 }
 
+function parseKnowledgeRevalidationParityPayload(stdout: string): KnowledgeRevalidationParityPayload | null {
+  // The knowledge-revalidation parity gate outputs raw JSON when --format json is used
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null) {
+      return null;
+    }
+
+    const report = parsed as Record<string, unknown>;
+
+    // Validate required fields
+    if (report.status !== "pass" && report.status !== "fail") {
+      return null;
+    }
+
+    if (!Array.isArray(report.violations)) {
+      return null;
+    }
+
+    if (typeof report.summary !== "object" || report.summary === null) {
+      return null;
+    }
+
+    const summary = report.summary as Record<string, unknown>;
+    if (typeof summary.totalArtifacts !== "number" ||
+        typeof summary.fullyWiredArtifacts !== "number" ||
+        typeof summary.partiallyWiredArtifacts !== "number" ||
+        typeof summary.missingWiringArtifacts !== "number") {
+      return null;
+    }
+
+    return {
+      status: report.status,
+      violations: report.violations as KnowledgeRevalidationParityViolation[],
+      summary: {
+        totalArtifacts: summary.totalArtifacts,
+        fullyWiredArtifacts: summary.fullyWiredArtifacts,
+        partiallyWiredArtifacts: summary.partiallyWiredArtifacts,
+        missingWiringArtifacts: summary.missingWiringArtifacts,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function makeSkippedStep(id: AutoplanStepId, command: string, reasonCode: string, summary: string): AutoplanStepResult {
   return {
     id,
@@ -476,6 +551,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
   let seedStep: AutoplanStepResult;
   let contractStep: AutoplanStepResult;
   let parityStep: AutoplanStepResult;
+  let knowledgeRevalidationParityStep: AutoplanStepResult;
 
   if (!recoverPayload) {
     recoverStep = {
@@ -511,6 +587,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a ready verdict.",
     );
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -520,7 +603,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -528,6 +611,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         preflightReasonCode: null,
       },
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Inspect taskpad:intake:recover output contract markers and rerun taskpad:intake:autoplan.",
         "Resolve runtime/contract issues before retrying orchestration.",
@@ -573,6 +657,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a valid ready verdict.",
     );
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a valid ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -582,7 +673,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -590,6 +681,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         preflightReasonCode: null,
       },
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Fix intake-recover exit semantics so ready maps to exit 0 and non-ready maps to non-zero.",
         "Rerun taskpad:intake:autoplan after contract semantics are restored.",
@@ -634,6 +726,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover verdict was not ready.",
     );
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover verdict was not ready.",
+    );
+
     if (recoverPayload.verdict === "hold") {
       return {
         status: "fail",
@@ -644,7 +743,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: null,
         plannedMarker: null,
         newSliceHeading: null,
-        steps: [recoverStep, seedStep, contractStep, parityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
         queueReconcile: null,
         artifact: {
           artifactPath: null,
@@ -652,6 +751,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
           preflightReasonCode: null,
         },
         evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
         nextActions: [
           "Follow intake-recover next actions and rerun taskpad:intake:autoplan once intake is ready.",
           "Keep plan-seed and plan-contract skipped until recovery reaches ready.",
@@ -668,7 +768,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -676,6 +776,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         preflightReasonCode: null,
       },
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Inspect intake-recover failure output and remediate runtime or contract issues.",
         "Rerun taskpad:intake:autoplan after recover stops returning blocked.",
@@ -717,6 +818,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed did not produce a valid payload.",
     );
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed did not produce a valid payload.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -726,7 +834,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -734,6 +842,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         preflightReasonCode: null,
       },
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Fix taskpad:plan-seed output contract markers and rerun taskpad:intake:autoplan.",
         "Ensure plan-seed returns deterministic status/reasonCode fields.",
@@ -772,6 +881,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed failed deterministic contract semantics.",
     );
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed failed deterministic contract semantics.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -781,7 +897,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -789,6 +905,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         preflightReasonCode: null,
       },
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Repair plan-seed exit semantics so seeded/noop/fallback exit 0 and failed exits non-zero.",
         "Rerun taskpad:intake:autoplan after plan-seed contract is restored.",
@@ -830,6 +947,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed returned failed status.",
     );
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed returned failed status.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -839,10 +963,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Resolve taskpad:plan-seed failure reason and rerun taskpad:intake:autoplan.",
         "Do not run plan-contract until plan-seed succeeds or returns deterministic noop/fallback.",
@@ -924,6 +1049,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         "Skipped because plan-contract step failed with missing script.",
       );
 
+      knowledgeRevalidationParityStep = makeSkippedStep(
+        "knowledge-revalidation-parity",
+        buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with missing script.",
+      );
+
       return {
         status: "fail",
         verdict: "blocked",
@@ -933,10 +1065,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
         plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
         newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep, parityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
         evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
         nextActions: [
           "Wire taskpad:plan-contract script or keep plan:integrity available for fallback.",
           "Rerun taskpad:intake:autoplan once the contract command is executable.",
@@ -995,6 +1128,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         "Skipped because plan-contract step failed with strict-active-slice violation.",
       );
 
+      knowledgeRevalidationParityStep = makeSkippedStep(
+        "knowledge-revalidation-parity",
+        buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with strict-active-slice violation.",
+      );
+
       return {
         status: "fail",
         verdict: "hold",
@@ -1005,10 +1145,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: hasMutation ? seedPayload.selectedBacklogLine : null,
         plannedMarker: hasMutation ? plannedMarker : null,
         newSliceHeading: hasMutation ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep, parityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
         evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
         nextActions,
       };
     }
@@ -1016,6 +1157,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     parityStep = makeSkippedStep(
       "evidence-gap-parity",
       buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because plan-contract step failed.",
+    );
+
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
       SKIP_PLAN_CONTRACT_FAILED,
       "Skipped because plan-contract step failed.",
     );
@@ -1029,10 +1177,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
       plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
       newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Fix plan contract/integrity failures in IMPLEMENTATION_PLAN.md.",
         "Rerun taskpad:intake:autoplan after contract gate passes.",
@@ -1061,6 +1210,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       stderr: evidenceGapParityRun.stderr,
     };
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because evidence-gap parity step failed.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -1070,10 +1226,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
       plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
       newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Fix taskpad:evidence-gap-refresh-contract-parity output contract markers.",
         "Ensure the gate returns valid JSON with status, violations, and summary fields.",
@@ -1097,6 +1254,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       stderr: evidenceGapParityRun.stderr,
     };
 
+    knowledgeRevalidationParityStep = makeSkippedStep(
+      "knowledge-revalidation-parity",
+      buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because evidence-gap parity step failed.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -1106,10 +1270,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
       plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
       newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-      steps: [recoverStep, seedStep, contractStep, parityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Repair evidence-gap parity exit semantics so pass exits 0 and fail exits non-zero.",
         "Rerun taskpad:intake:autoplan after parity contract is restored.",
@@ -1153,6 +1318,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
 
       nextActions.push("Rerun taskpad:intake:autoplan after evidence-gap wiring is complete.");
 
+      knowledgeRevalidationParityStep = makeSkippedStep(
+        "knowledge-revalidation-parity",
+        buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because evidence-gap parity step failed.",
+      );
+
       return {
         status: "fail",
         verdict: "hold",
@@ -1162,10 +1334,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
         plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
         newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep, parityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
         evidenceGapParity: evidenceGapPayload,
+        knowledgeRevalidationParity: null,
         nextActions,
       };
     }
@@ -1185,6 +1358,155 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     stderr: evidenceGapParityRun.stderr,
   };
 
+  // Knowledge-revalidation parity check runs after evidence-gap parity passes
+  const knowledgeRevalidationParityRun = runScript("taskpad:knowledge-revalidation-refresh-contract-parity", [
+    "--taskpad", taskpadPath,
+    "--plan", planPath,
+    "--project-root", ".",
+    "--format", "json",
+  ]);
+  const knowledgeRevalidationPayload = parseKnowledgeRevalidationParityPayload(knowledgeRevalidationParityRun.stdout);
+
+  if (!knowledgeRevalidationPayload) {
+    knowledgeRevalidationParityStep = {
+      id: "knowledge-revalidation-parity",
+      command: knowledgeRevalidationParityRun.command,
+      status: "fail",
+      exitCode: knowledgeRevalidationParityRun.exitCode,
+      reasonCode: "KNOWLEDGE_REVALIDATION_PARITY_JSON_MISSING_OR_INVALID",
+      summary: "Knowledge-revalidation parity step did not emit a parseable machine-readable payload.",
+      stdout: knowledgeRevalidationParityRun.stdout,
+      stderr: knowledgeRevalidationParityRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: null,
+      nextActions: [
+        "Fix taskpad:knowledge-revalidation-refresh-contract-parity output contract markers.",
+        "Ensure the gate returns valid JSON with status, violations, and summary fields.",
+      ],
+    };
+  }
+
+  const knowledgeRevalidationParityContractValid =
+    (knowledgeRevalidationPayload.status === "pass" && knowledgeRevalidationParityRun.exitCode === 0) ||
+    (knowledgeRevalidationPayload.status === "fail" && knowledgeRevalidationParityRun.exitCode !== 0);
+
+  if (!knowledgeRevalidationParityContractValid) {
+    knowledgeRevalidationParityStep = {
+      id: "knowledge-revalidation-parity",
+      command: knowledgeRevalidationParityRun.command,
+      status: "fail",
+      exitCode: knowledgeRevalidationParityRun.exitCode,
+      reasonCode: "KNOWLEDGE_REVALIDATION_PARITY_EXIT_SEMANTICS_INVALID",
+      summary: "Knowledge-revalidation parity output violated deterministic status/exit semantics.",
+      stdout: knowledgeRevalidationParityRun.stdout,
+      stderr: knowledgeRevalidationParityRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: knowledgeRevalidationPayload,
+      nextActions: [
+        "Repair knowledge-revalidation parity exit semantics so pass exits 0 and fail exits non-zero.",
+        "Rerun taskpad:intake:autoplan after parity contract is restored.",
+      ],
+    };
+  }
+
+  // Check if knowledge-revalidation parity failed with violations
+  if (knowledgeRevalidationPayload.status === "fail" && knowledgeRevalidationPayload.violations.length > 0) {
+    const errorViolations = knowledgeRevalidationPayload.violations.filter(v => v.severity === "error");
+    const hasPlannedArtifactsWithMissingWiring = knowledgeRevalidationPayload.summary.totalArtifacts > 0 &&
+      (knowledgeRevalidationPayload.summary.missingWiringArtifacts > 0 ||
+       knowledgeRevalidationPayload.summary.partiallyWiredArtifacts > 0);
+
+    if (errorViolations.length > 0 || hasPlannedArtifactsWithMissingWiring) {
+      knowledgeRevalidationParityStep = {
+        id: "knowledge-revalidation-parity",
+        command: knowledgeRevalidationParityRun.command,
+        status: "fail",
+        exitCode: knowledgeRevalidationParityRun.exitCode,
+        reasonCode: AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY,
+        summary: `Knowledge-revalidation parity gate failed with ${errorViolations.length} error violations and ${knowledgeRevalidationPayload.summary.missingWiringArtifacts} artifacts with missing wiring.`,
+        stdout: knowledgeRevalidationParityRun.stdout,
+        stderr: knowledgeRevalidationParityRun.stderr,
+      };
+
+      const nextActions: string[] = [
+        `Fix ${knowledgeRevalidationPayload.summary.missingWiringArtifacts + knowledgeRevalidationPayload.summary.partiallyWiredArtifacts} knowledge-revalidation artifact(s) with missing save-flow wiring.`,
+      ];
+
+      // Add specific remediation actions for each violation
+      for (const violation of errorViolations.slice(0, 3)) {
+        nextActions.push(`[${violation.ruleId}] ${violation.artifactName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      if (errorViolations.length > 3) {
+        nextActions.push(`... and ${errorViolations.length - 3} more violations.`);
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after knowledge-revalidation wiring is complete.");
+
+      return {
+        status: "fail",
+        verdict: "hold",
+        reasonCode: AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY,
+        taskpadPath,
+        planPath,
+        selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+        plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+        newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
+        queueReconcile: seedPayload.queueReconcile,
+        artifact: seedPayload.artifact,
+        evidenceGapParity: evidenceGapPayload,
+        knowledgeRevalidationParity: knowledgeRevalidationPayload,
+        nextActions,
+      };
+    }
+  }
+
+  // Knowledge-revalidation parity passed (or has no planned artifacts)
+  knowledgeRevalidationParityStep = {
+    id: "knowledge-revalidation-parity",
+    command: knowledgeRevalidationParityRun.command,
+    status: "pass",
+    exitCode: knowledgeRevalidationParityRun.exitCode,
+    reasonCode: null,
+    summary: knowledgeRevalidationPayload.summary.totalArtifacts === 0
+      ? "Knowledge-revalidation parity gate passed (no planned knowledge-revalidation artifacts)."
+      : `Knowledge-revalidation parity gate passed (${knowledgeRevalidationPayload.summary.fullyWiredArtifacts}/${knowledgeRevalidationPayload.summary.totalArtifacts} artifacts fully wired).`,
+    stdout: knowledgeRevalidationParityRun.stdout,
+    stderr: knowledgeRevalidationParityRun.stderr,
+  };
+
   return {
     status: "pass",
     verdict: "ready",
@@ -1194,10 +1516,11 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
     plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
     newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-    steps: [recoverStep, seedStep, contractStep, parityStep],
+    steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep],
     queueReconcile: seedPayload.queueReconcile,
     artifact: seedPayload.artifact,
     evidenceGapParity: evidenceGapPayload,
+    knowledgeRevalidationParity: knowledgeRevalidationPayload,
     nextActions: ["Proceed with Builder dispatch using the newest active plan slice."],
   };
 }
@@ -1235,6 +1558,23 @@ function printHumanSummary(result: TaskpadIntakeAutoplanResult): void {
     console.log(`- queueReconcile.sectionsPresent.autonomousKickoffQueue: ${qr.sectionsPresent.autonomousKickoffQueue}`);
     console.log(`- queueReconcile.sectionsPresent.selfImprovementBacklog: ${qr.sectionsPresent.selfImprovementBacklog}`);
     console.log(`- queueReconcile.healedSections: ${qr.healedSections.length > 0 ? qr.healedSections.join(", ") : "none"}`);
+  }
+
+  if (result.evidenceGapParity) {
+    const eg = result.evidenceGapParity;
+    console.log(`- evidenceGapParity.status: ${eg.status}`);
+    console.log(`- evidenceGapParity.totalArtifacts: ${eg.summary.totalArtifacts}`);
+    console.log(`- evidenceGapParity.fullyWiredArtifacts: ${eg.summary.fullyWiredArtifacts}`);
+    console.log(`- evidenceGapParity.missingWiringArtifacts: ${eg.summary.missingWiringArtifacts}`);
+  }
+
+  if (result.knowledgeRevalidationParity) {
+    const kr = result.knowledgeRevalidationParity;
+    console.log(`- knowledgeRevalidationParity.status: ${kr.status}`);
+    console.log(`- knowledgeRevalidationParity.totalArtifacts: ${kr.summary.totalArtifacts}`);
+    console.log(`- knowledgeRevalidationParity.fullyWiredArtifacts: ${kr.summary.fullyWiredArtifacts}`);
+    console.log(`- knowledgeRevalidationParity.partiallyWiredArtifacts: ${kr.summary.partiallyWiredArtifacts}`);
+    console.log(`- knowledgeRevalidationParity.missingWiringArtifacts: ${kr.summary.missingWiringArtifacts}`);
   }
 
   if (result.nextActions.length > 0) {
@@ -1318,6 +1658,12 @@ function main(): void {
           SKIP_RECOVER_NOT_READY,
           "Skipped due to runtime exception.",
         ),
+        makeSkippedStep(
+          "knowledge-revalidation-parity",
+          buildCommand("taskpad:knowledge-revalidation-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+          SKIP_RECOVER_NOT_READY,
+          "Skipped due to runtime exception.",
+        ),
       ],
       queueReconcile: null,
       artifact: {
@@ -1326,6 +1672,7 @@ function main(): void {
         preflightReasonCode: null,
       },
       evidenceGapParity: null,
+      knowledgeRevalidationParity: null,
       nextActions: [
         "Inspect runtime exception and ensure required files/scripts exist.",
         "Rerun taskpad:intake:autoplan after resolving the runtime issue.",
