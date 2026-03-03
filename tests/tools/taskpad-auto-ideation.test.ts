@@ -678,14 +678,20 @@ describe("taskpad-auto-ideation", () => {
       const taskpadPath = join(dir, "TASKPAD.md");
       const planPath = join(dir, "IMPLEMENTATION_PLAN.md");
 
-      // Empty queues with a duplicate candidate already in backlog
+      // Executable queues have items (non-empty), with a duplicate candidate in backlog
+      // Auto-ideation should return 'noop' when executable queues are NOT empty
       const taskpadWithExisting = `# TASKPAD
+
+## Work Queue
+- [ ] planned-2026-02-15 add deterministic ranking fixtures for taskpad auto-ideation (exactly three candidates with stable tie-break ordering)
+
+## Execution Queue
+- [ ] existing execution task
 
 ## Autonomous Kickoff Queue
 - [x] done
 
 ## Self-Improvement Backlog
-- [ ] planned-2026-02-15 add deterministic ranking fixtures for taskpad auto-ideation (exactly three candidates with stable tie-break ordering)
 - [x] done
 `;
 
@@ -705,9 +711,9 @@ describe("taskpad-auto-ideation", () => {
 
       const stdout = new TextDecoder().decode(run.stdout);
 
-      // Note: Since there's an unchecked item in the backlog, the queue is NOT empty,
-      // so ideation returns 'noop' instead of 'deduped'. The actual dedupe behavior
-      // is tested at the unit level in "dedupes when candidate bullet already exists"
+      // Note: Since Work Queue has an unchecked item, executable queues are NOT empty,
+      // so ideation returns 'noop'. The actual dedupe behavior is tested at
+      // the unit level in "dedupes when candidate bullet already exists"
       const result = parseJsonBlock(stdout);
       expect(result.status).toBe("noop");
       expect(result.triggered).toBe(false);
@@ -728,10 +734,17 @@ describe("taskpad-auto-ideation", () => {
       const taskpadPath = join(dir, "TASKPAD.md");
       const planPath = join(dir, "IMPLEMENTATION_PLAN.md");
 
+      // Executable queues (Work/Execution) have items - auto-ideation should return 'noop'
       const taskpadWithQueueItems = `# TASKPAD
 
-## Autonomous Kickoff Queue
+## Work Queue
 - [ ] planned-2026-02-28 continue active work
+
+## Execution Queue
+- [ ] existing execution task
+
+## Autonomous Kickoff Queue
+- [x] done
 
 ## Self-Improvement Backlog
 - [x] done
@@ -819,10 +832,17 @@ describe("taskpad-auto-ideation", () => {
     const taskpadPath = join(dir, "TASKPAD.md");
     const planPath = join(dir, "IMPLEMENTATION_PLAN.md");
 
+    // Executable queues have items - auto-ideation should return 'noop'
     const originalTaskpad = `# TASKPAD
 
-## Autonomous Kickoff Queue
+## Work Queue
 - [ ] planned-2026-02-28 continue active work
+
+## Execution Queue
+- [ ] existing execution task
+
+## Autonomous Kickoff Queue
+- [x] done
 
 ## Self-Improvement Backlog
 - [x] done

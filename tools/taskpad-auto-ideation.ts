@@ -115,9 +115,20 @@ const SEMANTIC_KEY_SYNONYM_FOLD_MAP = new Map<string, string>([
 ]);
 
 export interface TaskpadQueueParserStatus {
+  // Executable queues (Builder-ready)
+  workQueueUncheckedCount: number;
+  executionQueueUncheckedCount: number;
+
+  // Intake/planning queues (require promotion/seeding)
   autonomousUncheckedCount: number;
   selfImprovementUncheckedCount: number;
+
+  // Aggregates (for backward compatibility and quick checks)
+  executableQueueTotal: number;
+  intakeQueueTotal: number;
   totalUnchecked: number;
+
+  // Executable-queue-aware empty state (canonical trigger for auto-ideation)
   queuesAreEmpty: boolean;
 }
 
@@ -797,7 +808,9 @@ export function parseTaskpadQueueStatus(taskpadMarkdown: string): TaskpadQueuePa
 
   return {
     ...counts,
-    queuesAreEmpty: counts.totalUnchecked === 0,
+    // Executable-queue-aware readiness: auto-ideation should trigger when
+    // Work Queue and Execution Queue are both empty, regardless of intake queue state
+    queuesAreEmpty: counts.executableQueueTotal === 0,
   };
 }
 

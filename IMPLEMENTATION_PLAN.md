@@ -55,7 +55,7 @@
 ### Task Graph
 - [x] **TP001**: Define queue-health contract updates for executable queues (`Work Queue`, `Execution Queue`) including deterministic per-section count fields and readiness semantics.
 - [x] **TP002**: Implement parser updates in `tools/taskpad-queue-health.ts` to count unchecked items across all required sections with stable JSON/human output ordering.
-- [ ] **TP003**: Update intake orchestration (`tools/taskpad-intake-autoplan.ts` and related callsites) to use executable-queue-aware readiness checks for auto-ideation/autoplan branching.
+- [x] **TP003**: Update intake orchestration (`tools/taskpad-intake-autoplan.ts` and related callsites) to use executable-queue-aware readiness checks for auto-ideation/autoplan branching.
 - [ ] **TP004**: Add/extend fixtures and tests for queue-health and intake-autoplan to cover fully-empty executable queues, partial coverage, and non-regression on legacy autonomous/self-improvement-only cases.
 - [ ] **TP005**: Update README/quality docs with the new executable queue-health contract and canonical verification flow.
 
