@@ -11,6 +11,7 @@ import { sanitizeFilename } from "./sanitize";
 import { parseTags, addAutoTags } from "./tags";
 import { cleanTitle } from "./titleSuggestion";
 import { applyTitleTemplate } from "./titleTemplate";
+import { DEFAULT_NO_QUERY_DIAGNOSTICS } from "./retrievalQueryPackContract";
 
 /**
  * Options for building frontmatter
@@ -106,7 +107,8 @@ export function buildFrontmatterFromClip(options: BuildFrontmatterOptions): Buil
     channel: result.metadata?.channel,
     duration: result.metadata?.duration,
     videoType: result.metadata?.videoType,
-    extra
+    extra,
+    queryPackDiagnostics: DEFAULT_NO_QUERY_DIAGNOSTICS
   };
 
   return {

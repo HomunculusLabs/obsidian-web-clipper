@@ -215,3 +215,59 @@ describe("buildFrontmatterFromClip SeedFinder profile mapping", () => {
     expect(yaml).not.toContain("lineage_parents:");
   });
 });
+
+describe("buildFrontmatterFromClip query pack diagnostics defaults", () => {
+  test("emits query_pack_version and query_pack_truncated with no-query defaults", () => {
+    const result = createSeedFinderClipResult();
+
+    const built = buildFrontmatterFromClip({
+      result,
+      settings: DEFAULT_SETTINGS,
+      pageType: "web",
+      currentTabUrl: result.url
+    });
+
+    const yaml = buildFrontmatterYaml(built.frontmatter);
+
+    // Query pack diagnostics should be present by default
+    expect(built.frontmatter.queryPackDiagnostics).toBeDefined();
+    expect(built.frontmatter.queryPackDiagnostics).toEqual({
+      query_pack_exact_phrases: 0,
+      query_pack_keyword_booleans: 0,
+      query_pack_entity_seeds: 0,
+      query_pack_total_queries: 0,
+      query_pack_truncated: false,
+      query_pack_version: "1.0.0",
+    });
+
+    // YAML output should contain the fields
+    expect(yaml).toContain('query_pack_version: "1.0.0"');
+    expect(yaml).toContain("query_pack_exact_phrases: 0");
+    expect(yaml).toContain("query_pack_keyword_booleans: 0");
+    expect(yaml).toContain("query_pack_entity_seeds: 0");
+    expect(yaml).toContain("query_pack_total_queries: 0");
+    expect(yaml).toContain("query_pack_truncated: false");
+  });
+
+  test("query_pack_diagnostics defaults are stable across multiple calls", () => {
+    const result = createSeedFinderClipResult();
+
+    const built1 = buildFrontmatterFromClip({
+      result,
+      settings: DEFAULT_SETTINGS,
+      pageType: "web",
+      currentTabUrl: result.url
+    });
+
+    const built2 = buildFrontmatterFromClip({
+      result,
+      settings: DEFAULT_SETTINGS,
+      pageType: "web",
+      currentTabUrl: result.url
+    });
+
+    expect(built1.frontmatter.queryPackDiagnostics).toEqual(
+      built2.frontmatter.queryPackDiagnostics
+    );
+  });
+});
