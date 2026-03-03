@@ -9,6 +9,74 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Knowledge-confidence state sync for durable triage overrides
+
+### Distilled Scope
+**Problem**
+- `knowledge-confidence-inbox.md` and `knowledge-confidence-history.ndjson` are now planned as confidence surfaces, but there is no deterministic state-sync artifact that persists manual confidence-status edits back to source references.
+- Without writeback parity, confidence triage can drift across reruns and re-surface previously-triaged low-confidence items, reducing trust in AI coding/writing kickoff context.
+- Intake queues were empty, so the highest-impact ideation slice is closing the confidence lifecycle loop with deterministic status reconciliation.
+
+**In scope**
+- Define deterministic `knowledge-confidence-state-sync.md` contract for reconciling edited confidence statuses from `knowledge-confidence-inbox.md` back to source refs.
+- Implement builder/exporter wiring with stable provenance fields (`confidence_item_id`, `status_source`, `status_changed_at`, `status_sync_version`, `status_sync_truncated`) and deterministic ordering/tie-breaks.
+- Add save-flow/runtime refresh parity (`src/popup/save.ts`, `src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeConfidenceStateSync.ts`) following existing inbox/state-sync patterns.
+- Add focused contract + e2e coverage and include verification wiring in intake-auto command flow.
+
+**Out of scope**
+- New confidence-scoring/ranking algorithms for `knowledge-confidence-inbox.md`.
+- LLM-based confidence inference.
+- Broad redesign of existing contradiction/evidence-gap/key-takeaway contracts beyond confidence status reconciliation.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic `knowledge-confidence-state-sync.md` export + incremental refresh for confidence override reconciliation across reruns. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:confidence-refresh-contract-parity` gate that fails when confidence inbox/history/state-sync artifacts are missing save-flow wiring surfaces.
+3. **[OBSERVABILITY]** Add `knowledge-confidence-resolution-history.ndjson` telemetry for lifecycle transitions (`confidence_item_id`, `status_from`, `status_to`, `resolved_at`, `source_clip_ref_delta`).
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "knowledge-triage-state-sync|refreshKnowledgeTriageStateSync|key-takeaways-inbox|state-sync" src tests tools README.md package.json docs`
+  - `select set IMPLEMENTATION_PLAN.md src/popup/save.ts src/shared/messages.ts src/background/router.ts src/background/handlers/refreshKnowledgeTriageStateSync.ts src/background/handlers/refreshKeyTakeawaysInbox.ts src/shared/keyTakeawaysInboxContract.ts src/shared/keyTakeawaysInboxBuilder.ts src/shared/keyTakeawaysInboxExporter.ts src/shared/knowledgeTriageStateSyncContract.ts src/shared/knowledgeTriageStateSyncBuilder.ts src/shared/knowledgeTriageStateSyncExporter.ts tests/content/shared/key-takeaways-inbox.test.ts tests/content/shared/knowledge-triage-state-sync.test.ts tests/e2e/headless-clip-harness.test.ts tests/tools/taskpad-intake-autoplan.test.ts package.json README.md`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `src/popup/save.ts`
+  - `src/shared/messages.ts`
+  - `src/background/router.ts`
+  - `src/background/handlers/refreshKnowledgeTriageStateSync.ts`
+  - `src/shared/knowledgeTriageStateSyncContract.ts`
+  - `src/shared/knowledgeTriageStateSyncBuilder.ts`
+  - `src/shared/knowledgeTriageStateSyncExporter.ts`
+  - `src/shared/keyTakeawaysInboxContract.ts`
+  - `tests/content/shared/knowledge-triage-state-sync.test.ts`
+  - `tests/e2e/headless-clip-harness.test.ts`
+
+### Task Graph
+- [x] **TP001**: Specify `knowledge-confidence-state-sync.md` contract (status enum, source-ref mapping precedence, deterministic fingerprinting/ordering, truncation semantics, diagnostics defaults).
+- [ ] **TP002**: Implement shared confidence state-sync builder utilities that parse confidence-inbox status edits and reconcile to source refs with stable provenance metadata.
+- [ ] **TP003**: Implement deterministic `knowledge-confidence-state-sync.md` renderer/export path with explicit empty-state and bounded diagnostics behavior.
+- [ ] **TP004**: Add refresh wiring through runtime surfaces (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeConfidenceStateSync.ts`, `src/popup/save.ts`) using non-fatal save-path behavior.
+- [ ] **TP005**: Add `tests/content/shared/knowledge-confidence-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify confidence state-sync refresh parity and intake verification stability.
+
+### Acceptance Criteria
+- `knowledge-confidence-state-sync.md` is produced deterministically from confidence-inbox edits + source artifact refs with stable IDs/provenance fields.
+- Confidence triage overrides persist across reruns and do not resurface already-resolved confidence items on unchanged inputs.
+- Save flow remains resilient: confidence state-sync refresh failures are observable but non-fatal to primary clip save.
+- Contract + e2e/tooling tests fail on drift and pass with stable output parity.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/knowledge-confidence-state-sync.test.ts
+bun test tests/content/shared/knowledge-confidence-inbox.test.ts
+bun test tests/content/shared/key-takeaways-inbox.test.ts
+bun test tests/content/shared/contradiction-inbox.test.ts
+bun test tests/content/shared/evidence-gap-inbox.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Evidence-gap refresh wiring parity gate for deterministic save-flow coverage
 
 ### Distilled Scope
