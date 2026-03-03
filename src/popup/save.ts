@@ -38,6 +38,7 @@ import {
   type RetrievalQueryPackInput,
   type QueryPackDiagnostics
 } from "../shared/retrievalQueryPackContract";
+import type { RefreshOpenQuestionsInboxResponse } from "../shared/messages";
 
 const MAX_URI_CONTENT_CHARS = 180000;
 
@@ -535,6 +536,78 @@ async function saveViaClipboard(
 }
 
 /**
+ * Refresh the Open Questions Inbox after a successful save.
+ *
+ * This is a fire-and-forget operation that:
+ * 1. Scans the vault for Open Questions from Clip Brief sections
+ * 2. Builds the inbox deterministically
+ * 3. Saves it via CLI
+ *
+ * On any error, logs and continues (does not block or corrupt).
+ */
+async function refreshOpenQuestionsInbox(
+  settings: Settings,
+  vault: string
+): Promise<void> {
+  // Skip if inbox is disabled
+  if (!settings.enableOpenQuestionsInbox) {
+    return;
+  }
+
+  // Skip if CLI is not configured (inbox requires CLI for file write)
+  if (!settings.obsidianCli?.enabled || !settings.obsidianCli.cliPath) {
+    if (settings.debug) {
+      console.warn("[OpenQuestionsInbox] CLI not configured, skipping inbox refresh");
+    }
+    return;
+  }
+
+  // Get vault path (required for scanning)
+  const vaultPath = getVaultPathFromSettings(settings);
+  if (!vaultPath) {
+    if (settings.debug) {
+      console.warn("[OpenQuestionsInbox] Vault path not available, skipping inbox refresh");
+    }
+    return;
+  }
+
+  try {
+    const response = await runtimeSendMessage<
+      RuntimeRequest,
+      RefreshOpenQuestionsInboxResponse
+    >({
+      action: "refreshOpenQuestionsInbox",
+      vaultPath,
+      cliPath: settings.obsidianCli.cliPath,
+      vault,
+      inboxFolder: settings.openQuestionsInboxFolder || undefined,
+      maxFiles: settings.openQuestionsInboxMaxFiles || 100,
+    });
+
+    if (response?.success) {
+      if (settings.debug) {
+        console.log(
+          "[OpenQuestionsInbox] Refreshed inbox:",
+          `${response.questionsCount} questions from ${response.sourceClipsProcessed} clips`
+        );
+      }
+    } else {
+      if (settings.debug) {
+        console.warn(
+          "[OpenQuestionsInbox] Refresh failed:",
+          response?.error || "Unknown error"
+        );
+      }
+    }
+  } catch (err) {
+    // Deterministic fallback: log error and continue
+    if (settings.debug) {
+      console.warn("[OpenQuestionsInbox] Refresh error:", err);
+    }
+  }
+}
+
+/**
  * Main save function with method routing and fallback chain.
  *
  * Fallback chain: CLI → URI → clipboard
@@ -614,6 +687,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
           prepared.vault
         );
         void incrementBadgeCounter(settings);
+
+        // Refresh Open Questions Inbox (fire-and-forget, non-blocking)
+        void refreshOpenQuestionsInbox(settings, prepared.vault);
 
         return { usedClipboardFallback, usedMethod: method };
       }

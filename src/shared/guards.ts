@@ -25,6 +25,7 @@ const RUNTIME_REQUEST_ACTIONS = [
   "listVaultFolders",
   "createVaultFolder",
   "saveContent",
+  "refreshOpenQuestionsInbox",
   "testNativeHost"
 ] as const;
 

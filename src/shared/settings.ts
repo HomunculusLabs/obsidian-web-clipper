@@ -96,6 +96,11 @@ export interface Settings {
   relatedClipsRequiredTags: string;
   relatedClipsMaxDepth: number;
 
+  // --- Open Questions Inbox settings ---
+  enableOpenQuestionsInbox: boolean;
+  openQuestionsInboxMaxFiles: number;
+  openQuestionsInboxFolder: string;
+
   // --- Debug settings ---
   debug: boolean; // Enable debug logging to console
 
@@ -212,6 +217,11 @@ export const DEFAULT_SETTINGS: Settings = {
   relatedClipsRequiredTags: "web-clip",
   relatedClipsMaxDepth: 3,
 
+  // --- Open Questions Inbox settings ---
+  enableOpenQuestionsInbox: false,
+  openQuestionsInboxMaxFiles: 100,
+  openQuestionsInboxFolder: "",
+
   // --- Debug settings ---
   debug: false, // Disabled by default
 
@@ -276,6 +286,10 @@ export const SETTINGS_KEYS = [
   "enableRelatedClips",
   "relatedClipsRequiredTags",
   "relatedClipsMaxDepth",
+  // Open Questions Inbox
+  "enableOpenQuestionsInbox",
+  "openQuestionsInboxMaxFiles",
+  "openQuestionsInboxFolder",
   // Debug
   "debug",
   // Schema version

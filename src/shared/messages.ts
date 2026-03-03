@@ -33,6 +33,19 @@ export type RuntimeRequest =
       /** Whether to fall back to clipboard if URI fails (default: true) */
       fallbackToClipboard?: boolean;
     }
+  | {
+      action: "refreshOpenQuestionsInbox";
+      /** Vault path on filesystem */
+      vaultPath: string;
+      /** CLI path for saving the inbox */
+      cliPath: string;
+      /** Vault name */
+      vault: string;
+      /** Folder to save the inbox (optional, defaults to vault root) */
+      inboxFolder?: string;
+      /** Maximum files to scan (optional) */
+      maxFiles?: number;
+    }
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
@@ -74,6 +87,17 @@ export type CreateVaultFolderResponse =
 
 export type ExtractPdfResponse =
   | { success: true; text: string; pageCount: number; truncated: boolean; hasTextLayer: boolean }
+  | { success: false; error: string };
+
+export type RefreshOpenQuestionsInboxResponse =
+  | {
+      success: true;
+      questionsCount: number;
+      sourceClipsProcessed: number;
+      unresolvedQuestions: number;
+      resolvedQuestions: number;
+      truncated: boolean;
+    }
   | { success: false; error: string };
 
 /**
