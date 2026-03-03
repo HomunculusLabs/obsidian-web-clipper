@@ -9,6 +9,68 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Deterministic Open Questions Inbox export for unresolved research capture
+
+### Distilled Scope
+**Problem**
+- The clip pipeline already generates per-note `Open Questions` in `## Clip Brief`, but those questions remain fragmented across many notes.
+- For AI coding/writing workflows, unresolved questions are high-value next actions; manually scanning old clips to find them is slow and easy to skip.
+- With no unchecked intake queues, the highest-impact product slice is a deterministic cross-note inbox that aggregates unresolved questions with direct clip linkbacks.
+
+**In scope**
+- Add deterministic cross-note `open-questions-inbox.md` export that aggregates Clip Brief `Open Questions` from recent clips.
+- Define stable dedupe/ranking/linkback contract for inbox entries with bounded metadata (`question_id`, `source_clip_refs`, `question_status`, `inbox_version`, `inbox_truncated`).
+- Integrate inbox generation into existing save flow so new clips can refresh the inbox incrementally without introducing non-deterministic ordering.
+- Add focused tests for contract rules, truncation behavior, and end-to-end save-path parity.
+
+**Out of scope**
+- LLM-generated rewording/classification of questions.
+- New clip-source providers or major template redesign beyond linkback metadata.
+- Broad knowledge-hub/index redesign outside the dedicated open-questions inbox artifact.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic cross-note `open-questions-inbox.md` export + per-clip linkbacks to centralize unresolved research prompts from Clip Brief artifacts. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:artifact-surface-parity` gate to fail when planned note artifacts are missing from save-path/frontmatter outputs.
+3. **[OBSERVABILITY]** Add inbox telemetry history (`questions_total`, `new_questions`, `resolved_questions`, `truncated`) for vault-scale drift tracking.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "related clips|retrieval query pack|context-pack|clip brief|knowledge entities|source map|execution tasks|follow-up"`
+  - `search "clip brief|open questions|action items|knowledge bundle|context pack|buildfullclipmarkdown"`
+  - `select set "IMPLEMENTATION_PLAN.md" "src/popup/save.ts" "src/shared/markdown.ts" "src/shared/retrievalQueryPackContract.ts" "src/shared/relatedClipsContract.ts" "tests/e2e/headless-clip-harness.test.ts"`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `IMPLEMENTATION_PLAN.md`
+  - `src/popup/save.ts`
+  - `src/shared/markdown.ts`
+  - `src/shared/retrievalQueryPackContract.ts`
+  - `src/shared/relatedClipsContract.ts`
+  - `tests/e2e/headless-clip-harness.test.ts`
+
+### Task Graph
+- [x] **TP001**: Specify Open Questions Inbox contract (entry schema, deterministic question fingerprinting, dedupe precedence, ordering/tie-breaks, truncation policy, diagnostics defaults).
+- [ ] **TP002**: Implement shared inbox builder utilities that normalize Clip Brief `Open Questions`, merge duplicate prompts across clips, and emit stable entry/linkback ordering.
+- [ ] **TP003**: Implement deterministic `open-questions-inbox.md` renderer/export path with bounded section layout and explicit empty-state behavior.
+- [ ] **TP004**: Integrate inbox refresh into save pipeline (`src/popup/save.ts`) so clip saves update inbox incrementally with deterministic fallback on read/parse failures.
+- [ ] **TP005**: Add `tests/content/shared/open-questions-inbox.test.ts` contract coverage for dedupe, rank ordering, linkback rendering, truncation, and empty-state determinism.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end inbox artifact refresh and stable output parity across repeated runs.
+
+### Acceptance Criteria
+- Clip saves can produce/update `open-questions-inbox.md` deterministically from existing Clip Brief `Open Questions` data.
+- Inbox entries preserve stable IDs, ordering, and source-clip linkbacks across reruns on unchanged inputs.
+- Dedupe/truncation behavior is explicit, test-locked, and observable via deterministic metadata fields.
+- Shared-contract + headless e2e tests catch drift and pass on stable output.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/open-questions-inbox.test.ts
+bun test tests/content/shared/clip-brief-contract.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Deterministic vault-index cache for low-latency related/query synthesis
 
 ### Distilled Scope
