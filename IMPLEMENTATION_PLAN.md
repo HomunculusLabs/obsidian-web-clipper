@@ -54,7 +54,7 @@
 - [x] **TP002**: Implement `tools/taskpad-work-queue-prune.ts` to archive checked/planned Work Queue bullets atomically, preserve unchecked bullets in-place, and emit deterministic prune summaries.
 - [x] **TP003**: Implement `tools/taskpad-work-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable rule-ID diagnostics on drift.
 - [x] **TP004**: Add fixtures + tests (`tests/tools/taskpad-work-queue-prune.test.ts`, `tests/tools/taskpad-work-queue-archive-parity.test.ts`) covering pass/noop/missing-heading and parity drift conditions.
-- [ ] **TP005**: Wire scripts/docs (`package.json`, `README.md`, `docs/quality/taskpad-queue-health.md`) and integrate canonical invocation into intake-auto verification flow.
+- [x] **TP005**: Wire scripts/docs (`package.json`, `README.md`, `docs/quality/taskpad-queue-health.md`) and integrate canonical invocation into intake-auto verification flow.
 
 ### Acceptance Criteria
 - Running Work Queue prune archives only checked/planned Work Queue bullets and leaves unchecked executable items intact.

@@ -201,10 +201,42 @@ executableQueueTotal === 0
    └─ Run: taskpad:auto-ideation --target-queue work
    └─ Ensures new item goes to Work Queue (executable)
 
-3. Post-ideation verification:
+3. Work Queue maintenance (deterministic archive + parity):
+   └─ Run: taskpad:work-queue-prune --taskpad <path> --archive <path>
+   └─ Archives checked/planned Work Queue bullets to monthly archive
+   └─ Run: taskpad:work-queue-archive-parity --taskpad <path> --archive <path>
+   └─ Validates one-to-one fingerprint parity between TASKPAD and archive
+
+4. Post-ideation verification:
    └─ Re-check queue-health to confirm executableQueueTotal >= 1
    └─ Run full intake verification gates
 ```
+
+**Work Queue Pruning Contract:**
+
+Work Queue pruning (`taskpad:work-queue-prune`) and archive parity (`taskpad:work-queue-archive-parity`) are now part of the canonical intake-auto verification flow. These commands ensure:
+
+- **Auditability**: Completed/planned Work Queue bullets are archived to `docs/archive/TASKPAD_ARCHIVE_YYYY-MM.md` with deterministic fingerprints
+- **Lean ideation context**: Archived items are removed from active TASKPAD, keeping ideation readable
+- **Parity guarantees**: Archive parity gate validates one-to-one fingerprint matching, detecting drift with actionable rule IDs (`WQAP001_MISSING_ARCHIVE_ENTRY`, `WQAP002_EXTRA_ARCHIVE_ENTRY`, `WQAP003_FINGERPRINT_MISMATCH`)
+
+**Canonical work queue maintenance commands:**
+
+```bash
+# Prune completed/planned Work Queue items to monthly archive
+bun run taskpad:work-queue-prune -- \
+  --taskpad "8 - Projects/.../TASKPAD.md" \
+  --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" \
+  --format json
+
+# Validate archive↔TASKPAD fingerprint parity
+bun run taskpad:work-queue-archive-parity -- \
+  --taskpad "8 - Projects/.../TASKPAD.md" \
+  --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" \
+  --format json
+```
+
+For full contract documentation, see: `docs/quality/taskpad-work-queue-prune.md`
 
 ### Decision Matrix
 
