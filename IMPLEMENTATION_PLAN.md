@@ -9,6 +9,69 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Deterministic Retrieval Query Pack synthesis for vault-search pivots
+
+### Distilled Scope
+**Problem**
+- Clip outputs now include Clip Brief, Concept Taxonomy, Knowledge Entities, Source Map, Implementation Blueprint, Prompt-Ready Context Pack, and Related Clips, but there is no explicit retrieval-query surface users can run directly in Obsidian/global search.
+- This forces manual query crafting after every clip and slows the intended AI coding/writing workflow where notes should be immediately actionable.
+- With intake queues empty, the highest-impact next product slice is to convert existing deterministic artifacts into a bounded, reusable `## Retrieval Query Pack` per note.
+
+**In scope**
+- Add deterministic in-note `## Retrieval Query Pack` synthesis for ChatGPT/Claude/GitHub/document/YouTube clips.
+- Produce stable query outputs (`exact_phrase_queries`, `keyword_boolean_queries`, `entity_query_seeds`) from existing clip artifacts without external LLM calls.
+- Emit frontmatter diagnostics (`query_pack_version`, `query_pack_truncated`) with deterministic defaults when query generation is sparse.
+- Add focused shared-contract and end-to-end harness coverage validating section ordering, truncation, and diagnostics parity.
+
+**Out of scope**
+- Semantic/vector retrieval engines or embedding backends.
+- New clip-source providers or major template redesign beyond the new section/diagnostics contract.
+- Changes to autonomous intake orchestration beyond verification command updates needed for this slice.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic in-note `## Retrieval Query Pack` synthesis derived from existing clip artifacts + diagnostics for immediate vault search pivots. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:artifact-section-parity` gate to fail when synthesized product sections drift by provider/template.
+3. **[OBSERVABILITY]** Add `query-pack` telemetry summarizing query density/truncation drift across fixture corpus.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "concept taxonomy|Prompt-Ready Context Pack|Knowledge Entities|Related Clips|context_pack|primary_topics|related_clips" src tests docs`
+  - `search "taxonomy|context pack|clip brief|knowledge entities|implementation blueprint|source map" src/shared src/popup tests/content/shared`
+  - `select set IMPLEMENTATION_PLAN.md src/popup/save.ts src/shared/markdown.ts src/shared/relatedClipsContract.ts tests/content/shared/related-clips-graph.test.ts tests/e2e/headless-clip-harness.test.ts docs/quality/taskpad-auto-ideation.md README.md`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `IMPLEMENTATION_PLAN.md`
+  - `src/popup/save.ts`
+  - `src/shared/markdown.ts`
+  - `src/shared/relatedClipsContract.ts`
+  - `tests/content/shared/related-clips-graph.test.ts`
+  - `tests/e2e/headless-clip-harness.test.ts`
+  - `README.md`
+
+### Task Graph
+- [x] **TP001**: Specify Retrieval Query Pack contract (inputs, deterministic ranking/tie-breaks, max-query bounds, section schema, and diagnostics fields/versioning).
+- [ ] **TP002**: Implement shared query-pack builder utilities that derive exact-phrase, boolean keyword, and entity-seed queries from existing clip artifacts with stable output ordering.
+- [ ] **TP003**: Integrate query-pack synthesis into save pipeline/template assembly and render a bounded `## Retrieval Query Pack` section only when non-empty.
+- [ ] **TP004**: Extend frontmatter construction to emit `query_pack_version` + `query_pack_truncated` with explicit no-query defaults.
+- [ ] **TP005**: Add `tests/content/shared/retrieval-query-pack.test.ts` coverage for no-query/minimal/full/truncation/tie-break determinism cases.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` scenario assertions to validate end-to-end query-pack section + diagnostics parity across representative providers.
+
+### Acceptance Criteria
+- Saved notes can include deterministic `## Retrieval Query Pack` content generated from existing clip artifacts with no external model dependency.
+- Query ordering and truncation behavior are stable across reruns on unchanged fixtures.
+- `query_pack_version` and `query_pack_truncated` diagnostics are always present and deterministic.
+- Shared-contract + headless tests fail on drift and pass with stable outputs.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/retrieval-query-pack.test.ts
+bun test tests/content/shared/related-clips-graph.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Cross-clip Related Clips graph linking for retrieval-ready knowledge notes
 
 ### Distilled Scope

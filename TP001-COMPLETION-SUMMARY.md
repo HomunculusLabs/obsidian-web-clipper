@@ -1,208 +1,156 @@
 # TP001 Completion Summary
 
-## Task
-**TP001**: Define deterministic real-world GitHub regression fixture contract for `vhs`, `lipgloss`, and `crush` (inputs, expected README extraction mode, expected link-follow children, and stable ordering rules).
+**Task**: Specify Retrieval Query Pack contract (inputs, deterministic ranking/tie-breaks, max-query bounds, section schema, and diagnostics fields/versioning)
 
-## Status
-✅ **COMPLETE** - Marked as checked in IMPLEMENTATION_PLAN.md
+**Job ID**: tdfaiipx-plan-6884dee100b5-55d40cc509f39794
 
----
+**Status**: ✅ COMPLETE (implementation done, commit blocked by permission issue)
 
-## Deliverables
+## Files Created
 
-### 1. Contract Definition Document
-**File**: `tests/fixtures/github-regression-fixtures.md`
+### src/shared/retrievalQueryPackContract.ts
+A comprehensive contract specification for the Retrieval Query Pack feature, including:
 
-A comprehensive contract specification that defines:
-- Purpose and scope for regression testing
-- Three fixture definitions (vhs, lipgloss, crush)
-- README extraction mode contracts for each repo
-- Link-follow children contracts for each repo
-- Stable ordering rules
-- Filename derivation rules (package.json → repo name fallback)
-- Discovery rules and exclusion patterns
-- Deterministic execution requirements
-- Test harness integration expectations
+**Constants & Versioning**
+- `QUERY_PACK_VERSION = "1.0.0"` - Algorithm version for diagnostics
+- `MAX_EXACT_PHRASE_QUERIES = 10` - Bound for exact phrase queries
+- `MAX_KEYWORD_BOOLEAN_QUERIES = 10` - Bound for keyword boolean queries
+- `MAX_ENTITY_QUERY_SEEDS = 10` - Bound for entity query seeds
+- `MAX_TOTAL_QUERIES = 30` - Combined bound
 
-### 2. HTML Fixtures (3 files)
-**Location**: `tests/templates/fixtures/`
+**Core Types**
+- `RetrievalQueryPackInput` - Input contract derived from clip artifacts (title, description, conceptTaxonomy, knowledgeEntities, keywords, sourceUrl, contentType, author, publishedDate)
+- `ExactPhraseQuery` - Multi-word literal phrases (phrase, source, score)
+- `KeywordBooleanQuery` - Boolean combinations of terms (query, operator, terms, source, score)
+- `EntityQuerySeed` - Single entity terms (entity, source, score)
+- `RetrievalQueryPack` - Complete pack with all query types and truncation status
+- `QueryPackDiagnostics` - Frontmatter diagnostics for every saved clip
+- `DEFAULT_NO_QUERY_DIAGNOSTICS` - Defaults when no queries are generated
 
-- `github-regression-vhs.html` (4,201 bytes)
-- `github-regression-lipgloss.html` (4,631 bytes)
-- `github-regression-crush.html` (4,798 bytes)
+**Scoring Rules (Documented)**
+- Exact Phrase Queries (max 100 pts): Phrase length (40 pts) + uniqueness (30 pts) + source priority (30 pts) + recency (10 pts)
+- Keyword Boolean Queries (max 100 pts): Term count (40 pts) + operator specificity (20 pts) + source priority (30 pts) + uniqueness (20 pts) + recency (10 pts)
+- Entity Query Seeds (max 100 pts): Entity type (40 pts) + source priority (30 pts) + frequency (15 pts) + length (10 pts) + recency (15 pts)
 
-Each fixture includes:
-- Simulated GitHub page structure
-- README content with markdown links
-- Repository metadata (stars, forks, language, topics)
-- Related project links in "Related Projects" section
-- Elements for remove selectors testing
+**Deterministic Ranking & Tie-Breaks**
+1. Score (descending - higher scores first)
+2. Published date (descending - more recent first)
+3. Source priority (fixed order per query type)
+4. Lexicographic order (alphabetical - deterministic fallback)
 
-### 3. Fixture Contracts (6 JSON files)
-**Location**: `tests/templates/fixtures/`
+**Truncation Rules**
+- Each query type independently truncated to its MAX constant
+- Diagnostics field `query_pack_truncated` set to `true` when any truncation occurs
+- Empty section not rendered when no queries generated
 
-Per-repo contracts (vhs, lipgloss, crush):
-- `{repo}.contract.json` - Expected clipping behavior
-  - Package name derivation
-  - README extraction mode
-  - URL variants (root, tree path)
-  - Expected frontmatter structure
-  - Markdown structure expectations
-  - Metadata extraction selectors
-  - Discovery configuration
+**Section Schema (Markdown)**
+```markdown
+## Retrieval Query Pack
 
-- `{repo}.children.json` - Expected link-follow children
-  - Child repo URLs discovered from README
-  - Filename derivation (parent-child prefixing)
-  - Discovery source and depth tracking
-  - Dedupe and exclusion rules
-  - Assertion expectations
+### Exact Phrase Queries
+- "phrase one"
+- "phrase two"
 
-### 4. JSON Schemas (2 files)
-**Location**: `tests/fixtures/schemas/`
+### Keyword Boolean Queries
+- term1 AND term2
+- term3 OR term4
 
-- `github-regression-contract.schema.json` (7,817 bytes)
-  - Schema for fixture contracts
-  - Validation rules for all contract fields
-  - Supports contract versioning
-
-- `github-regression-children.schema.json` (9,061 bytes)
-  - Schema for children contracts
-  - Validation rules for link-follow expectations
-  - Supports child assertion definitions
-
----
-
-## Contract Coverage
-
-### Fixture 1: charmbracelet/vhs
-- **URL**: https://github.com/charmbracelet/vhs
-- **Package name**: `vhs`
-- **Expected filename**: `vhs.md`
-- **Expected children**: 3 (bubbletea, gum, lipgloss)
-- **Discovery depth**: 1
-
-### Fixture 2: charmbracelet/lipgloss
-- **URL**: https://github.com/charmbracelet/lipgloss
-- **Package name**: `lipgloss`
-- **Expected filename**: `lipgloss.md`
-- **Expected children**: 3 (bubbletea, gum, vhs)
-- **Discovery depth**: 1
-
-### Fixture 3: charmbracelet/crush
-- **URL**: https://github.com/charmbracelet/crush
-- **Package name**: `crush`
-- **Expected filename**: `crush.md`
-- **Expected children**: 3 (bubbletea, gum, lipgloss)
-- **Discovery depth**: 1
-
----
-
-## Key Contract Rules
-
-### Filename Derivation
-1. **Primary source**: `package.json` → `name` field
-2. **Fallback**: Repository name from URL path
-3. **Sanitization rules**:
-   - Remove leading/trailing whitespace
-   - Replace non-alphanumeric with hyphens (except `_`, `-`, `.`)
-   - Collapse consecutive hyphens
-   - Remove leading/trailing hyphens
-
-### README Extraction
-- **Content selector priority**: `article.markdown-body` → `.repository-content .readme article` → `.markdown-body`
-- **Remove selectors**: Edit buttons, copy buttons, anchor links, navigation, action buttons
-- **URL variant support**: Root repo, tree path (`/tree/main`), subdirectory README
-
-### Link-Follow Discovery
-- **Include patterns**: `https://github.com/owner/repo` (exact match)
-- **Exclude patterns**: Self-references, non-GitHub URLs, paths beyond `/owner/repo`, tree paths
-- **Dedupe strategy**: URL-based deduplication
-- **Ordering**: Alphabetical by URL string
-- **Depth limit**: 1 (no recursive follows)
-
-### Child Note Creation
-- **Filename pattern**: `{parent}-{child}.md` (e.g., `vhs-lipgloss.md`)
-- **Discovery metadata**: `github_discovered_from`, `github_discovery_depth`, `github_sibling_of`
-
----
-
-## Verification Results
-
-All verification commands passed:
-
-```bash
-✓ bun test tests/templates/github.test.ts
-  23 pass, 0 fail, 40 expect() calls
-
-✓ bun test tests/e2e/headless-clip-harness.test.ts
-  5 pass, 0 fail, 53 expect() calls
-
-✓ bun run typecheck
-  No TypeScript errors
-
-✓ All JSON contracts validated
-  8 JSON files validated successfully
+### Entity Query Seeds
+- entity1
+- entity2
 ```
 
----
+**Diagnostics Fields (Always Present)**
+- `query_pack_version` - Algorithm version (e.g., "1.0.0")
+- `query_pack_exact_phrases` - Count of exact phrase queries
+- `query_pack_keyword_booleans` - Count of keyword boolean queries
+- `query_pack_entity_seeds` - Count of entity query seeds
+- `query_pack_total_queries` - Sum of all query counts
+- `query_pack_truncated` - Boolean indicating truncation
 
-## Files Created/Modified
+**Exported Functions**
+- `extractQueryPackDiagnostics(pack)` - Extract diagnostics for frontmatter
+- `renderRetrievalQueryPackSection(pack)` - Render markdown section (empty if no queries)
+- `extractQueryDomain(url)` - Extract hostname from URL
+- `normalizeQueryString(query)` - Normalize query strings
+- `isRecentContent(publishedDate)` - Check if content is from last 6 months
 
-### Created (11 files)
-1. `tests/fixtures/github-regression-fixtures.md`
-2. `tests/fixtures/schemas/github-regression-contract.schema.json`
-3. `tests/fixtures/schemas/github-regression-children.schema.json`
-4. `tests/templates/fixtures/github-regression-vhs.html`
-5. `tests/templates/fixtures/github-regression-vhs.contract.json`
-6. `tests/templates/fixtures/github-regression-vhs.children.json`
-7. `tests/templates/fixtures/github-regression-lipgloss.html`
-8. `tests/templates/fixtures/github-regression-lipgloss.contract.json`
-9. `tests/templates/fixtures/github-regression-lipgloss.children.json`
-10. `tests/templates/fixtures/github-regression-crush.html`
-11. `tests/templates/fixtures/github-regression-crush.contract.json`
+## Files Modified
 
-### Modified (1 file)
-1. `IMPLEMENTATION_PLAN.md` - Marked TP001 as complete `[x]`
+### IMPLEMENTATION_PLAN.md
+- Marked TP001 as complete: `- [x] **TP001**: Specify Retrieval Query Pack contract...`
 
----
+## Verification
 
-## Next Steps (TP002-T005)
+✅ TypeScript compilation successful (`bun run typecheck`)
+✅ Contract follows the same pattern as relatedClipsContract.ts
+✅ All documented scoring rules are deterministic and bounded
+✅ Diagnostics contract matches related clips pattern for consistency
+✅ Section schema is well-defined with optional subsections
 
-The fixtures and contracts are now ready for:
-- **TP002**: Adding/curating fixture corpus and expected outputs
-- **TP003**: Extending GitHub test assertions to use new fixtures
-- **TP004**: Extending headless-clip-harness for real-world URL regression
-- **TP005**: Updating README/quality docs with regression gate
+## Git Commit Status
 
----
+❌ **BLOCKED**: Unable to create git commit due to macOS permission error:
+```
+fatal: Unable to create '/Users/t3rpz/projects/obsidian-web-clipper/.git/index.lock': Operation not permitted
+```
 
-## Contract Version
-- **Version**: 1.0.0
-- **Created**: 2026-03-02
-- **Slice**: TASKPAD Intake Slice (2026-03-02)
-- **Status**: Active
+The `.git` directory appears to have write permissions blocked, preventing git add/commit operations. This is a macOS security/permission issue unrelated to the implementation.
 
----
+## Files Changed (Pending Commit)
+
+1. **Modified**: `IMPLEMENTATION_PLAN.md` (TP001 marked complete)
+2. **Created**: `src/shared/retrievalQueryPackContract.ts` (16,039 bytes)
+
+## Next Steps for Manual Commit
+
+Once the permission issue is resolved, the following commit should be created:
+
+```bash
+git add src/shared/retrievalQueryPackContract.ts IMPLEMENTATION_PLAN.md
+git commit -m "TP001: Specify Retrieval Query Pack contract (inputs, deterministic ranking/tie-breaks, max-query bounds, section schema, and diagnostics fields/versioning).
+
+- Add src/shared/retrievalQueryPackContract.ts with full contract specification
+- Define query types: ExactPhraseQuery, KeywordBooleanQuery, EntityQuerySeed
+- Specify scoring rules and deterministic tie-break algorithms
+- Set truncation bounds: 10 exact phrases, 10 keyword booleans, 10 entity seeds
+- Define diagnostics schema with versioning (query_pack_version: 1.0.0)
+- Add rendering function for markdown '## Retrieval Query Pack' section
+- Update IMPLEMENTATION_PLAN.md: mark TP001 as complete
+
+Job ID: tdfaiipx-plan-6884dee100b5-55d40cc509f39794"
+```
 
 ## RepoPrompt Evidence
 
-**Context Mode**: RepoPrompt
-
 **Commands Used**:
-- `tree --depth 3` - Explored project structure
-- `search "link-follow|link follow|README|github.*extraction"` - Found relevant code
-- `search "vhs|lipgloss|crush|charmbracelet"` - Found failing repo references
+- `rp_bind(windowId=1, tab="compose")` - Bound to RepoPrompt compose tab
+- `rp_exec tree` - Viewed file tree
+- `rp_exec search "taxonomy"` - Searched for related content
+- `rp_exec select set IMPLEMENTATION_PLAN.md` - Selected plan file
+- `rp_exec context --files --tree` - Loaded full context
 
 **Selected Files**:
-- `src/content/templates/github.ts` - GitHub template implementation
-- `tests/templates/github.test.ts` - Existing GitHub tests
-- `tests/e2e/headless-clip-harness.test.ts` - E2E test harness
-- `tests/e2e/support/test-vault-sandbox.ts` - Sandbox infrastructure
-- `tests/templates/fixtures/github-repo.html` - Example fixture
-- `docs/quality/headless-harness-spec.md` - Harness contract spec
-- `IMPLEMENTATION_PLAN.md` - Task definitions
+- `IMPLEMENTATION_PLAN.md` (67,694 tokens)
+- `README.md` (555 tokens)
+- `src/shared/relatedClipsContract.ts` (via read tool)
+- `src/popup/save.ts` (via read tool)
+- `src/shared/markdown.ts` (via read tool)
+- `src/shared/buildFrontmatter.ts` (via read tool)
+- `src/shared/types.ts` (via read tool)
+- `tests/content/shared/related-clips-graph.test.ts` (via read tool)
 
----
+**Context Mode**: RepoPrompt
 
-**TP001 COMPLETE ✅**
+## Summary
+
+TP001 is complete. The Retrieval Query Pack contract has been fully specified with:
+- ✅ Input contract derived from existing clip artifacts (no LLM dependency)
+- ✅ Deterministic scoring rules for all three query types
+- ✅ Deterministic ranking and tie-break rules
+- ✅ Bounded output (10 each, 30 total max)
+- ✅ Well-defined section schema for markdown rendering
+- ✅ Frontmatter diagnostics with versioning
+- ✅ TypeScript compilation verified
+
+The only blocker is a macOS permission issue preventing git commit, which is an environment-specific problem, not an implementation issue.
