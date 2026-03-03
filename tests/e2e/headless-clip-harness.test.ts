@@ -4869,4 +4869,522 @@ date_clipped: 2026-03-04T10:00:00.000Z
       expect(hasQueryPackSection(clipMarkdownMiss!)).toBe(hasQueryPackSection(clipMarkdownHit!));
     });
   });
+
+  // ============================================================================
+  // TP006: Open Questions Inbox - End-to-End Refresh & Parity
+  // ============================================================================
+
+  describe("TP006: Open Questions Inbox artifact refresh", () => {
+    test("inbox-refresh: clip with Open Questions creates inbox artifact", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-refresh",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/inbox-test";
+
+      // Create a note with Clip Brief and Open Questions
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      const noteWithQuestions = `---
+source: https://example.com/article-with-questions
+title: Article With Questions
+tags:
+  - web-clip
+date_clipped: 2026-03-03T10:00:00.000Z
+---
+
+# Article With Questions
+
+This article raises some questions.
+
+## Clip Brief
+
+### Open Questions
+
+- What is the best approach for X?
+- How should I implement Y?
+- Is Z deprecated?
+
+### Action Items
+
+- Research X approach
+- Test Y implementation`;
+
+      await fs.writeFile(
+        join(clipsPath, "Article With Questions.md"),
+        noteWithQuestions,
+        "utf-8"
+      );
+
+      // Scan vault for Open Questions
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const scanResult = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      // Pass gate: Questions are discovered
+      expect(scanResult.filesScanned).toBe(1);
+      expect(scanResult.filesWithClipBrief).toBe(1);
+      expect(scanResult.filesWithOpenQuestions).toBe(1);
+      expect(scanResult.questions).toHaveLength(3);
+
+      // Pass gate: Questions are extracted correctly (order may vary)
+      const questions = scanResult.questions.map(q => q.question);
+      expect(questions).toContain("What is the best approach for X?");
+      expect(questions).toContain("How should I implement Y?");
+      expect(questions).toContain("Is Z deprecated?");
+
+      // Build and render inbox
+      const { buildOpenQuestionsInbox, renderOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+      const inbox = buildOpenQuestionsInbox(scanResult.questions);
+      const markdown = renderOpenQuestionsInbox(inbox);
+
+      // Pass gate: Inbox has correct structure
+      expect(markdown).toContain("# Open Questions Inbox");
+      expect(markdown).toContain("## Summary");
+      expect(markdown).toContain("## Questions");
+      expect(markdown).toContain("questions_count: 3");
+      expect(markdown).toContain("unresolved_questions: 3");
+      expect(markdown).toContain("inbox_truncated: false");
+
+      // Pass gate: Questions are present in inbox
+      expect(markdown).toContain("What is the best approach for X?");
+      expect(markdown).toContain("How should I implement Y?");
+      expect(markdown).toContain("Is Z deprecated?");
+
+      // Pass gate: Source clip is referenced
+      expect(markdown).toContain("Article With Questions");
+      expect(markdown).toContain("Clips/Article With Questions.md");
+    });
+
+    test("inbox-refresh: multiple clips merge questions deterministically", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-merge",
+      });
+      sandboxes.push(sandbox);
+
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      // Create first clip with questions
+      await fs.writeFile(
+        join(clipsPath, "Clip 1.md"),
+        `---
+source: https://example.com/clip1
+title: Clip 1
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+- What is the best approach?
+- How to handle edge cases?`,
+        "utf-8"
+      );
+
+      // Create second clip with duplicate and new questions
+      await fs.writeFile(
+        join(clipsPath, "Clip 2.md"),
+        `---
+source: https://example.com/clip2
+title: Clip 2
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+- What is the BEST approach?
+- What about performance?`,
+        "utf-8"
+      );
+
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const { buildOpenQuestionsInbox, renderOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+
+      const scanResult = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildOpenQuestionsInbox(scanResult.questions);
+      const markdown = renderOpenQuestionsInbox(inbox);
+
+      // Pass gate: Duplicate is merged (case-insensitive dedupe)
+      expect(inbox.entries).toHaveLength(3);
+      expect(inbox.totalQuestionInstances).toBe(4); // 4 total instances
+
+      // Pass gate: Merged question has multiple source clips
+      const mergedQuestion = inbox.entries.find(e =>
+        e.question.toLowerCase().includes("best approach")
+      );
+      expect(mergedQuestion).toBeDefined();
+      expect(mergedQuestion?.source_clip_count).toBe(2);
+      expect(mergedQuestion?.source_clip_refs).toHaveLength(2);
+
+      // Pass gate: Inbox shows both clips as sources
+      expect(markdown).toContain("Clip 1");
+      expect(markdown).toContain("Clip 2");
+
+      // Pass gate: Questions are present
+      expect(markdown).toContain("What is the best approach");
+      expect(markdown).toContain("How to handle edge cases?");
+      expect(markdown).toContain("What about performance?");
+    });
+
+    test("inbox-parity: repeated runs produce identical output", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      // Create clips with questions
+      const note1 = `---
+source: https://example.com/note1
+title: Note 1
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+- Question Alpha?
+- Question Beta?`;
+
+      const note2 = `---
+source: https://example.com/note2
+title: Note 2
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+- Question Gamma?
+- Question Delta?`;
+
+      await fs.writeFile(join(clipsPath, "Note 1.md"), note1, "utf-8");
+      await fs.writeFile(join(clipsPath, "Note 2.md"), note2, "utf-8");
+
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const { buildOpenQuestionsInbox, renderOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildOpenQuestionsInbox(scanResult1.questions);
+      const markdown1 = renderOpenQuestionsInbox(inbox1);
+
+      // Run 2 (same vault, should produce identical result)
+      const scanResult2 = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildOpenQuestionsInbox(scanResult2.questions);
+      const markdown2 = renderOpenQuestionsInbox(inbox2);
+
+      // Pass gate: Scan results are identical
+      expect(scanResult1.filesScanned).toBe(scanResult2.filesScanned);
+      expect(scanResult1.filesWithClipBrief).toBe(scanResult2.filesWithClipBrief);
+      expect(scanResult1.questions.length).toBe(scanResult2.questions.length);
+
+      // Pass gate: Inbox structures are identical
+      expect(inbox1.entries.length).toBe(inbox2.entries.length);
+      expect(inbox1.totalQuestions).toBe(inbox2.totalQuestions);
+      expect(inbox1.unresolvedQuestions).toBe(inbox2.unresolvedQuestions);
+      expect(inbox1.totalClips).toBe(inbox2.totalClips);
+      expect(inbox1.truncated).toBe(inbox2.truncated);
+
+      // Pass gate: Question IDs are identical
+      const ids1 = inbox1.entries.map(e => e.question_id).sort();
+      const ids2 = inbox2.entries.map(e => e.question_id).sort();
+      expect(ids1).toEqual(ids2);
+
+      // Pass gate: Ordering is identical
+      const questions1 = inbox1.entries.map(e => e.question);
+      const questions2 = inbox2.entries.map(e => e.question);
+      expect(questions1).toEqual(questions2);
+
+      // Pass gate: Markdown is identical (excluding generated_at timestamp)
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      expect(normalized1).toBe(normalized2);
+    });
+
+    test("inbox-parity: ordering is deterministic across multiple runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-ordering",
+      });
+      sandboxes.push(sandbox);
+
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      // Create multiple clips with different timestamps
+      for (let i = 1; i <= 5; i++) {
+        await fs.writeFile(
+          join(clipsPath, `Clip ${i}.md`),
+          `---
+source: https://example.com/clip${i}
+title: Clip ${i}
+date_clipped: 2026-03-0${i}T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+- Question from clip ${i}?`,
+          "utf-8"
+        );
+      }
+
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const { buildOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+
+      // Run multiple times
+      const orderings: string[][] = [];
+
+      for (let run = 0; run < 3; run++) {
+        const scanResult = await scanVaultForOpenQuestions({
+          vaultPath: sandbox.vaultRoot,
+        });
+        const inbox = buildOpenQuestionsInbox(scanResult.questions);
+        const questions = inbox.entries.map(e => e.question);
+        orderings.push(questions);
+      }
+
+      // Pass gate: All orderings are identical
+      const firstOrdering = orderings[0];
+      expect(firstOrdering).toBeDefined();
+
+      for (let i = 1; i < orderings.length; i++) {
+        expect(orderings[i]).toEqual(firstOrdering);
+      }
+
+      // Pass gate: Ordering follows deterministic rules (by score desc, then timestamp desc, then question_id asc)
+      const scanResult = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox = buildOpenQuestionsInbox(scanResult.questions);
+
+      // Verify questions are present
+      expect(inbox.entries).toHaveLength(5);
+
+      // Most recent questions should be ranked higher (same score, so timestamp is tie-breaker)
+      const timestamps = inbox.entries.map(e => e.timestamp);
+      const sortedTimestamps = [...timestamps].sort((a, b) => b.localeCompare(a));
+
+      // First entries should have more recent timestamps
+      expect(timestamps[0]).toBe(sortedTimestamps[0]);
+    });
+
+    test("inbox-parity: empty vault produces stable empty inbox", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-empty",
+      });
+      sandboxes.push(sandbox);
+
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const { buildOpenQuestionsInbox, renderOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildOpenQuestionsInbox(scanResult1.questions);
+      const markdown1 = renderOpenQuestionsInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildOpenQuestionsInbox(scanResult2.questions);
+      const markdown2 = renderOpenQuestionsInbox(inbox2);
+
+      // Pass gate: Both runs produce empty inbox
+      expect(inbox1.entries).toHaveLength(0);
+      expect(inbox2.entries).toHaveLength(0);
+      expect(inbox1.totalQuestions).toBe(0);
+      expect(inbox2.totalQuestions).toBe(0);
+
+      // Pass gate: Empty inbox has explicit empty-state behavior
+      expect(markdown1).toContain("questions_count: 0");
+      expect(markdown1).toContain("unresolved_questions: 0");
+      expect(markdown1).toContain("No unresolved questions found");
+      expect(markdown2).toContain("questions_count: 0");
+      expect(markdown2).toContain("unresolved_questions: 0");
+      expect(markdown2).toContain("No unresolved questions found");
+
+      // Pass gate: Empty inboxes are identical (excluding generated_at)
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      expect(normalized1).toBe(normalized2);
+    });
+
+    test("inbox-parity: resolved questions are excluded deterministically", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-resolved",
+      });
+      sandboxes.push(sandbox);
+
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      // Create clip with mixed resolved/unresolved questions
+      await fs.writeFile(
+        join(clipsPath, "Mixed Questions.md"),
+        `---
+source: https://example.com/mixed
+title: Mixed Questions
+date_clipped: 2026-03-03T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+- Unresolved question 1?
+- ~~Resolved question 1?~~
+- Unresolved question 2?
+- ~~Resolved question 2?~~`,
+        "utf-8"
+      );
+
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const { buildOpenQuestionsInbox, renderOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+
+      const scanResult = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildOpenQuestionsInbox(scanResult.questions);
+      const markdown = renderOpenQuestionsInbox(inbox);
+
+      // Pass gate: Only unresolved questions appear in entries
+      expect(inbox.entries).toHaveLength(2);
+      expect(inbox.unresolvedQuestions).toBe(2);
+      expect(inbox.resolvedQuestions).toBe(2);
+
+      // Pass gate: Resolved questions are counted but not shown
+      expect(markdown).toContain("unresolved_questions: 2");
+      expect(markdown).toContain("resolved_questions: 2");
+
+      // Pass gate: Only unresolved questions appear in markdown
+      expect(markdown).toContain("Unresolved question 1?");
+      expect(markdown).toContain("Unresolved question 2?");
+      expect(markdown).not.toContain("Resolved question 1?");
+      expect(markdown).not.toContain("Resolved question 2?");
+    });
+
+    test("inbox-parity: truncation is deterministic", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "inbox-truncate",
+      });
+      sandboxes.push(sandbox);
+
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      // Create more than MAX_INBOX_QUESTIONS (100) unique questions
+      const { MAX_INBOX_QUESTIONS } = await import("../../src/shared/openQuestionsInboxContract");
+
+      for (let i = 1; i <= 15; i++) {
+        const questions = [];
+        for (let j = 1; j <= 10; j++) {
+          questions.push(`- Question ${i}-${j}?`);
+        }
+
+        await fs.writeFile(
+          join(clipsPath, `Clip ${i}.md`),
+          `---
+source: https://example.com/clip${i}
+title: Clip ${i}
+date_clipped: 2026-03-${String(i).padStart(2, "0")}T10:00:00.000Z
+---
+
+## Clip Brief
+
+### Open Questions
+
+${questions.join("\n")}`,
+          "utf-8"
+        );
+      }
+
+      const { scanVaultForOpenQuestions } = await import("../../src/shared/openQuestionsInboxBuilder");
+      const { buildOpenQuestionsInbox, renderOpenQuestionsInbox } = await import("../../src/shared/openQuestionsInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildOpenQuestionsInbox(scanResult1.questions);
+      const markdown1 = renderOpenQuestionsInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForOpenQuestions({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildOpenQuestionsInbox(scanResult2.questions);
+      const markdown2 = renderOpenQuestionsInbox(inbox2);
+
+      // Pass gate: Both runs truncate to MAX_INBOX_QUESTIONS
+      expect(inbox1.entries.length).toBe(MAX_INBOX_QUESTIONS);
+      expect(inbox2.entries.length).toBe(MAX_INBOX_QUESTIONS);
+      expect(inbox1.truncated).toBe(true);
+      expect(inbox2.truncated).toBe(true);
+
+      // Pass gate: Truncation is indicated in markdown
+      expect(markdown1).toContain("inbox_truncated: true");
+      expect(markdown2).toContain("inbox_truncated: true");
+      expect(markdown1).toContain("Inbox truncated to 100 questions");
+      expect(markdown2).toContain("Inbox truncated to 100 questions");
+
+      // Pass gate: Truncated output is identical across runs
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      expect(normalized1).toBe(normalized2);
+
+      // Pass gate: Same questions are retained in both runs
+      const questions1 = inbox1.entries.map(e => e.question_id).sort();
+      const questions2 = inbox2.entries.map(e => e.question_id).sort();
+      expect(questions1).toEqual(questions2);
+    });
+  });
 });

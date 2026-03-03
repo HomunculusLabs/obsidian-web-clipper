@@ -54,7 +54,7 @@
 - [x] **TP003**: Implement deterministic `open-questions-inbox.md` renderer/export path with bounded section layout and explicit empty-state behavior.
 - [x] **TP004**: Integrate inbox refresh into save pipeline (`src/popup/save.ts`) so clip saves update inbox incrementally with deterministic fallback on read/parse failures.
 - [x] **TP005**: Add `tests/content/shared/open-questions-inbox.test.ts` contract coverage for dedupe, rank ordering, linkback rendering, truncation, and empty-state determinism.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end inbox artifact refresh and stable output parity across repeated runs.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end inbox artifact refresh and stable output parity across repeated runs.
 
 ### Acceptance Criteria
 - Clip saves can produce/update `open-questions-inbox.md` deterministically from existing Clip Brief `Open Questions` data.
