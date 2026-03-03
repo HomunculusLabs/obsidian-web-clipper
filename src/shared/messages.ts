@@ -59,6 +59,21 @@ export type RuntimeRequest =
       /** Maximum files to scan (optional) */
       maxFiles?: number;
     }
+  | {
+      action: "refreshKnowledgeTriageStateSync";
+      /** Vault path on filesystem */
+      vaultPath: string;
+      /** CLI path for saving the sync */
+      cliPath: string;
+      /** Vault name */
+      vault: string;
+      /** Folder to save the sync (optional, defaults to vault root) */
+      syncFolder?: string;
+      /** Maximum files to scan (optional) */
+      maxFiles?: number;
+      /** Maximum depth to recurse when scanning (optional) */
+      maxDepth?: number;
+    }
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
@@ -120,6 +135,19 @@ export type RefreshKeyTakeawaysInboxResponse =
       sourceClipsProcessed: number;
       activeInsights: number;
       archivedInsights: number;
+      truncated: boolean;
+    }
+  | { success: false; error: string };
+
+export type RefreshKnowledgeTriageStateSyncResponse =
+  | {
+      success: true;
+      itemsCount: number;
+      sourceInboxesProcessed: number;
+      statusCountsReady: number;
+      statusCountsInProgress: number;
+      statusCountsBlocked: number;
+      statusCountsDone: number;
       truncated: boolean;
     }
   | { success: false; error: string };

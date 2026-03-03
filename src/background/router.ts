@@ -16,6 +16,7 @@ import { handleSaveContent } from "./handlers/saveContent";
 import { handleTestNativeHost } from "./handlers/testNativeHost";
 import { handleRefreshOpenQuestionsInbox } from "./handlers/refreshOpenQuestionsInbox";
 import { handleRefreshKeyTakeawaysInbox } from "./handlers/refreshKeyTakeawaysInbox";
+import { handleRefreshKnowledgeTriageStateSync } from "./handlers/refreshKnowledgeTriageStateSync";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -45,6 +46,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleRefreshOpenQuestionsInbox(request);
     case "refreshKeyTakeawaysInbox":
       return handleRefreshKeyTakeawaysInbox(request);
+    case "refreshKnowledgeTriageStateSync":
+      return handleRefreshKnowledgeTriageStateSync(request);
     case "testNativeHost":
       return handleTestNativeHost(request);
     default: {

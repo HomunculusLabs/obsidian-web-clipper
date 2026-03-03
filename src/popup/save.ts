@@ -39,7 +39,7 @@ import {
   type RetrievalQueryPackInput,
   type QueryPackDiagnostics
 } from "../shared/retrievalQueryPackContract";
-import type { RefreshOpenQuestionsInboxResponse } from "../shared/messages";
+import type { RefreshOpenQuestionsInboxResponse, RefreshKnowledgeTriageStateSyncResponse } from "../shared/messages";
 
 const MAX_URI_CONTENT_CHARS = 180000;
 
@@ -609,6 +609,77 @@ async function refreshOpenQuestionsInbox(
 }
 
 /**
+ * Refresh the Knowledge Triage State Sync after a successful save.
+ *
+ * This is a fire-and-forget operation that:
+ * 1. Scans the vault for triage items from multiple inboxes
+ * 2. Builds the state sync deterministically
+ * 3. Saves it via CLI
+ *
+ * On any error, logs and continues (does not block or corrupt).
+ */
+async function refreshKnowledgeTriageStateSync(
+  settings: Settings,
+  vault: string
+): Promise<void> {
+  // Skip if sync is disabled (no explicit setting yet, always enable)
+  // For now, we always run the sync if CLI is configured
+
+  // Skip if CLI is not configured (sync requires CLI for file write)
+  if (!settings.obsidianCli?.enabled || !settings.obsidianCli.cliPath) {
+    if (settings.debug) {
+      console.warn("[KnowledgeTriageStateSync] CLI not configured, skipping sync refresh");
+    }
+    return;
+  }
+
+  // Get vault path (required for scanning)
+  const vaultPath = getVaultPathFromSettings(settings);
+  if (!vaultPath) {
+    if (settings.debug) {
+      console.warn("[KnowledgeTriageStateSync] Vault path not available, skipping sync refresh");
+    }
+    return;
+  }
+
+  try {
+    const response = await runtimeSendMessage<
+      RuntimeRequest,
+      RefreshKnowledgeTriageStateSyncResponse
+    >({
+      action: "refreshKnowledgeTriageStateSync",
+      vaultPath,
+      cliPath: settings.obsidianCli.cliPath,
+      vault,
+      syncFolder: undefined, // Save to vault root by default
+      maxFiles: 100,
+      maxDepth: 3,
+    });
+
+    if (response?.success) {
+      if (settings.debug) {
+        console.log(
+          "[KnowledgeTriageStateSync] Refreshed sync:",
+          `${response.itemsCount} items from ${response.sourceInboxesProcessed} inboxes`
+        );
+      }
+    } else {
+      if (settings.debug) {
+        console.warn(
+          "[KnowledgeTriageStateSync] Refresh failed:",
+          response?.error || "Unknown error"
+        );
+      }
+    }
+  } catch (err) {
+    // Deterministic fallback: log error and continue
+    if (settings.debug) {
+      console.warn("[KnowledgeTriageStateSync] Refresh error:", err);
+    }
+  }
+}
+
+/**
  * Refresh the Key Takeaways Inbox after a successful save.
  *
  * This is a fire-and-forget operation that:
@@ -766,6 +837,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
 
         // Refresh Key Takeaways Inbox (fire-and-forget, non-blocking)
         void refreshKeyTakeawaysInbox(settings, prepared.vault);
+
+        // Refresh Knowledge Triage State Sync (fire-and-forget, non-blocking)
+        void refreshKnowledgeTriageStateSync(settings, prepared.vault);
 
         return { usedClipboardFallback, usedMethod: method };
       }
