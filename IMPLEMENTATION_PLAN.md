@@ -56,7 +56,7 @@
 - [x] **TP002**: Implement shared confidence state-sync builder utilities that parse confidence-inbox status edits and reconcile to source refs with stable provenance metadata.
 - [x] **TP003**: Implement deterministic `knowledge-confidence-state-sync.md` renderer/export path with explicit empty-state and bounded diagnostics behavior.
 - [x] **TP004**: Add refresh wiring through runtime surfaces (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeConfidenceStateSync.ts`, `src/popup/save.ts`) using non-fatal save-path behavior.
-- [ ] **TP005**: Add `tests/content/shared/knowledge-confidence-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
+- [x] **TP005**: Add `tests/content/shared/knowledge-confidence-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
 - [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify confidence state-sync refresh parity and intake verification stability.
 
 ### Acceptance Criteria
