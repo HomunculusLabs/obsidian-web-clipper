@@ -7421,7 +7421,7 @@ ${claimLines}
       } = await import("../../src/shared/knowledgeConfidenceStateSyncBuilder");
       const {
         renderConfidenceStateSync,
-      } = await import("../../src/shared/knowledgeConfidenceStateSyncExporter");
+      } = await import("../../src/shared/knowledgeConfidenceStateSyncContract");
 
       // Run refresh twice on empty vault
       const sync1 = await buildStateSyncFromVault({

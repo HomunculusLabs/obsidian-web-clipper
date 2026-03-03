@@ -57,7 +57,7 @@
 - [x] **TP003**: Implement deterministic `knowledge-confidence-state-sync.md` renderer/export path with explicit empty-state and bounded diagnostics behavior.
 - [x] **TP004**: Add refresh wiring through runtime surfaces (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeConfidenceStateSync.ts`, `src/popup/save.ts`) using non-fatal save-path behavior.
 - [x] **TP005**: Add `tests/content/shared/knowledge-confidence-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify confidence state-sync refresh parity and intake verification stability.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify confidence state-sync refresh parity and intake verification stability.
 
 ### Acceptance Criteria
 - `knowledge-confidence-state-sync.md` is produced deterministically from confidence-inbox edits + source artifact refs with stable IDs/provenance fields.
