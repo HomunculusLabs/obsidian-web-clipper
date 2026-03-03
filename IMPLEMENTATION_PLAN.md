@@ -9,6 +9,68 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Execution Queue archive-prune + parity gate for executable queue hygiene
+
+### Distilled Scope
+**Problem**
+- Queue-health now treats `## Execution Queue` as an executable intake surface, but archival tooling only prunes `## Work Queue` completed/planned bullets.
+- As execution-ops intake grows, stale checked entries in `## Execution Queue` can accumulate and dilute active signal quality for autonomous queue-health and ideation flows.
+- There is no deterministic parity gate proving Execution Queue archive entries match exactly what was pruned from TASKPAD.
+
+**In scope**
+- Add deterministic `taskpad:execution-queue-prune` command to archive completed/planned `## Execution Queue` bullets into monthly `docs/archive/TASKPAD_ARCHIVE_YYYY-MM.md` while preserving unchecked execution tasks.
+- Add deterministic `taskpad:execution-queue-archive-parity` gate that validates archive↔TASKPAD fingerprint parity for pruned Execution Queue entries.
+- Add focused fixtures/tests for prune pass/noop/missing-section and parity pass/fail drift states.
+- Wire scripts/docs so execution-queue prune + parity can run in canonical intake-auto verification flow.
+
+**Out of scope**
+- Product clipping/extractor behavior changes.
+- Queue ranking heuristics or target-queue routing logic redesign.
+- Work Queue prune semantics (already covered by existing tooling).
+
+### Ideation Candidates Considered
+1. **[AUTOMATION]** Add `taskpad:execution-queue-prune` + `taskpad:execution-queue-archive-parity` to keep secondary executable queue history compact and auditable. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:queue-heading-bootstrap` to auto-create missing executable queue sections when queue-health fails on missing headings.
+3. **[OBSERVABILITY]** Add `taskpad:executable-queue-drift-report` summarizing Work vs Execution queue stale/active ratios per run.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "taskpad:auto-ideation|taskpad:intake-autoplan|taskpad:queue-health|work-queue|execution queue|verification-pack"`
+  - `select set IMPLEMENTATION_PLAN.md tools/taskpad-auto-ideation.ts tools/taskpad-intake-autoplan.ts tools/taskpad-queue-health.ts tests/tools/taskpad-auto-ideation.test.ts tests/tools/taskpad-intake-autoplan.test.ts README.md package.json docs/quality/taskpad-auto-ideation.md docs/quality/taskpad-queue-health.md`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `tools/taskpad-queue-health.ts`
+  - `tools/taskpad-intake-autoplan.ts`
+  - `tools/taskpad-auto-ideation.ts`
+  - `tests/tools/taskpad-intake-autoplan.test.ts`
+  - `tests/tools/taskpad-auto-ideation.test.ts`
+  - `docs/quality/taskpad-queue-health.md`
+  - `package.json`
+
+### Task Graph
+- [x] **TP001**: Define `taskpad:execution-queue-prune` + `taskpad:execution-queue-archive-parity` contracts (inputs, archive policy, fingerprint schema, deterministic rule IDs, output ordering).
+- [ ] **TP002**: Implement `tools/taskpad-execution-queue-prune.ts` to archive checked/planned Execution Queue bullets while preserving unchecked entries and deterministic summaries.
+- [ ] **TP003**: Implement `tools/taskpad-execution-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable drift diagnostics.
+- [ ] **TP004**: Add fixtures/tests (`tests/tools/taskpad-execution-queue-prune.test.ts`, `tests/tools/taskpad-execution-queue-archive-parity.test.ts`) covering pass/noop/missing-section and parity drift outcomes.
+- [ ] **TP005**: Wire scripts/docs (`package.json`, `README.md`, `docs/quality/taskpad-queue-health.md`) and integrate execution-queue prune/parity commands into intake-auto verification guidance.
+
+### Acceptance Criteria
+- Execution Queue prune archives only checked/planned `## Execution Queue` bullets and preserves unchecked executable items.
+- Archive parity gate deterministically detects missing/extra/mutated archived Execution Queue entries.
+- Tests lock stable diagnostics and pass/noop/fail behavior for prune + parity commands.
+- Canonical scripts/docs include execution-queue prune/parity in machine-auditable intake verification flow.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-execution-queue-prune.test.ts
+bun test tests/tools/taskpad-execution-queue-archive-parity.test.ts
+bun run taskpad:execution-queue-prune -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" --format json
+bun run taskpad:execution-queue-archive-parity -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" --format json
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Work Queue archive-prune + parity gate for deterministic ideation signal
 
 ### Distilled Scope
