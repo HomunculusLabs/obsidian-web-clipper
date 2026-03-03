@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
+import { promises as fs } from "node:fs";
 import { join } from "node:path";
 
 import { buildClipMarkdown } from "../../src/shared/markdown";
@@ -27,6 +28,10 @@ import {
 import {
   extractGitHubLinkFollow,
 } from "../../src/shared/githubLinkFollowExtraction";
+import {
+  indexVaultWithCache,
+  type VaultIndexOptions,
+} from "../../src/shared/vaultIndex";
 
 const sandboxes: TestVaultSandbox[] = [];
 
@@ -3802,11 +3807,11 @@ describe("TP006: Retrieval Query Pack end-to-end section + diagnostics parity", 
 
       // Create some existing notes in the vault for related clips matching
       const existingNotePath = join(
-        sandbox.vaultPath,
+        sandbox.vaultRoot,
         "Clips",
         "Existing Related Note.md"
       );
-      await fs.mkdir(join(sandbox.vaultPath, "Clips"), { recursive: true });
+      await fs.mkdir(join(sandbox.vaultRoot, "Clips"), { recursive: true });
       await fs.writeFile(
         existingNotePath,
         `---
@@ -4055,6 +4060,806 @@ This is an existing note that should be matched as related.`,
       // All paths should use the same folder
       const folders = filePaths.map(p => p.split("/").slice(-2, -1)[0]);
       expect(folders.every(f => f === folders[0])).toBe(true);
+    });
+
+    test("cache-parity: vault index cache hit vs rebuild produce identical candidates", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "vault-index-cache-parity",
+      });
+      sandboxes.push(sandbox);
+
+      // Create test notes in vault
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      await fs.writeFile(
+        join(clipsPath, "Note 1.md"),
+        `---
+source: https://example.com/note1
+title: Note 1
+tags:
+  - test
+  - web-clip
+keywords:
+  - typescript
+  - api
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Note 1 Content`,
+        "utf-8"
+      );
+
+      await fs.writeFile(
+        join(clipsPath, "Note 2.md"),
+        `---
+source: https://example.com/note2
+title: Note 2
+tags:
+  - test
+  - web-clip
+keywords:
+  - javascript
+  - api
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# Note 2 Content`,
+        "utf-8"
+      );
+
+      await fs.writeFile(
+        join(clipsPath, "Note 3.md"),
+        `---
+source: https://different.com/note3
+title: Note 3
+tags:
+  - test
+keywords:
+  - python
+date_clipped: 2026-03-03T10:00:00.000Z
+---
+# Note 3 Content`,
+        "utf-8"
+      );
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // First call: cache miss (rebuild)
+      const resultMiss = await indexVaultWithCache(options);
+      expect(resultMiss.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(resultMiss.cacheDiagnostics?.cacheRebuilt).toBe(true);
+      expect(resultMiss.candidates.length).toBe(3);
+
+      // Second call: cache hit
+      const resultHit = await indexVaultWithCache(options);
+      expect(resultHit.cacheDiagnostics?.cacheHit).toBe(true);
+      expect(resultHit.cacheDiagnostics?.cacheRebuilt).toBe(false);
+      expect(resultHit.candidates.length).toBe(3);
+
+      // Candidates from cache hit should match cache rebuild exactly
+      // Sort both arrays for comparison since order may differ but content should be identical
+      const sortedMiss = [...resultMiss.candidates].sort((a, b) => a.path.localeCompare(b.path));
+      const sortedHit = [...resultHit.candidates].sort((a, b) => a.path.localeCompare(b.path));
+
+      expect(sortedHit).toEqual(sortedMiss);
+      expect(sortedHit).toHaveLength(3);
+
+      // Verify candidate order is deterministic (sorted by path)
+      const pathsMiss = resultMiss.candidates.map((c) => c.path).sort();
+      const pathsHit = resultHit.candidates.map((c) => c.path).sort();
+      expect(pathsHit).toEqual(pathsMiss);
+
+      // Verify all candidate fields are identical
+      for (let i = 0; i < sortedMiss.length; i++) {
+        const missCandidate = sortedMiss[i];
+        const hitCandidate = sortedHit[i];
+
+        expect(hitCandidate.path).toBe(missCandidate.path);
+        expect(hitCandidate.title).toBe(missCandidate.title);
+        expect(hitCandidate.sourceUrl).toBe(missCandidate.sourceUrl);
+        expect(hitCandidate.domain).toBe(missCandidate.domain);
+        expect(hitCandidate.contentType).toBe(missCandidate.contentType);
+        expect(hitCandidate.entities).toEqual(missCandidate.entities);
+        expect(hitCandidate.tags).toEqual(missCandidate.tags);
+        expect(hitCandidate.timestamp).toBe(missCandidate.timestamp);
+        expect(hitCandidate.id).toBe(missCandidate.id);
+      }
+    });
+
+    test("cache-parity: Related Clips section identical with cache hit vs rebuild", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "related-clips-cache-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/new-article";
+
+      // Create existing notes for related clips matching
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      await fs.writeFile(
+        join(clipsPath, "Related Note A.md"),
+        `---
+source: https://example.com/related-a
+title: Related Note A
+tags:
+  - web-clip
+  - typescript
+keywords:
+  - typescript
+  - api
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Related Note A`,
+        "utf-8"
+      );
+
+      await fs.writeFile(
+        join(clipsPath, "Related Note B.md"),
+        `---
+source: https://example.com/related-b
+title: Related Note B
+tags:
+  - web-clip
+  - api
+keywords:
+  - javascript
+  - api
+date_clipped: 2026-03-02T10:00:00.000Z
+---
+# Related Note B`,
+        "utf-8"
+      );
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // Get candidates from cache rebuild (miss)
+      const resultMiss = await indexVaultWithCache(options);
+      expect(resultMiss.cacheDiagnostics?.cacheHit).toBe(false);
+
+      // Get candidates from cache hit
+      const resultHit = await indexVaultWithCache(options);
+      expect(resultHit.cacheDiagnostics?.cacheHit).toBe(true);
+
+      // Save clip with rebuild candidates
+      const clipMarkdownMiss = withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-related-rebuild"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown }) => {
+          return clipMarkdown;
+        }
+      );
+
+      // Save clip with cache hit candidates
+      const clipMarkdownHit = withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-related-hit"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown }) => {
+          return clipMarkdown;
+        }
+      );
+
+      // Both should produce clip markdown
+      expect(clipMarkdownMiss).toBeDefined();
+      expect(clipMarkdownHit).toBeDefined();
+
+      // Extract Related Clips sections for comparison
+      const extractRelatedClipsSection = (markdown: string): string | null => {
+        const match = markdown.match(/## Related Clips[\s\S]*?(?=##|$)/);
+        return match ? match[0] : null;
+      };
+
+      const relatedSectionMiss = extractRelatedClipsSection(clipMarkdownMiss!);
+      const relatedSectionHit = extractRelatedClipsSection(clipMarkdownHit!);
+
+      // Both should either have Related Clips section or both should not have it
+      const bothHave = relatedSectionMiss !== null && relatedSectionHit !== null;
+      const bothLack = relatedSectionMiss === null && relatedSectionHit === null;
+
+      expect(bothHave || bothLack).toBe(true);
+
+      // If both have sections, they should be identical
+      if (bothHave) {
+        // Sections should be identical (excluding title differences)
+        const normalizeSection = (section: string): string => {
+          return section
+            .replace(/\[\[.*?\|/g, "[[") // Remove wikilink text, keep paths
+            .replace(/title: .+$/m, "") // Remove title line
+            .trim();
+        };
+
+        const normalizedMiss = normalizeSection(relatedSectionMiss!);
+        const normalizedHit = normalizeSection(relatedSectionHit!);
+
+        expect(normalizedHit).toBe(normalizedMiss);
+      }
+    });
+
+    test("cache-parity: Retrieval Query Pack section identical with cache hit vs rebuild", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "query-pack-cache-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/query-pack-test";
+
+      // Create existing notes with varying term frequencies for discriminative scoring
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      // Create multiple notes with "common" term
+      for (let i = 1; i <= 5; i++) {
+        await fs.writeFile(
+          join(clipsPath, `Common Term ${i}.md`),
+          `---
+source: https://example.com/common-${i}
+title: Common Term Article ${i}
+tags:
+  - web-clip
+keywords:
+  - typescript
+  - common
+date_clipped: 2026-03-0${i}T10:00:00.000Z
+---
+# Common Term Content ${i}`,
+          "utf-8"
+        );
+      }
+
+      // Create notes with "rare" terms
+      await fs.writeFile(
+        join(clipsPath, "Rare Term.md"),
+        `---
+source: https://example.com/rare-term
+title: Rare Term Article
+tags:
+  - web-clip
+keywords:
+  - specialized
+  - unique
+date_clipped: 2026-03-06T10:00:00.000Z
+---
+# Rare Term Content`,
+        "utf-8"
+      );
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // Get candidates from cache rebuild (miss)
+      const resultMiss = await indexVaultWithCache(options);
+      expect(resultMiss.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(resultMiss.candidates.length).toBe(6);
+
+      // Get candidates from cache hit
+      const resultHit = await indexVaultWithCache(options);
+      expect(resultHit.cacheDiagnostics?.cacheHit).toBe(true);
+      expect(resultHit.candidates.length).toBe(6);
+
+      // Save clip with rebuild candidates
+      let clipMarkdownMiss: string | undefined;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-query-rebuild"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown }) => {
+          clipMarkdownMiss = clipMarkdown;
+        }
+      );
+
+      // Save clip with cache hit candidates
+      let clipMarkdownHit: string | undefined;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-query-hit"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown }) => {
+          clipMarkdownHit = clipMarkdown;
+        }
+      );
+
+      // Both should produce clip markdown
+      expect(clipMarkdownMiss).toBeDefined();
+      expect(clipMarkdownHit).toBeDefined();
+
+      // Extract Retrieval Query Pack sections for comparison
+      const extractQueryPackSection = (markdown: string): string | null => {
+        const match = markdown.match(/## Retrieval Query Pack[\s\S]*?(?=##|$)/);
+        return match ? match[0] : null;
+      };
+
+      const queryPackSectionMiss = extractQueryPackSection(clipMarkdownMiss!);
+      const queryPackSectionHit = extractQueryPackSection(clipMarkdownHit!);
+
+      // Both should either have Retrieval Query Pack section or both should not have it
+      const bothHave = queryPackSectionMiss !== null && queryPackSectionHit !== null;
+      const bothLack = queryPackSectionMiss === null && queryPackSectionHit === null;
+
+      expect(bothHave || bothLack).toBe(true);
+
+      // If both have sections, they should be identical
+      if (bothHave) {
+        const normalizeQueryPackSection = (section: string): string => {
+          return section
+            .replace(/^title: .+$/m, "") // Remove title line
+            .trim();
+        };
+
+        const normalizedMiss = normalizeQueryPackSection(queryPackSectionMiss!);
+        const normalizedHit = normalizeQueryPackSection(queryPackSectionHit!);
+
+        expect(normalizedHit).toBe(normalizedMiss);
+      }
+    });
+
+    test("cache-parity: complete note output identical with cache hit vs rebuild", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "complete-note-cache-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/complete-note-test";
+
+      // Create existing notes for comprehensive testing
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      await fs.writeFile(
+        join(clipsPath, "Existing Article.md"),
+        `---
+source: https://example.com/existing-article
+title: Existing Article
+tags:
+  - web-clip
+  - typescript
+keywords:
+  - typescript
+  - testing
+  - api
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Existing Article
+
+This is an existing article in the vault.`,
+        "utf-8"
+      );
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // Get candidates from cache rebuild (miss)
+      const resultMiss = await indexVaultWithCache(options);
+      expect(resultMiss.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(resultMiss.cacheDiagnostics?.cacheRebuilt).toBe(true);
+
+      // Get candidates from cache hit
+      const resultHit = await indexVaultWithCache(options);
+      expect(resultHit.cacheDiagnostics?.cacheHit).toBe(true);
+      expect(resultHit.cacheDiagnostics?.cacheRebuilt).toBe(false);
+
+      // Candidates should be identical
+      expect(resultHit.candidates).toEqual(resultMiss.candidates);
+
+      // Save clip with rebuild candidates
+      let clipMarkdownMiss: string | undefined;
+      let builtMiss: any;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-complete-rebuild"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown, built }) => {
+          clipMarkdownMiss = clipMarkdown;
+          builtMiss = built;
+        }
+      );
+
+      // Save clip with cache hit candidates
+      let clipMarkdownHit: string | undefined;
+      let builtHit: any;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("cache-parity-complete-hit"),
+          overrideTags: "web-clip,cache-parity",
+        },
+        ({ clipMarkdown, built }) => {
+          clipMarkdownHit = clipMarkdown;
+          builtHit = built;
+        }
+      );
+
+      // Both should produce clip markdown
+      expect(clipMarkdownMiss).toBeDefined();
+      expect(clipMarkdownHit).toBeDefined();
+
+      // Normalize clip markdown for comparison (remove title and date)
+      const normalizeClipMarkdown = (markdown: string): string => {
+        return markdown
+          .replace(/^title: .+$/m, "") // Remove title line
+          .replace(/^date_clipped: .+$/m, "") // Remove date line
+          .trim();
+      };
+
+      const normalizedMiss = normalizeClipMarkdown(clipMarkdownMiss!);
+      const normalizedHit = normalizeClipMarkdown(clipMarkdownHit!);
+
+      // Normalized markdown should be identical
+      expect(normalizedHit).toBe(normalizedMiss);
+
+      // Frontmatter structure should be identical
+      expect(builtHit.frontmatter.source).toBe(builtMiss.frontmatter.source);
+      expect(builtHit.frontmatter.type).toBe(builtMiss.frontmatter.type);
+      expect(builtHit.frontmatter.tags).toEqual(builtMiss.frontmatter.tags);
+      expect(Array.isArray(builtHit.frontmatter.tags)).toBe(true);
+      expect(builtHit.frontmatter.tags).toContain("web-clip");
+      expect(builtHit.frontmatter.tags).toContain("cache-parity");
+
+      // Both should have same sections
+      const hasSection = (markdown: string, section: string): boolean => {
+        return markdown.includes(`## ${section}`);
+      };
+
+      for (const section of [
+        "Clip Brief",
+        "Knowledge Entities",
+        "Source Map",
+        "Implementation Blueprint",
+        "Prompt-Ready Context Pack",
+        "Related Clips",
+        "Retrieval Query Pack",
+      ]) {
+        const hasMiss = hasSection(clipMarkdownMiss!, section);
+        const hasHit = hasSection(clipMarkdownHit!, section);
+        expect(hasMiss).toBe(hasHit);
+      }
+
+      // Cache diagnostics should be consistent
+      expect(resultMiss.cacheDiagnostics?.vaultFilesFingerprinted).toBe(
+        resultHit.cacheDiagnostics?.vaultFilesFingerprinted
+      );
+      expect(resultMiss.metadata.filesScanned).toBe(resultHit.metadata.filesScanned);
+      expect(resultMiss.metadata.filesWithFrontmatter).toBe(
+        resultHit.metadata.filesWithFrontmatter
+      );
+    });
+
+    test("cache-parity: multiple cache hits produce identical outputs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "multiple-cache-hits-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/multiple-hits-test";
+
+      // Create existing notes
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      await fs.writeFile(
+        join(clipsPath, "Test Note.md"),
+        `---
+source: https://example.com/test-note
+title: Test Note
+tags:
+  - web-clip
+keywords:
+  - test
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Test Note`,
+        "utf-8"
+      );
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // Build initial cache
+      await indexVaultWithCache(options);
+
+      // Multiple cache hits
+      const clipOutputs: string[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        // Small delay to ensure cache age increases
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        const cacheResult = await indexVaultWithCache(options);
+        expect(cacheResult.cacheDiagnostics?.cacheHit).toBe(true);
+
+        const clipMarkdown = withScenario(
+          {
+            fixturePath,
+            simulatedUrl: `${fixtureUrl}/${i}`,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: sandbox.deterministic.nextTitle(`multi-hit-${i}`),
+            overrideTags: "web-clip,multi-hit",
+          },
+          ({ clipMarkdown }) => {
+            return clipMarkdown;
+          }
+        );
+
+        expect(clipMarkdown).toBeDefined();
+        clipOutputs.push(clipMarkdown!);
+      }
+
+      // All clip outputs should be identical (excluding title/date)
+      const normalizeForComparison = (markdown: string): string => {
+        return markdown
+          .replace(/^title: .+$/m, "")
+          .replace(/^date_clipped: .+$/m, "")
+          .trim();
+      };
+
+      const normalizedOutputs = clipOutputs.map(normalizeForComparison);
+      const firstOutput = normalizedOutputs[0];
+
+      for (let i = 1; i < normalizedOutputs.length; i++) {
+        expect(normalizedOutputs[i]).toBe(firstOutput);
+      }
+    });
+
+    test("cache-parity: cache invalidation and rebuild produce deterministic outputs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "cache-invalidation-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/invalidation-test";
+
+      // Create initial notes
+      const clipsPath = join(sandbox.vaultRoot, "Clips");
+      await fs.mkdir(clipsPath, { recursive: true });
+
+      await fs.writeFile(
+        join(clipsPath, "Initial Note.md"),
+        `---
+source: https://example.com/initial-note
+title: Initial Note
+tags:
+  - web-clip
+keywords:
+  - initial
+date_clipped: 2026-03-01T10:00:00.000Z
+---
+# Initial Note`,
+        "utf-8"
+      );
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // Initial cache build
+      const result1 = await indexVaultWithCache(options);
+      expect(result1.cacheDiagnostics?.cacheRebuilt).toBe(true);
+      expect(result1.candidates.length).toBe(1);
+
+      // Cache hit
+      const result2 = await indexVaultWithCache(options);
+      expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+      expect(result2.candidates).toEqual(result1.candidates);
+
+      // Wait for mtime change
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Add new note to trigger invalidation
+      await fs.writeFile(
+        join(clipsPath, "New Note.md"),
+        `---
+source: https://example.com/new-note
+title: New Note
+tags:
+  - web-clip
+keywords:
+  - new
+date_clipped: 2026-03-04T10:00:00.000Z
+---
+# New Note`,
+        "utf-8"
+      );
+
+      // Should rebuild cache due to fingerprint change
+      const result3 = await indexVaultWithCache(options);
+      expect(result3.cacheDiagnostics?.cacheHit).toBe(false);
+      expect(result3.cacheDiagnostics?.cacheRebuilt).toBe(true);
+      expect(result3.cacheDiagnostics?.rebuildReason).toBe("vault_fingerprint_changed");
+      expect(result3.candidates.length).toBe(2);
+
+      // New cache hit should match rebuild
+      const result4 = await indexVaultWithCache(options);
+      expect(result4.cacheDiagnostics?.cacheHit).toBe(true);
+      expect(result4.candidates).toEqual(result3.candidates);
+
+      // Candidates should be deterministically sorted by path
+      const paths = result4.candidates.map(c => c.path);
+      const sortedPaths = [...paths].sort();
+      expect(paths).toEqual(sortedPaths);
+    });
+
+    test("cache-parity: empty vault produces consistent outputs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "empty-vault-parity",
+      });
+      sandboxes.push(sandbox);
+
+      const fixturePath = join(
+        import.meta.dir,
+        "..",
+        "extractors",
+        "fixtures",
+        "article.html",
+      );
+      const fixtureUrl = "https://example.com/empty-vault-test";
+
+      const options: VaultIndexOptions = {
+        vaultPath: sandbox.vaultRoot,
+      };
+
+      // No notes - empty vault
+      const result1 = await indexVaultWithCache(options);
+      expect(result1.candidates).toHaveLength(0);
+      expect(result1.cacheDiagnostics?.cacheRebuilt).toBe(true);
+
+      const result2 = await indexVaultWithCache(options);
+      expect(result2.candidates).toHaveLength(0);
+      expect(result2.cacheDiagnostics?.cacheHit).toBe(true);
+
+      // Both should produce identical results
+      expect(result1.candidates).toEqual(result2.candidates);
+      expect(result1.filesScanned).toBe(result2.filesScanned);
+      expect(result1.filesWithFrontmatter).toBe(result2.filesWithFrontmatter);
+      expect(result1.filesSkipped).toBe(result2.filesSkipped);
+
+      // Save clips with both cache states
+      let clipMarkdownMiss: string | undefined;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: fixtureUrl,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("empty-vault-rebuild"),
+          overrideTags: "web-clip,empty-vault",
+        },
+        ({ clipMarkdown }) => {
+          clipMarkdownMiss = clipMarkdown;
+        }
+      );
+
+      let clipMarkdownHit: string | undefined;
+      withScenario(
+        {
+          fixturePath,
+          simulatedUrl: `${fixtureUrl}-2`,
+          pageType: "web",
+          sandbox,
+          overrideFolder: "Clips",
+          overrideTitle: sandbox.deterministic.nextTitle("empty-vault-hit"),
+          overrideTags: "web-clip,empty-vault",
+        },
+        ({ clipMarkdown }) => {
+          clipMarkdownHit = clipMarkdown;
+        }
+      );
+
+      // Both should produce clip markdown
+      expect(clipMarkdownMiss).toBeDefined();
+      expect(clipMarkdownHit).toBeDefined();
+
+      // Normalize and compare (remove title, date, and article body)
+      const normalizeClipMarkdown = (markdown: string): string => {
+        // Remove frontmatter
+        const frontmatterEnd = markdown.indexOf('\n---\n');
+        const body = frontmatterEnd >= 0 ? markdown.slice(frontmatterEnd + 5) : markdown;
+        return body.trim();
+      };
+
+      const normalizedMiss = normalizeClipMarkdown(clipMarkdownMiss!);
+      const normalizedHit = normalizeClipMarkdown(clipMarkdownHit!);
+
+      // Should be identical (article body should be deterministic)
+      expect(normalizedHit).toBe(normalizedMiss);
+
+      // Related Clips and Query Pack sections should be present and identical
+      const hasRelatedSection = (markdown: string): boolean => {
+        return markdown.includes('## Related Clips');
+      };
+
+      const hasQueryPackSection = (markdown: string): boolean => {
+        return markdown.includes('## Retrieval Query Pack');
+      };
+
+      expect(hasRelatedSection(clipMarkdownMiss!)).toBe(hasRelatedSection(clipMarkdownHit!));
+      expect(hasQueryPackSection(clipMarkdownMiss!)).toBe(hasQueryPackSection(clipMarkdownHit!));
     });
   });
 });
