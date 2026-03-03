@@ -53,6 +53,13 @@ interface CommandRunResult {
 
 interface QueueHealthInterpretation {
   isQueueEmptyFailure: boolean;
+  executableQueueTotal: number;
+  workQueueUncheckedCount: number;
+  executionQueueUncheckedCount: number;
+  autonomousUncheckedCount: number;
+  selfImprovementUncheckedCount: number;
+  queueHealthStatus: "pass" | "fail";
+  queueHealthReasonCode: string | null;
 }
 
 interface AutoIdeationInterpretation {
@@ -202,18 +209,52 @@ function outputContainsPlanIntegrityFailSignal(output: string): boolean {
 }
 
 function interpretQueueHealth(run: CommandRunResult): QueueHealthInterpretation {
+  // Try to parse JSON output first for executable-queue-aware checks
+  const jsonPayload = extractJsonBlock(run.stdout, "QUEUE_HEALTH_JSON_START", "QUEUE_HEALTH_JSON_END");
+
+  if (jsonPayload && typeof jsonPayload === "object") {
+    const obj = jsonPayload as Record<string, unknown>;
+
+    // Extract queue health fields with defaults for missing fields
+    const queueHealth = obj.queueHealth as Record<string, unknown> | undefined;
+    const status = obj.status as string | undefined;
+    const reasonCode = obj.reasonCode as string | undefined;
+
+    return {
+      isQueueEmptyFailure: status === "fail" && reasonCode === "QH001_EXECUTABLE_QUEUES_EMPTY",
+      executableQueueTotal: typeof queueHealth?.executableQueueTotal === "number" ? queueHealth.executableQueueTotal : 0,
+      workQueueUncheckedCount: typeof queueHealth?.workQueueUncheckedCount === "number" ? queueHealth.workQueueUncheckedCount : 0,
+      executionQueueUncheckedCount: typeof queueHealth?.executionQueueUncheckedCount === "number" ? queueHealth.executionQueueUncheckedCount : 0,
+      autonomousUncheckedCount: typeof queueHealth?.autonomousUncheckedCount === "number" ? queueHealth.autonomousUncheckedCount : 0,
+      selfImprovementUncheckedCount: typeof queueHealth?.selfImprovementUncheckedCount === "number" ? queueHealth.selfImprovementUncheckedCount : 0,
+      queueHealthStatus: status === "pass" || status === "fail" ? status : "fail",
+      queueHealthReasonCode: typeof reasonCode === "string" && reasonCode.length > 0 ? reasonCode : null,
+    };
+  }
+
+  // Fallback to text-based detection for backward compatibility
   const combined = `${run.stdout}\n${run.stderr}`;
   const hasEmptyQueueSignal = outputContainsQueueEmptySignal(combined);
 
   return {
     isQueueEmptyFailure: run.exitCode !== 0 && hasEmptyQueueSignal,
+    executableQueueTotal: 0,
+    workQueueUncheckedCount: 0,
+    executionQueueUncheckedCount: 0,
+    autonomousUncheckedCount: 0,
+    selfImprovementUncheckedCount: 0,
+    queueHealthStatus: run.exitCode === 0 ? "pass" : "fail",
+    queueHealthReasonCode: null,
   };
 }
 
-function interpretVerifyFull(run: CommandRunResult): VerifyFullInterpretation {
+function interpretVerifyFull(run: CommandRunResult, queueHealthInterpretation: QueueHealthInterpretation): VerifyFullInterpretation {
   const combined = `${run.stdout}\n${run.stderr}`;
   return {
-    isQueueEmptyGateFailure: run.exitCode !== 0 && outputContainsQueueEmptySignal(combined),
+    // Use executable-queue-aware check from JSON interpretation if available
+    isQueueEmptyGateFailure:
+      queueHealthInterpretation.isQueueEmptyFailure ||
+      (run.exitCode !== 0 && outputContainsQueueEmptySignal(combined)),
     isPlanIntegrityGateFailure: run.exitCode !== 0 && outputContainsPlanIntegrityFailSignal(combined),
   };
 }
@@ -295,22 +336,25 @@ function buildVerdict(result: {
   steps: RecoverStepResult[];
   hadContractBlock: boolean;
   hadRuntimeBlock: boolean;
+  queueInitialInterpretation: QueueHealthInterpretation;
+  queueRecheckInterpretation: QueueHealthInterpretation;
 }): { verdict: RecoverVerdict; reasonCode: string; nextActions: string[] } {
   const queueRecheckStep = result.steps.find((step) => step.id === "queue-health-recheck");
   const planIntegrityStep = result.steps.find((step) => step.id === "plan-integrity");
   const verifyFullStep = result.steps.find((step) => step.id === "verify-intake-full");
 
+  // Use executable-queue-aware check from JSON interpretation
   if (
     queueRecheckStep?.status === "fail" &&
     (queueRecheckStep.reasonCode === "QUEUE_STILL_EMPTY_AFTER_RECOVERY" ||
-      outputContainsQueueEmptySignal(`${queueRecheckStep.stdout}\n${queueRecheckStep.stderr}`))
+      result.queueRecheckInterpretation.isQueueEmptyFailure)
   ) {
     return {
       verdict: "hold",
       reasonCode: RECOVER_HOLD_QUEUE_EMPTY,
       nextActions: [
-        "Seed at least one unchecked canonical bullet in TASKPAD and rerun taskpad:intake:recover.",
-        "If fallback artifact exists, apply it or investigate why auto-ideation did not repopulate queues.",
+        "Seed at least one unchecked canonical bullet in Work Queue and rerun taskpad:intake:recover.",
+        "If fallback artifact exists, apply it or investigate why auto-ideation did not repopulate executable queues.",
       ],
     };
   }
@@ -384,8 +428,10 @@ function buildVerdict(result: {
 export function runIntakeRecoverComposition(taskpadPath: string, planPath: string): IntakeRecoverCompositionResult {
   const steps: RecoverStepResult[] = [];
 
-  const queueInitialRun = runScript("taskpad:queue-health", ["--taskpad", taskpadPath]);
+  // Use JSON format for executable-queue-aware readiness checks
+  const queueInitialRun = runScript("taskpad:queue-health", ["--taskpad", taskpadPath, "--format", "json"]);
   const queueInitialInterpretation = interpretQueueHealth(queueInitialRun);
+  let queueRecheckInterpretation: QueueHealthInterpretation;
   const queueInitialStep = makeStepFromRun(
     "queue-health-initial",
     queueInitialRun,
@@ -398,11 +444,12 @@ export function runIntakeRecoverComposition(taskpadPath: string, planPath: strin
   );
   steps.push(queueInitialStep);
 
-  // Determine routing mode for machine-observable output
+  // Determine routing mode for machine-observable output based on executable queue state
   const routingMode: "noop" | "recovery" = queueInitialInterpretation.isQueueEmptyFailure ? "recovery" : "noop";
   const routingChoiceReason = queueInitialInterpretation.isQueueEmptyFailure
-    ? "Initial queue health reported empty; entering recovery branch with --target-queue work"
-    : "Initial queue health passed; skipping recovery branch";
+    ? "Initial queue health reported empty executable queues (workQueue + executionQueue); entering recovery branch with --target-queue work"
+    : `Initial queue health passed; skipping recovery branch (${queueInitialInterpretation.executableQueueTotal} executable items)`;
+
 
   let autoIdeationStep: RecoverStepResult;
   let applyFallbackStep: RecoverStepResult;
@@ -480,15 +527,16 @@ export function runIntakeRecoverComposition(taskpadPath: string, planPath: strin
       );
     }
 
-    const queueRecheckRun = runScript("taskpad:queue-health", ["--taskpad", taskpadPath]);
-    const queueRecheckInterpretation = interpretQueueHealth(queueRecheckRun);
+    // Use JSON format for executable-queue-aware readiness checks
+    const queueRecheckRun = runScript("taskpad:queue-health", ["--taskpad", taskpadPath, "--format", "json"]);
+    queueRecheckInterpretation = interpretQueueHealth(queueRecheckRun);
     queueRecheckStep = makeStepFromRun(
       "queue-health-recheck",
       queueRecheckRun,
       queueRecheckInterpretation.isQueueEmptyFailure
         ? {
             reasonCode: "QUEUE_STILL_EMPTY_AFTER_RECOVERY",
-            summary: "Queue remained empty after deterministic recovery branch.",
+            summary: "Executable queues remained empty after deterministic recovery branch.",
           }
         : undefined,
     );
@@ -554,14 +602,14 @@ export function runIntakeRecoverComposition(taskpadPath: string, planPath: strin
     steps.push(planIntegrityStep);
 
     const verifyFullRun = runScript("verify:taskpad:intake:full", ["--taskpad", taskpadPath, "--plan", planPath]);
-    const verifyInterpretation = interpretVerifyFull(verifyFullRun);
+    const verifyInterpretation = interpretVerifyFull(verifyFullRun, queueRecheckInterpretation);
     const verifyStep = makeStepFromRun(
       "verify-intake-full",
       verifyFullRun,
       verifyInterpretation.isQueueEmptyGateFailure
         ? {
             reasonCode: "VERIFY_FULL_QUEUE_EMPTY",
-            summary: "Full intake verify failed because both queues are empty.",
+            summary: "Full intake verify failed because executable queues are empty.",
           }
         : verifyInterpretation.isPlanIntegrityGateFailure
           ? {
@@ -577,6 +625,8 @@ export function runIntakeRecoverComposition(taskpadPath: string, planPath: strin
     steps,
     hadContractBlock,
     hadRuntimeBlock,
+    queueInitialInterpretation,
+    queueRecheckInterpretation,
   });
 
   return {
