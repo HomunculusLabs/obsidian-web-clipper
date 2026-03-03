@@ -11,6 +11,10 @@ const TOOL_PATH = join(PROJECT_ROOT, "tools", "taskpad-intake-recover.ts");
 const FIXTURES_ROOT = join(PROJECT_ROOT, "tests", "tools", "fixtures");
 const tempDirs: string[] = [];
 
+function readFixtureFile(fileName: string): string {
+  return readFileSync(join(FIXTURES_ROOT, fileName), "utf8");
+}
+
 interface ScenarioStep {
   script: string;
   exitCode: number;

@@ -1,4 +1,25 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, test } from "bun:test";
+
+import { countQueueHealth } from "../../tools/taskpad-queue-health";
+
+// ============================================================================
+// TP004: Focused tests for queue-health and intake-autoplan fixture coverage
+//
+// These tests verify queue state detection across:
+// - Fully-empty executable queues (Work/Execution empty, intake has items)
+// - Partial coverage scenarios (some queues have items, some don't)
+// - Non-regression on legacy autonomous/self-improvement-only cases (no Work/Execution queues)
+// ============================================================================
+
+const PROJECT_ROOT = join(import.meta.dir, "..", "..");
+const FIXTURES_ROOT = join(PROJECT_ROOT, "tests", "tools", "fixtures");
+
+function readFixtureFile(fileName: string): string {
+  return readFileSync(join(FIXTURES_ROOT, fileName), "utf8");
+}
 
 /**
  * TP007: Focused tests for strict-slice blocker propagation and deterministic failure metadata
@@ -495,5 +516,284 @@ describe("taskpad:intake:autoplan slice creation behavior", () => {
       (v) => v.ruleId === "PLI009_NO_UNCHECKED_TP_TASKS",
     );
     expect(hasStrictModeFailure).toBe(true);
+  });
+});
+
+// ============================================================================
+// TP004: Fixture-based tests for intake-autoplan covering queue states
+// ============================================================================
+
+describe("TP004: intake-autoplan fixture-based queue state tests", () => {
+  describe("fully-empty executable queues with intake items", () => {
+    test("detects empty executable queues when intake queues have unchecked items", () => {
+      // This is the key case: executable queues (Work/Execution) are empty,
+      // but non-executable backlog sections (Autonomous/Self-Improvement) have items.
+      // This should trigger auto-ideation for empty-queue recovery.
+      const markdown = `# TASKPAD
+
+## Work Queue
+(empty)
+
+## Execution Queue
+(empty)
+
+## Autonomous Kickoff Queue
+- [ ] Add queue-health tests
+- [ ] Update intake-autoplan
+
+## Self-Improvement Backlog
+- [ ] Refactor queue-health
+`;
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(0);
+
+      expect(counts.autonomousUncheckedCount).toBe(2);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(3);
+
+      expect(counts.workQueueHeadingFound).toBe(true);
+      expect(counts.executionQueueHeadingFound).toBe(true);
+
+      expect(counts.totalUnchecked).toBe(3);
+    });
+
+    test("uses executable-empty fixture for queue health validation", () => {
+      // Verify the fixture exists and has the expected state
+      const fixtureContent = readFixtureFile("taskpad-queue-health-executable-empty.md");
+
+      expect(typeof fixtureContent).toBe("string");
+      expect(fixtureContent.length).toBeGreaterThan(0);
+      expect(fixtureContent).toContain("## Work Queue");
+      expect(fixtureContent).toContain("## Execution Queue");
+      expect(fixtureContent).toContain("(empty)");
+      expect(fixtureContent).toContain("## Autonomous Kickoff Queue");
+      expect(fixtureContent).toContain("## Self-Improvement Backlog");
+
+      const counts = countQueueHealth(fixtureContent);
+
+      // Should detect executable queues as empty
+      expect(counts.executableQueueTotal).toBe(0);
+
+      // Should detect intake queues as having items
+      expect(counts.intakeQueueTotal).toBeGreaterThan(0);
+    });
+  });
+
+  describe("partial coverage queue states", () => {
+    test("handles work queue with items, execution queue empty", () => {
+      const markdown = `# TASKPAD
+
+## Work Queue
+- [ ] Task 1 Verify: bun test
+- [ ] Task 2 Verify: bun run lint
+
+## Execution Queue
+(empty)
+
+## Autonomous Kickoff Queue
+(empty)
+
+## Self-Improvement Backlog
+(empty)
+`;
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(2);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(2);
+      expect(counts.intakeQueueTotal).toBe(0);
+      expect(counts.totalUnchecked).toBe(2);
+    });
+
+    test("handles execution queue with items, work queue empty", () => {
+      const markdown = `# TASKPAD
+
+## Work Queue
+(empty)
+
+## Execution Queue
+- [ ] Hotfix task Verify: bun run deploy:hotfix
+
+## Autonomous Kickoff Queue
+(empty)
+
+## Self-Improvement Backlog
+(empty)
+`;
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(1);
+      expect(counts.executableQueueTotal).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(0);
+      expect(counts.totalUnchecked).toBe(1);
+    });
+
+    test("handles both executable queues with items", () => {
+      const markdown = `# TASKPAD
+
+## Work Queue
+- [ ] Work task 1 Verify: bun test
+- [ ] Work task 2 Verify: bun run lint
+
+## Execution Queue
+- [ ] Execution task 1 Verify: bun run deploy
+
+## Autonomous Kickoff Queue
+(empty)
+
+## Self-Improvement Backlog
+(empty)
+`;
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(2);
+      expect(counts.executionQueueUncheckedCount).toBe(1);
+      expect(counts.executableQueueTotal).toBe(3);
+      expect(counts.intakeQueueTotal).toBe(0);
+      expect(counts.totalUnchecked).toBe(3);
+    });
+
+    test("uses execution-only fixture for partial coverage validation", () => {
+      const fixtureContent = readFixtureFile("taskpad-queue-health-execution-only.md");
+
+      const counts = countQueueHealth(fixtureContent);
+
+      // Only execution queue should have items
+      expect(counts.executionQueueUncheckedCount).toBe(1);
+      expect(counts.workQueueUncheckedCount).toBe(0);
+
+      expect(counts.executableQueueTotal).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(0);
+    });
+  });
+
+  describe("non-regression on legacy autonomous/self-improvement-only cases", () => {
+    test("handles legacy taskpad without Work/Execution queues", () => {
+      const markdown = `# TASKPAD
+
+## Autonomous Kickoff Queue
+- [ ] Autonomous task 1
+- [ ] Autonomous task 2
+
+## Self-Improvement Backlog
+- [ ] Backlog item 1
+`;
+
+      const counts = countQueueHealth(markdown);
+
+      // Work/Execution queues should not exist (counts = 0)
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+
+      // Intake queues should be counted
+      expect(counts.autonomousUncheckedCount).toBe(2);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+
+      expect(counts.intakeQueueTotal).toBe(3);
+      expect(counts.executableQueueTotal).toBe(0);
+      expect(counts.totalUnchecked).toBe(3);
+
+      // Headings should not be found for executable queues
+      expect(counts.workQueueHeadingFound).toBe(false);
+      expect(counts.executionQueueHeadingFound).toBe(false);
+    });
+
+    test("uses legacy empty fixture for non-regression validation", () => {
+      const fixtureContent = readFixtureFile("taskpad-queue-health-empty.md");
+
+      const counts = countQueueHealth(fixtureContent);
+
+      // Should handle legacy taskpad without executable queue headings
+      expect(counts.workQueueHeadingFound).toBe(false);
+      expect(counts.executionQueueHeadingFound).toBe(false);
+
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+
+      // Should still count intake queues
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(0);
+    });
+
+    test("uses legacy pass fixture for non-regression validation", () => {
+      const fixtureContent = readFixtureFile("taskpad-queue-health-pass.md");
+
+      const counts = countQueueHealth(fixtureContent);
+
+      // Should handle legacy taskpad without executable queue headings
+      expect(counts.workQueueHeadingFound).toBe(false);
+      expect(counts.executionQueueHeadingFound).toBe(false);
+
+      // Should still count intake queues correctly
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(1);
+    });
+  });
+
+  describe("deterministic queue health for autoplan decision making", () => {
+    test("executable queue empty status is deterministic across reruns", () => {
+      const markdown = `# TASKPAD
+
+## Work Queue
+(empty)
+
+## Execution Queue
+(empty)
+
+## Autonomous Kickoff Queue
+- [ ] Item 1
+
+## Self-Improvement Backlog
+- [ ] Item 2
+`;
+
+      const counts1 = countQueueHealth(markdown);
+      const counts2 = countQueueHealth(markdown);
+
+      // Results should be identical across calls
+      expect(counts1).toEqual(counts2);
+      expect(counts1.executableQueueTotal).toBe(0);
+      expect(counts1.intakeQueueTotal).toBe(2);
+    });
+
+    test("partial coverage states have deterministic aggregate counts", () => {
+      const markdown = `# TASKPAD
+
+## Work Queue
+- [ ] Task 1
+
+## Execution Queue
+(empty)
+
+## Autonomous Kickoff Queue
+- [ ] Item 1
+- [ ] Item 2
+
+## Self-Improvement Backlog
+- [ ] Item 3
+`;
+
+      const counts = countQueueHealth(markdown);
+
+      // Aggregates should be deterministic and correct
+      expect(counts.workQueueUncheckedCount).toBe(1);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(1);
+
+      expect(counts.autonomousUncheckedCount).toBe(2);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(3);
+
+      expect(counts.totalUnchecked).toBe(4);
+    });
   });
 });

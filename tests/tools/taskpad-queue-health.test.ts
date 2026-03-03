@@ -1,6 +1,23 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, test } from "bun:test";
 
 import { countQueueHealth } from "../../tools/taskpad-queue-health";
+
+// ============================================================================
+// TP004: Fixture-based tests for queue-health covering:
+// - Fully-empty executable queues
+// - Partial coverage scenarios
+// - Non-regression on legacy autonomous/self-improvement-only cases
+// ============================================================================
+
+const PROJECT_ROOT = join(import.meta.dir, "..", "..");
+const FIXTURES_ROOT = join(PROJECT_ROOT, "tests", "tools", "fixtures");
+
+function readFixtureFile(fileName: string): string {
+  return readFileSync(join(FIXTURES_ROOT, fileName), "utf8");
+}
 
 describe("countQueueHealth", () => {
   test("passes when at least one unchecked item exists in either queue", () => {
@@ -250,5 +267,163 @@ describe("countQueueHealth", () => {
 
     expect(counts.workQueueHeadingFound).toBe(true);
     expect(counts.executionQueueHeadingFound).toBe(false);
+  });
+});
+
+// ============================================================================
+// TP004: Fixture-based tests for queue-health
+// ============================================================================
+
+describe("TP004: queue-health fixture-based tests", () => {
+  describe("fully-empty executable queues", () => {
+    test("work queue and execution queue both empty, intake queues have items", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-executable-empty.md");
+
+      const counts = countQueueHealth(markdown);
+
+      // Both executable queues should be empty
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(0);
+
+      // Intake queues should have items
+      expect(counts.autonomousUncheckedCount).toBe(2);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(3);
+
+      // Headings should be present
+      expect(counts.workQueueHeadingFound).toBe(true);
+      expect(counts.executionQueueHeadingFound).toBe(true);
+
+      // Total should reflect all unchecked items
+      expect(counts.totalUnchecked).toBe(3);
+    });
+
+    test("all queues empty of unchecked items (legacy case)", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-empty.md");
+
+      const counts = countQueueHealth(markdown);
+
+      // All queues should have no unchecked items
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(0);
+      expect(counts.intakeQueueTotal).toBe(0);
+      expect(counts.totalUnchecked).toBe(0);
+    });
+  });
+
+  describe("partial coverage scenarios", () => {
+    test("work queue has items, execution queue empty", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-executable-ready.md");
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(1);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(1);
+
+      // Intake queues should also have items
+      expect(counts.autonomousUncheckedCount).toBe(2);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(3);
+
+      expect(counts.totalUnchecked).toBe(4);
+    });
+
+    test("execution queue has items, work queue empty", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-execution-only.md");
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(1);
+      expect(counts.executableQueueTotal).toBe(1);
+
+      // Intake queues should be empty
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(0);
+      expect(counts.intakeQueueTotal).toBe(0);
+
+      expect(counts.totalUnchecked).toBe(1);
+    });
+
+    test("both executable queues have items", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-both-executable.md");
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(1);
+      expect(counts.executionQueueUncheckedCount).toBe(1);
+      expect(counts.executableQueueTotal).toBe(2);
+
+      // Intake queues should be empty
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(0);
+      expect(counts.intakeQueueTotal).toBe(0);
+
+      expect(counts.totalUnchecked).toBe(2);
+    });
+
+    test("work queue only has checked items", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-work-only-checked.md");
+
+      const counts = countQueueHealth(markdown);
+
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+      expect(counts.executableQueueTotal).toBe(0);
+
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(0);
+      expect(counts.intakeQueueTotal).toBe(0);
+      expect(counts.totalUnchecked).toBe(0);
+    });
+  });
+
+  describe("non-regression on legacy autonomous/self-improvement-only cases", () => {
+    test("legacy case with only intake queues (no executable queues)", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-pass.md");
+
+      const counts = countQueueHealth(markdown);
+
+      // Work/Execution queues should not exist (counts = 0)
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+
+      // Intake queues should be counted
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(1);
+      expect(counts.intakeQueueTotal).toBe(1);
+
+      expect(counts.totalUnchecked).toBe(1);
+
+      // Headings should not be found for executable queues
+      expect(counts.workQueueHeadingFound).toBe(false);
+      expect(counts.executionQueueHeadingFound).toBe(false);
+    });
+
+    test("legacy empty state with only intake queues present", () => {
+      const markdown = readFixtureFile("taskpad-queue-health-empty.md");
+
+      const counts = countQueueHealth(markdown);
+
+      // Work/Execution queues should not exist
+      expect(counts.workQueueUncheckedCount).toBe(0);
+      expect(counts.executionQueueUncheckedCount).toBe(0);
+
+      // Intake queues should have checked items only
+      expect(counts.autonomousUncheckedCount).toBe(0);
+      expect(counts.selfImprovementUncheckedCount).toBe(0);
+      expect(counts.intakeQueueTotal).toBe(0);
+
+      expect(counts.totalUnchecked).toBe(0);
+
+      // Headings should not be found for executable queues
+      expect(counts.workQueueHeadingFound).toBe(false);
+      expect(counts.executionQueueHeadingFound).toBe(false);
+    });
   });
 });
