@@ -9,6 +9,63 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Work Queue parity-count correctness for auto-ideation routing
+
+### Distilled Scope
+**Problem**
+- `taskpad:auto-ideation` currently computes `queueParityStatus.targetQueueUncheckedCount` for `--target-queue work` using `autonomousUncheckedCount` instead of `workQueueUncheckedCount`, which can report incorrect parity state even when Work Queue routing succeeds.
+- This creates false diagnostics in autonomous intake flows (`verify:taskpad:intake:auto`) and weakens confidence in queue-readiness telemetry used for planning decisions.
+- With no unchecked intake queue items available, this is the highest-impact reliability correction to keep ideation/autoplan reporting trustworthy.
+
+**In scope**
+- Correct Work Queue parity-count source mapping in `taskpad:auto-ideation` so `targetQueue="work"` derives from `workQueueUncheckedCount`.
+- Add deterministic test coverage for empty/mixed queue states that previously masked this mismatch.
+- Extend intake-autoplan verification coverage so Work Queue-target ideation assertions fail on parity-field regressions.
+- Update quality docs with the corrected queueParityStatus contract examples.
+
+**Out of scope**
+- New product clipping capabilities.
+- Queue ranking/scoring heuristic redesign.
+- Broad mutator-contract refactors beyond this parity-count correctness slice.
+
+### Ideation Candidates Considered
+1. **[RELIABILITY]** Fix Work Queue parity accounting in `taskpad:auto-ideation` so `queueParityStatus` uses `workQueueUncheckedCount` for Work Queue routing. **(selected)**
+2. **[RELIABILITY]** Add cross-queue parity contract tests that compare reported target counts against `taskpad:queue-health` for every target queue.
+3. **[AUTOMATION]** Add an intake-auto parity audit command that snapshots pre/post queue metrics and flags mismatched target-queue counters.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "chatgpt|response-only|frontmatter|save mode|clip action|work queue|execution queue|verification-pack"`
+  - `select set IMPLEMENTATION_PLAN.md tools/taskpad-auto-ideation.ts tests/tools/taskpad-auto-ideation.test.ts docs/quality/taskpad-auto-ideation.md`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `tools/taskpad-auto-ideation.ts`
+  - `tests/tools/taskpad-auto-ideation.test.ts`
+  - `docs/quality/taskpad-auto-ideation.md`
+  - `IMPLEMENTATION_PLAN.md`
+
+### Task Graph
+- [x] **TP001**: Define the parity-count correctness contract for Work Queue routing (`targetQueue=work`) and document expected `queueParityStatus` values for empty, seeded, and mixed queue states.
+- [ ] **TP002**: Patch `computeQueueParityStatus` so Work Queue-target calculations read from `workQueueUncheckedCount` (not intake-queue counters) with deterministic behavior preserved.
+- [ ] **TP003**: Add/adjust `tests/tools/taskpad-auto-ideation.test.ts` coverage to assert Work Queue parity counts and `parityStatus` outcomes across seeded + no-op scenarios.
+- [ ] **TP004**: Extend `tests/tools/taskpad-intake-autoplan.test.ts` (or nearest intake-auto suite) to assert downstream parity integrity when auto-ideation is invoked with `--target-queue work`.
+- [ ] **TP005**: Update `docs/quality/taskpad-auto-ideation.md` examples/checklists so `queueParityStatus` references the corrected Work Queue count semantics.
+
+### Acceptance Criteria
+- Work Queue-target ideation reports `queueParityStatus.targetQueueUncheckedCount` from Work Queue unchecked items only.
+- Empty/mixed queue fixtures fail before the fix and pass after the fix with deterministic outputs.
+- Intake-auto orchestration tests catch parity-count regressions on Work Queue-target runs.
+- Documentation examples and evidence checklists match implemented parity semantics.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-auto-ideation.test.ts
+bun test tests/tools/taskpad-intake-autoplan.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-02): Queue-health executable coverage for Work/Execution queue empty-state detection
 
 ### Distilled Scope

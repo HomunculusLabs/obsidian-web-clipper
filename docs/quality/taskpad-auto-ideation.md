@@ -187,6 +187,224 @@ When documenting `verify:taskpad:intake:auto` runs:
 | `self-improvement` | `## Self-Improvement Backlog` | Default; staging area for future improvement ideas |
 | `work` | `## Work Queue` | Immediately executable work items for Engineer loops |
 
+## Queue Parity Status Contract
+
+**Purpose**: Define deterministic correctness contract for `queueParityStatus` when using `--target-queue work`, ensuring parity counts reflect the correct target queue section.
+
+### Correctness Rule (TP001)
+
+When `targetQueue="work"`, the `queueParityStatus.targetQueueUncheckedCount` MUST be derived from **`workQueueUncheckedCount`** (the unchecked count under `## Work Queue`), NOT from `autonomousUncheckedCount` or any other intake queue counter.
+
+**Bug context**: Before TP001 fix, `computeQueueParityStatus` incorrectly used `autonomousUncheckedCount` for Work Queue routing, causing false parity failures even when Work Queue seeding succeeded.
+
+### Schema Definition
+
+```typescript
+interface QueueParityStatus {
+  hasExecutableItems: boolean;        // true if effectiveTargetQueueCount > 0
+  targetQueueUncheckedCount: number;   // unchecked items in the target queue (pre- or post-insertion)
+  parityStatus: "parity-pass" | "parity-fail-empty" | "parity-fail-unknown";
+}
+```
+
+### Field Semantics
+
+| Field | Description | Derivation |
+|-------|-------------|------------|
+| `hasExecutableItems` | Whether the target queue has unchecked items after ideation | `effectiveTargetQueueCount > 0` |
+| `targetQueueUncheckedCount` | Effective unchecked count in target queue | `baseQueueCount + (inserted ? 1 : 0)` |
+| `parityStatus` | Deterministic parity classification | Based on `effectiveTargetQueueCount` |
+
+### Count Source Mapping (Corrected)
+
+| Target Queue | Count Source (correct) | Count Source (bug - pre-TP001) |
+|--------------|------------------------|---------------------------------|
+| `work` | `queueStatus.workQueueUncheckedCount` | ❌ `queueStatus.autonomousUncheckedCount` |
+| `self-improvement` | `queueStatus.selfImprovementUncheckedCount` | `queueStatus.selfImprovementUncheckedCount` |
+
+### Parity Status Values
+
+| Value | Condition | Meaning |
+|-------|-----------|---------|
+| `parity-pass` | `effectiveTargetQueueCount > 0` | Target queue has unchecked items; ideation succeeded |
+| `parity-fail-empty` | `effectiveTargetQueueCount === 0` | Target queue is empty; ideation did not produce an item |
+| `parity-fail-unknown` | Default/fallback | Unexpected state; should not occur in deterministic runs |
+
+### Effective Count Calculation
+
+```
+effectiveTargetQueueCount = baseQueueCount + (insertionResult?.action === "inserted" && wasTriggered ? 1 : 0)
+```
+
+Where:
+- `baseQueueCount` = `targetQueue === "work" ? workQueueUncheckedCount : selfImprovementUncheckedCount`
+- `insertionResult?.action === "inserted"` = true when a new bullet was added
+- `wasTriggered` = true when ideation ran (queues were empty)
+
+### Expected Values by Queue State
+
+#### Empty Queue State (Before Ideation)
+
+**TASKPAD state:**
+```markdown
+## Work Queue
+- [x] planned-2026-02-27 completed work item
+
+## Self-Improvement Backlog
+- [x] done
+```
+
+**Expected `queueParityStatus` (no ideation triggered):**
+```json
+{
+  "hasExecutableItems": false,
+  "targetQueueUncheckedCount": 0,
+  "parityStatus": "parity-fail-empty"
+}
+```
+
+#### Seeded Queue State (After Successful Ideation)
+
+**TASKPAD state (after Work Queue ideation):**
+```markdown
+## Work Queue
+- [x] planned-2026-02-27 completed work item
+- [ ] planned-2026-03-03 Add Work Queue-target ideation verification guidance
+
+## Self-Improvement Backlog
+- [x] done
+```
+
+**Expected `queueParityStatus` (post-insertion):**
+```json
+{
+  "hasExecutableItems": true,
+  "targetQueueUncheckedCount": 1,
+  "parityStatus": "parity-pass"
+}
+```
+
+#### Mixed Queue State (Pre-Existing Unchecked Items)
+
+**TASKPAD state:**
+```markdown
+## Work Queue
+- [x] planned-2026-02-27 completed work item
+- [ ] existing unchecked work item
+
+## Self-Improvement Backlog
+- [ ] some backlog item
+- [ ] another backlog item
+```
+
+**Expected `queueParityStatus` (no ideation triggered - queues not empty):**
+```json
+{
+  "hasExecutableItems": true,
+  "targetQueueUncheckedCount": 1,
+  "parityStatus": "parity-pass"
+}
+```
+
+**Expected `queueParityStatus` (if ideation runs with `--target-queue work`):**
+```json
+{
+  "hasExecutableItems": true,
+  "targetQueueUncheckedCount": 2,
+  "parityStatus": "parity-pass"
+}
+```
+
+### Deterministic Rule IDs for Parity Status
+
+| Rule ID | Description |
+|---------|-------------|
+| `QPS001_CORRECT_COUNT_SOURCE` | `targetQueueUncheckedCount` uses correct queue counter |
+| `QPS002_PARITY_PASS_ON_ITEMS` | `parityStatus: "parity-pass"` when `targetQueueUncheckedCount > 0` |
+| `QPS003_PARITY_FAIL_EMPTY` | `parityStatus: "parity-fail-empty"` when `targetQueueUncheckedCount === 0` |
+| `QPS004_INSERTION_COUNTED` | Successful insertion adds 1 to effective count when `wasTriggered === true` |
+
+### Verification Evidence Checklist
+
+When documenting `queueParityStatus` runs:
+
+- [ ] Confirm `targetQueue` matches the routing intent (`work` vs `self-improvement`)
+- [ ] Verify `targetQueueUncheckedCount` source is correct:
+  - For `targetQueue="work"`: MUST derive from `workQueueUncheckedCount`
+  - For `targetQueue="self-improvement"`: MUST derive from `selfImprovementUncheckedCount`
+- [ ] Confirm `parityStatus` matches the effective count:
+  - `parity-pass` when `targetQueueUncheckedCount > 0`
+  - `parity-fail-empty` when `targetQueueUncheckedCount === 0`
+- [ ] Verify insertion accounting: if `insertionResult.action === "inserted"` and `wasTriggered === true`, then `targetQueueUncheckedCount === baseCount + 1`
+- [ ] For empty-state runs, capture pre- and post-ideation `queueParityStatus` to confirm the transition from `parity-fail-empty` to `parity-pass`
+- [ ] For mixed-state runs, confirm pre-existing unchecked items are counted correctly
+
+### Example CLI Output
+
+**Work Queue ideation (empty → seeded):**
+
+```bash
+bun run taskpad:auto-ideation -- \
+  --taskpad TASKPAD.md \
+  --plan IMPLEMENTATION_PLAN.md \
+  --target-queue work \
+  --format json
+```
+
+Expected `queueParityStatus` in output:
+```json
+{
+  "status": "seeded",
+  "triggered": true,
+  "targetQueueRouting": {
+    "targetQueue": "work",
+    "insertionSection": "## Work Queue",
+    "ruleId": "TQR004_WORK_QUEUE_PATH"
+  },
+  "queueParityStatus": {
+    "hasExecutableItems": true,
+    "targetQueueUncheckedCount": 1,
+    "parityStatus": "parity-pass"
+  },
+  "selectedOutcome": {
+    "action": "inserted",
+    "taskpadPath": "/path/to/TASKPAD.md",
+    "insertedLine": 42,
+    "matchedExistingLine": null
+  }
+}
+```
+
+**Work Queue no-op (already populated):**
+
+```bash
+bun run taskpad:auto-ideation -- \
+  --taskpad TASKPAD.md \
+  --plan IMPLEMENTATION_PLAN.md \
+  --target-queue work \
+  --format json
+```
+
+Expected `queueParityStatus` in output:
+```json
+{
+  "status": "noop",
+  "triggered": false,
+  "targetQueueRouting": null,
+  "queueParityStatus": {
+    "hasExecutableItems": true,
+    "targetQueueUncheckedCount": 2,
+    "parityStatus": "parity-pass"
+  },
+  "selectedOutcome": {
+    "action": "noop",
+    "taskpadPath": "/path/to/TASKPAD.md",
+    "insertedLine": null,
+    "matchedExistingLine": null
+  }
+}
+```
+
 ### Enforcement in Intake Pipeline
 
 The `verify:taskpad:intake:auto` orchestration command enforces Work Queue routing when queue-health reports no unchecked executable queue items. This ensures autonomous empty-queue recovery always produces an immediately plannable Work Queue item without requiring manual queue promotion.
