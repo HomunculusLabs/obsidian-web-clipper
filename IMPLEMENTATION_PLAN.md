@@ -49,7 +49,7 @@
 - [x] **TP001**: Define the parity-count correctness contract for Work Queue routing (`targetQueue=work`) and document expected `queueParityStatus` values for empty, seeded, and mixed queue states.
 - [x] **TP002**: Patch `computeQueueParityStatus` so Work Queue-target calculations read from `workQueueUncheckedCount` (not intake-queue counters) with deterministic behavior preserved.
 - [x] **TP003**: Add/adjust `tests/tools/taskpad-auto-ideation.test.ts` coverage to assert Work Queue parity counts and `parityStatus` outcomes across seeded + no-op scenarios.
-- [ ] **TP004**: Extend `tests/tools/taskpad-intake-autoplan.test.ts` (or nearest intake-auto suite) to assert downstream parity integrity when auto-ideation is invoked with `--target-queue work`.
+- [x] **TP004**: Extend `tests/tools/taskpad-intake-autoplan.test.ts` (or nearest intake-auto suite) to assert downstream parity integrity when auto-ideation is invoked with `--target-queue work`.
 - [ ] **TP005**: Update `docs/quality/taskpad-auto-ideation.md` examples/checklists so `queueParityStatus` references the corrected Work Queue count semantics.
 
 ### Acceptance Criteria
