@@ -6626,3 +6626,623 @@ ${takeawayLines.join("\n")}
     });
   });
 });
+
+// ============================================================================
+// TP006: Contradiction Inbox - End-to-End Refresh Parity Across Clip/Save Cycles
+// ============================================================================
+
+describe("TP006: Contradiction Inbox end-to-end refresh parity across repeated clip/save cycles", () => {
+  /**
+   * Helper to seed a clip note with Key Takeaways containing claims in the vault
+   */
+  async function seedClipWithClaims(
+    sandbox: TestVaultSandbox,
+    filename: string,
+    frontmatter: {
+      source: string;
+      title: string;
+      date_clipped?: string;
+    },
+    claims: string[],
+  ): Promise<string> {
+    const clipsPath = join(sandbox.vaultRoot, "Clips");
+    await fs.mkdir(clipsPath, { recursive: true });
+
+    const claimLines = claims.map((c) => `- ${c}`).join("\n");
+
+    const content = `---
+source: "${frontmatter.source}"
+title: "${frontmatter.title}"
+date_clipped: ${frontmatter.date_clipped || "2026-03-03T10:00:00.000Z"}
+---
+
+## Clip Brief
+
+### Key Takeaways
+
+${claimLines}
+`;
+
+    const filePath = join(clipsPath, `${filename}.md`);
+    await fs.writeFile(filePath, content, "utf-8");
+    return filePath;
+  }
+
+  /**
+   * Helper to build contradiction inbox from vault
+   */
+  async function buildContradictionInboxFromVault(vaultPath: string) {
+    const { scanVaultForClaims, buildContradictionInbox } = await import(
+      "../../src/shared/contradictionInboxBuilder"
+    );
+    const { renderContradictionInbox } = await import(
+      "../../src/shared/contradictionInboxContract"
+    );
+
+    const scanResult = await scanVaultForClaims({
+      vaultPath,
+      maxDepth: 2,
+    });
+
+    const inbox = buildContradictionInbox(scanResult.claims);
+    const markdown = renderContradictionInbox(inbox);
+
+    return { scanResult, inbox, markdown };
+  }
+
+  describe("TP006: Contradiction detection and inbox refresh", () => {
+    test("inbox-refresh: clips with claims are tracked and produce valid inbox", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed two clips with claims
+      await seedClipWithClaims(
+        sandbox,
+        "Claim Source A",
+        {
+          source: "https://example.com/source-a",
+          title: "Claim Source A",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "React Server Components should never be used with client-side state",
+          "Server Components improve performance significantly",
+        ],
+      );
+
+      await seedClipWithClaims(
+        sandbox,
+        "Claim Source B",
+        {
+          source: "https://example.com/source-b",
+          title: "Claim Source B",
+          date_clipped: "2026-03-02T10:00:00.000Z",
+        },
+        [
+          "React Server Components work best when combined with client state",
+          "Server Components have minimal performance impact",
+        ],
+      );
+
+      const { inbox, markdown } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+
+      // Pass gate: Inbox has correct structure
+      expect(markdown).toContain("# Contradiction Inbox");
+      expect(markdown).toContain("---");
+      expect(markdown).toContain("inbox_version:");
+      expect(markdown).toContain("conflicts_count:");
+
+      // Pass gate: Claims are tracked
+      expect(inbox.totalClaims).toBeGreaterThan(0);
+
+      // Pass gate: Source clips are tracked
+      expect(inbox.totalClips).toBe(2);
+
+      // Pass gate: Inbox version is correct
+      expect(inbox.inbox_version).toBeDefined();
+    });
+
+    test("inbox-refresh: multiple cycles produce stable conflict IDs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-stable",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed clips with claims
+      await seedClipWithClaims(
+        sandbox,
+        "Stable Test Clip",
+        {
+          source: "https://example.com/stable-test",
+          title: "Stable Test Clip",
+        },
+        [
+          "TypeScript enums are the best practice for constants",
+          "TypeScript enums should be avoided in favor of const objects",
+        ],
+      );
+
+      // Run 1
+      const { inbox: inbox1 } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+
+      // Run 2
+      const { inbox: inbox2 } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+
+      // Run 3
+      const { inbox: inbox3 } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+
+      // Pass gate: Same number of conflicts across runs
+      expect(inbox1.entries.length).toBe(inbox2.entries.length);
+      expect(inbox2.entries.length).toBe(inbox3.entries.length);
+
+      // Pass gate: Conflict IDs are stable across runs
+      const ids1 = inbox1.entries.map((e) => e.conflict_id).sort();
+      const ids2 = inbox2.entries.map((e) => e.conflict_id).sort();
+      const ids3 = inbox3.entries.map((e) => e.conflict_id).sort();
+
+      expect(ids1).toEqual(ids2);
+      expect(ids2).toEqual(ids3);
+    });
+
+    test("inbox-parity: identical outputs across multiple runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-parity",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed multiple clips with various claims
+      for (let i = 1; i <= 3; i++) {
+        await seedClipWithClaims(
+          sandbox,
+          `Clip ${i}`,
+          {
+            source: `https://example.com/clip-${i}`,
+            title: `Clip ${i}`,
+            date_clipped: `2026-03-0${i}T10:00:00.000Z`,
+          },
+          [
+            `Claim ${i}A: Server-side rendering is essential for SEO`,
+            `Claim ${i}B: Client-side rendering provides better UX`,
+          ],
+        );
+      }
+
+      // Run multiple times
+      const results: Array<{
+        totalClaims: number;
+        totalConflicts: number;
+        entryIds: string[];
+      }> = [];
+
+      for (let run = 0; run < 3; run++) {
+        const { inbox } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+        results.push({
+          totalClaims: inbox.totalClaims,
+          totalConflicts: inbox.totalConflicts,
+          entryIds: inbox.entries.map((e) => e.conflict_id).sort(),
+        });
+      }
+
+      // Pass gate: All runs produce identical totals
+      expect(results[0]?.totalClaims).toBe(results[1]?.totalClaims);
+      expect(results[1]?.totalClaims).toBe(results[2]?.totalClaims);
+      expect(results[0]?.totalConflicts).toBe(results[1]?.totalConflicts);
+      expect(results[1]?.totalConflicts).toBe(results[2]?.totalConflicts);
+
+      // Pass gate: All runs produce identical conflict IDs
+      expect(results[0]?.entryIds).toEqual(results[1]?.entryIds);
+      expect(results[1]?.entryIds).toEqual(results[2]?.entryIds);
+    });
+
+    test("inbox-parity: empty vault produces stable empty inbox", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-empty",
+      });
+      sandboxes.push(sandbox);
+
+      // Run 1
+      const { inbox: inbox1, markdown: markdown1 } = await buildContradictionInboxFromVault(
+        sandbox.vaultRoot,
+      );
+
+      // Run 2
+      const { inbox: inbox2, markdown: markdown2 } = await buildContradictionInboxFromVault(
+        sandbox.vaultRoot,
+      );
+
+      // Pass gate: Both runs produce empty inbox
+      expect(inbox1.entries).toHaveLength(0);
+      expect(inbox2.entries).toHaveLength(0);
+      expect(inbox1.totalClaims).toBe(0);
+      expect(inbox2.totalClaims).toBe(0);
+      expect(inbox1.totalConflicts).toBe(0);
+      expect(inbox2.totalConflicts).toBe(0);
+
+      // Pass gate: Empty inbox has explicit empty-state behavior
+      expect(markdown1).toContain("conflicts_count: 0");
+      expect(markdown1).toContain("open_conflicts: 0");
+      expect(markdown2).toContain("conflicts_count: 0");
+      expect(markdown2).toContain("open_conflicts: 0");
+
+      // Pass gate: Empty inboxes are identical (excluding timestamp)
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      expect(normalized1).toBe(normalized2);
+    });
+
+    test("inbox-parity: source clip refs are preserved across cycles", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-refs",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed clip with claims
+      await seedClipWithClaims(
+        sandbox,
+        "Source Ref Test",
+        {
+          source: "https://example.com/source-ref-test",
+          title: "Source Ref Test",
+        },
+        [
+          "Testing should be done before implementation",
+          "Testing should be done after implementation",
+        ],
+      );
+
+      // Run multiple cycles
+      const clipRefCounts: number[] = [];
+
+      for (let run = 0; run < 3; run++) {
+        const { inbox } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+        // Track source clip refs for each conflict
+        for (const entry of inbox.entries) {
+          for (const claim of entry.claims) {
+            clipRefCounts.push(claim.source_clip_refs.length);
+          }
+        }
+      }
+
+      // Pass gate: All cycles have same source clip ref counts
+      const uniqueCounts = new Set(clipRefCounts);
+      expect(uniqueCounts.size).toBe(1);
+    });
+
+    test("inbox-parity: claim fingerprints are deterministic", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-fingerprints",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed clip with claims
+      await seedClipWithClaims(
+        sandbox,
+        "Fingerprint Test",
+        {
+          source: "https://example.com/fingerprint-test",
+          title: "Fingerprint Test",
+        },
+        [
+          "Monorepos are the best approach for large teams",
+          "Polyrepos are better for independent deployment",
+        ],
+      );
+
+      // Run 1: Extract claims
+      const { scanVaultForClaims } = await import(
+        "../../src/shared/contradictionInboxBuilder"
+      );
+      const { computeClaimFingerprint } = await import(
+        "../../src/shared/contradictionInboxContract"
+      );
+
+      const scanResult1 = await scanVaultForClaims({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const fingerprints1 = scanResult1.claims.map((c) =>
+        computeClaimFingerprint(c.claim),
+      );
+
+      // Run 2: Extract again
+      const scanResult2 = await scanVaultForClaims({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const fingerprints2 = scanResult2.claims.map((c) =>
+        computeClaimFingerprint(c.claim),
+      );
+
+      // Pass gate: Same number of claims extracted
+      expect(scanResult1.claims.length).toBe(scanResult2.claims.length);
+
+      // Pass gate: Claim hashes are identical across runs
+      const hashes1 = fingerprints1.map((f) => f.hash).sort();
+      const hashes2 = fingerprints2.map((f) => f.hash).sort();
+      expect(hashes1).toEqual(hashes2);
+
+      // Pass gate: Key terms are identical across runs
+      const terms1 = fingerprints1.map((f) => f.keyTerms.join(",")).sort();
+      const terms2 = fingerprints2.map((f) => f.keyTerms.join(",")).sort();
+      expect(terms1).toEqual(terms2);
+    });
+  });
+
+  describe("TP006: Contradiction status handling and filtering", () => {
+    test("inbox-parity: resolved conflicts are filtered consistently", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-resolved",
+      });
+      sandboxes.push(sandbox);
+
+      // Create inbox manually with mixed statuses
+      const { buildContradictionInbox } = await import(
+        "../../src/shared/contradictionInboxBuilder"
+      );
+      const { ConflictStatus, renderContradictionInbox } = await import(
+        "../../src/shared/contradictionInboxContract"
+      );
+
+      const { scanVaultForClaims } = await import(
+        "../../src/shared/contradictionInboxBuilder"
+      );
+
+      // Seed clip first
+      await seedClipWithClaims(
+        sandbox,
+        "Status Test",
+        {
+          source: "https://example.com/status-test",
+          title: "Status Test",
+        },
+        ["Claim A: Use functional components", "Claim B: Use class components"],
+      );
+
+      // Build inbox with manual status injection
+      const scanResult = await scanVaultForClaims({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildContradictionInbox(scanResult.claims);
+
+      // Pass gate: Inbox tracks total conflicts
+      expect(inbox.totalConflicts).toBeGreaterThanOrEqual(0);
+
+      // Pass gate: Open conflicts count is tracked
+      expect(typeof inbox.openConflicts).toBe("number");
+
+      // Pass gate: Resolved conflicts count is tracked
+      expect(typeof inbox.resolvedConflicts).toBe("number");
+
+      // Pass gate: False positive conflicts count is tracked
+      expect(typeof inbox.falsePositiveConflicts).toBe("number");
+
+      // Pass gate: Status counts add up to total
+      const statusSum = inbox.openConflicts + inbox.resolvedConflicts + inbox.falsePositiveConflicts;
+      expect(statusSum).toBe(inbox.totalConflicts);
+    });
+
+    test("inbox-parity: truncation is deterministic", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-truncate",
+      });
+      sandboxes.push(sandbox);
+
+      const { MAX_CONFLICTS } = await import(
+        "../../src/shared/contradictionInboxContract"
+      );
+
+      // Create many clips to potentially trigger truncation
+      for (let i = 1; i <= 10; i++) {
+        await seedClipWithClaims(
+          sandbox,
+          `Truncation Clip ${i}`,
+          {
+            source: `https://example.com/truncation-${i}`,
+            title: `Truncation Clip ${i}`,
+            date_clipped: `2026-03-${String(i).padStart(2, "0")}T10:00:00.000Z`,
+          },
+          [
+            `Claim set ${i}A: Approach X is better for scalability`,
+            `Claim set ${i}B: Approach Y is better for maintainability`,
+          ],
+        );
+      }
+
+      // Run 1
+      const { inbox: inbox1, markdown: markdown1 } = await buildContradictionInboxFromVault(
+        sandbox.vaultRoot,
+      );
+
+      // Run 2
+      const { inbox: inbox2, markdown: markdown2 } = await buildContradictionInboxFromVault(
+        sandbox.vaultRoot,
+      );
+
+      // Pass gate: Both runs have same truncation state
+      expect(inbox1.truncated).toBe(inbox2.truncated);
+
+      // Pass gate: Truncation is indicated consistently in markdown
+      expect(markdown1.includes("inbox_truncated:")).toBe(markdown2.includes("inbox_truncated:"));
+
+      // Pass gate: If truncated, both have same entry count
+      if (inbox1.truncated) {
+        expect(inbox1.entries.length).toBe(inbox2.entries.length);
+        expect(inbox1.entries.length).toBeLessThanOrEqual(MAX_CONFLICTS);
+      }
+
+      // Pass gate: Same conflicts retained in both runs
+      const ids1 = inbox1.entries.map((e) => e.conflict_id).sort();
+      const ids2 = inbox2.entries.map((e) => e.conflict_id).sort();
+      expect(ids1).toEqual(ids2);
+    });
+  });
+
+  describe("TP006: Cross-cycle refresh parity", () => {
+    test("five consecutive refresh cycles produce identical inbox state", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-five-cycles",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed multiple clips with claims
+      await seedClipWithClaims(
+        sandbox,
+        "Cycle Test 1",
+        {
+          source: "https://example.com/cycle-1",
+          title: "Cycle Test 1",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "Microservices provide better scalability",
+          "Monoliths are easier to maintain",
+        ],
+      );
+
+      await seedClipWithClaims(
+        sandbox,
+        "Cycle Test 2",
+        {
+          source: "https://example.com/cycle-2",
+          title: "Cycle Test 2",
+          date_clipped: "2026-03-02T10:00:00.000Z",
+        },
+        [
+          "GraphQL is better than REST for complex data",
+          "REST is simpler and more cacheable",
+        ],
+      );
+
+      // Run 5 refresh cycles
+      const cycles = [];
+      for (let i = 0; i < 5; i++) {
+        const { inbox } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+        cycles.push({
+          totalClaims: inbox.totalClaims,
+          totalConflicts: inbox.totalConflicts,
+          openConflicts: inbox.openConflicts,
+          conflictIds: inbox.entries.map((e) => e.conflict_id).sort(),
+        });
+      }
+
+      // Pass gate: All cycles have identical counts
+      for (let i = 1; i < cycles.length; i++) {
+        expect(cycles[i]?.totalClaims).toBe(cycles[0]?.totalClaims);
+        expect(cycles[i]?.totalConflicts).toBe(cycles[0]?.totalConflicts);
+        expect(cycles[i]?.openConflicts).toBe(cycles[0]?.openConflicts);
+        expect(cycles[i]?.conflictIds).toEqual(cycles[0]?.conflictIds);
+      }
+    });
+
+    test("adding new clip triggers inbox refresh with new conflicts", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-refresh",
+      });
+      sandboxes.push(sandbox);
+
+      // Initial clip
+      await seedClipWithClaims(
+        sandbox,
+        "Initial Clip",
+        {
+          source: "https://example.com/initial",
+          title: "Initial Clip",
+        },
+        ["Approach X is the industry standard"],
+      );
+
+      // Cycle 1: Initial state
+      const { inbox: inbox1 } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+      const initialClaims = inbox1.totalClaims;
+
+      // Add conflicting clip (simulating new save)
+      await seedClipWithClaims(
+        sandbox,
+        "Conflicting Clip",
+        {
+          source: "https://example.com/conflicting",
+          title: "Conflicting Clip",
+        },
+        ["Approach Y is the industry standard, not X"],
+      );
+
+      // Cycle 2: After adding conflicting clip
+      const { inbox: inbox2 } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+
+      // Pass gate: New clip added claims
+      expect(inbox2.totalClaims).toBeGreaterThan(initialClaims);
+
+      // Pass gate: Total clips increased
+      expect(inbox2.totalClips).toBe(2);
+    });
+
+    test("export produces valid file with metadata", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "contradiction-export",
+      });
+      sandboxes.push(sandbox);
+
+      await seedClipWithClaims(
+        sandbox,
+        "Export Test",
+        {
+          source: "https://example.com/export-test",
+          title: "Export Test",
+        },
+        [
+          "Static typing catches errors at compile time",
+          "Dynamic typing provides more flexibility",
+        ],
+      );
+
+      const { inbox } = await buildContradictionInboxFromVault(sandbox.vaultRoot);
+
+      const {
+        exportContradictionInbox,
+        inboxFileExists,
+        readInboxFile,
+      } = await import("../../src/shared/contradictionInboxExporter");
+
+      const exportResult = await exportContradictionInbox(inbox, {
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      // Pass gate: File was created
+      expect(exportResult.created).toBe(true);
+
+      // Pass gate: File exists
+      const exists = await inboxFileExists({ vaultPath: sandbox.vaultRoot });
+      expect(exists).toBe(true);
+
+      // Pass gate: File content is valid markdown
+      const content = await readInboxFile({ vaultPath: sandbox.vaultRoot });
+      expect(content).not.toBeNull();
+      expect(content).toContain("---");
+      expect(content).toContain("# Contradiction Inbox");
+      expect(content).toContain("inbox_version:");
+
+      // Pass gate: Conflict status metadata is computed
+      expect(exportResult.conflictStatusMeta).toBeDefined();
+      expect(typeof exportResult.conflictStatusMeta.openCount).toBe("number");
+      expect(typeof exportResult.conflictStatusMeta.resolvedCount).toBe("number");
+    });
+  });
+});

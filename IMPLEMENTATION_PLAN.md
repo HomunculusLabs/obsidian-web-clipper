@@ -65,7 +65,7 @@
 - [x] **TP003**: Implement deterministic exporter/renderer for `contradiction-inbox.md` with explicit empty-state behavior and bounded conflict-status metadata.
 - [x] **TP004**: Wire refresh flow through runtime contracts (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshContradictionInbox.ts`, `src/popup/save.ts`, `src/shared/settings.ts`) using non-fatal save-path behavior.
 - [x] **TP005**: Add `tests/content/shared/contradiction-inbox.test.ts` contract coverage for contradictory-pair detection, dedupe, resolved-status handling, truncation, and rerun determinism.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end contradiction inbox refresh parity across repeated clip/save cycles.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end contradiction inbox refresh parity across repeated clip/save cycles.
 
 ### Acceptance Criteria
 - Clip save flows can deterministically produce/update `contradiction-inbox.md` from existing knowledge artifacts without external model calls.
