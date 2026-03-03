@@ -52,7 +52,7 @@
 ### Task Graph
 - [x] **TP001**: Define `taskpad:work-queue-prune` and `taskpad:work-queue-archive-parity` contracts (inputs, archive path policy, fingerprint schema, deterministic rule IDs, and JSON output ordering).
 - [x] **TP002**: Implement `tools/taskpad-work-queue-prune.ts` to archive checked/planned Work Queue bullets atomically, preserve unchecked bullets in-place, and emit deterministic prune summaries.
-- [ ] **TP003**: Implement `tools/taskpad-work-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable rule-ID diagnostics on drift.
+- [x] **TP003**: Implement `tools/taskpad-work-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable rule-ID diagnostics on drift.
 - [ ] **TP004**: Add fixtures + tests (`tests/tools/taskpad-work-queue-prune.test.ts`, `tests/tools/taskpad-work-queue-archive-parity.test.ts`) covering pass/noop/missing-heading and parity drift conditions.
 - [ ] **TP005**: Wire scripts/docs (`package.json`, `README.md`, `docs/quality/taskpad-queue-health.md`) and integrate canonical invocation into intake-auto verification flow.
 
