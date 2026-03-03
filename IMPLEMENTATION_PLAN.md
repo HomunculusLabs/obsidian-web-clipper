@@ -51,7 +51,7 @@
 
 ### Task Graph
 - [x] **TP001**: Specify Retrieval Query Pack contract (inputs, deterministic ranking/tie-breaks, max-query bounds, section schema, and diagnostics fields/versioning).
-- [ ] **TP002**: Implement shared query-pack builder utilities that derive exact-phrase, boolean keyword, and entity-seed queries from existing clip artifacts with stable output ordering.
+- [x] **TP002**: Implement shared query-pack builder utilities that derive exact-phrase, boolean keyword, and entity-seed queries from existing clip artifacts with stable output ordering.
 - [ ] **TP003**: Integrate query-pack synthesis into save pipeline/template assembly and render a bounded `## Retrieval Query Pack` section only when non-empty.
 - [ ] **TP004**: Extend frontmatter construction to emit `query_pack_version` + `query_pack_truncated` with explicit no-query defaults.
 - [ ] **TP005**: Add `tests/content/shared/retrieval-query-pack.test.ts` coverage for no-query/minimal/full/truncation/tie-break determinism cases.
