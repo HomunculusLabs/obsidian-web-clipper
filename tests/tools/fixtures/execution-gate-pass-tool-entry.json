@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "sliceId": "2026-03-02-verification-pack-execution-gate",
+  "packHash": "passtool123hash456",
+  "workQueueFingerprint": "passtoolfp789",
+  "workQueueItems": [
+    {
+      "text": "- [ ] **TP005**: Add fixture corpus + tests for pass/fail/noop cases",
+      "marker": null,
+      "markerShape": null,
+      "hasVerifyClause": true,
+      "verifyCommand": "bun run tools/taskpad-queue-health.ts"
+    }
+  ],
+  "verificationCommands": [
+    "bun run tools/taskpad-queue-health.ts -- --help"
+  ],
+  "metadata": {
+    "uncheckedCount": 1,
+    "plannedCount": 0,
+    "commandCount": 1,
+    "inputHash": "passtoolinputhash"
+  },
+  "generatedAt": "2026-03-02T21:00:00.000Z",
+  "sourceCommand": "taskpad:verification-pack",
+  "inputs": {
+    "taskpadPath": "TASKPAD.md",
+    "planPath": "IMPLEMENTATION_PLAN.md"
+  }
+}

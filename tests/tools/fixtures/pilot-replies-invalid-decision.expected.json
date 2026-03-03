@@ -1,0 +1,92 @@
+{
+  "status": "failed",
+  "processed": 4,
+  "upserts": {
+    "responseLog": 2,
+    "eventLog": 2
+  },
+  "suppressed": 0,
+  "errors": [
+    {
+      "ruleId": "INVALID_DECISION_STATE",
+      "rowIndex": 2,
+      "messageId": "msg-invalid-001",
+      "recipientHandle": "pilot_bravo",
+      "message": "Invalid decision state 'not-a-valid-state'. Must be one of: advance, nurture, disqualify, pending",
+      "details": {
+        "provided": "not-a-valid-state",
+        "valid": [
+          "advance",
+          "nurture",
+          "disqualify",
+          "pending"
+        ]
+      }
+    },
+    {
+      "ruleId": "INVALID_DECISION_STATE",
+      "rowIndex": 4,
+      "messageId": "msg-invalid-002",
+      "recipientHandle": "pilot_alpha",
+      "message": "Invalid decision state 'maybe'. Must be one of: advance, nurture, disqualify, pending",
+      "details": {
+        "provided": "maybe",
+        "valid": [
+          "advance",
+          "nurture",
+          "disqualify",
+          "pending"
+        ]
+      }
+    }
+  ],
+  "responseLogUpserts": [
+    {
+      "recipientHandle": "pilot_alpha",
+      "fields": {
+        "workflowSentence": "Valid reply with valid decision",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-22T10:00:00.000Z",
+        "decisionState": "advance"
+      }
+    },
+    {
+      "recipientHandle": "pilot_charlie",
+      "fields": {
+        "workflowSentence": "Another valid reply with nurture decision",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-22T12:00:00.000Z",
+        "decisionState": "nurture"
+      }
+    }
+  ],
+  "eventLogUpserts": [
+    {
+      "eventId": "RECEIVE_REPLY-pilot_alpha-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_alpha",
+      "eventTimestamp": "2026-02-22T10:00:00.000Z",
+      "payload": {
+        "channel": "X DM",
+        "workflowSentence": "Valid reply with valid decision",
+        "replyTimestamp": "2026-02-22T10:00:00.000Z",
+        "messageId": "msg-valid-001",
+        "decision": "advance"
+      }
+    },
+    {
+      "eventId": "RECEIVE_REPLY-pilot_charlie-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_charlie",
+      "eventTimestamp": "2026-02-22T12:00:00.000Z",
+      "payload": {
+        "channel": "Email",
+        "workflowSentence": "Another valid reply with nurture decision",
+        "replyTimestamp": "2026-02-22T12:00:00.000Z",
+        "messageId": "msg-valid-002",
+        "decision": "nurture"
+      }
+    }
+  ],
+  "suppressedEntries": []
+}

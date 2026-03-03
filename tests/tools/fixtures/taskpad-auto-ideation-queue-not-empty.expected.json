@@ -1,0 +1,16 @@
+{
+  "scenario": "queue-not-empty",
+  "description": "Semantic-dedupe noop: queue already has unchecked items that don't match candidates, ideation returns no-op",
+  "expectedOrder": [],
+  "expectedTop3": [],
+  "expectedStatus": "noop",
+  "expectedTriggered": false,
+  "expectedTargetQueue": "work",
+  "expectedInsertionSection": "## Work Queue",
+  "expectedQueueParityStatus": {
+    "hasExecutableItems": true,
+    "targetQueueUncheckedCount": 1,
+    "parityStatus": "parity-pass"
+  },
+  "note": "When autonomous or self-improvement queues have unchecked items, ideation does not trigger"
+}

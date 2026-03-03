@@ -1,0 +1,9 @@
+{
+  "status": "applied",
+  "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+  "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/multi-artifact-newest.artifact.json",
+  "reasonCode": null,
+  "message": "Fallback patch applied successfully to: TASKPAD.",
+  "remediationHint": null,
+  "appliedAt": "2026-03-02T00:40:00.000Z"
+}

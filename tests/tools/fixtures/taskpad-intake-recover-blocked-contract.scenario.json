@@ -1,0 +1,23 @@
+{
+  "name": "blocked-contract",
+  "steps": [
+    {
+      "script": "taskpad:queue-health",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "TASKPAD queue health: FAIL\nIntake blocked: both execution queues are empty.\n"
+    },
+    {
+      "script": "taskpad:auto-ideation",
+      "exitCode": 0,
+      "stdout": "TASKPAD auto-ideation: PASS but missing machine block\n",
+      "stderr": ""
+    },
+    {
+      "script": "taskpad:queue-health",
+      "exitCode": 0,
+      "stdout": "TASKPAD queue health: PASS\n- totalUnchecked: 1\n",
+      "stderr": ""
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+{"recipientKey":"pilot_alpha","messageId":"msg-alpha-placeholder","sourceExportHash":"0000000000000000000000000000000000000000000000000000000000000000","responseTimestamp":"2026-02-28T00:00:00Z","channel":"X DM"}
+{"recipientKey":"pilot_bravo","messageId":"msg-bravo-placeholder","sourceExportHash":"0000000000000000000000000000000000000000000000000000000000000000","responseTimestamp":"2026-02-28T00:00:00Z","channel":"Discord DM"}
+{"recipientKey":"pilot_charlie","messageId":"msg-charlie-placeholder","sourceExportHash":"0000000000000000000000000000000000000000000000000000000000000000","responseTimestamp":"2026-02-28T00:00:00Z","channel":"Email"}

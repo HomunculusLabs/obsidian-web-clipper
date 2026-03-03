@@ -1,0 +1,300 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GitHub Regression Children Contract Schema",
+  "description": "Schema for GitHub regression fixture children contract defining expected link-follow behavior",
+  "type": "object",
+  "required": [
+    "$schema",
+    "contract_version",
+    "parent",
+    "link_follow",
+    "children",
+    "discovered_links",
+    "excluded_links",
+    "exclusion_reasons",
+    "child_frontmatter_template",
+    "assertions"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Contract version in semver format"
+    },
+    "parent": {
+      "type": "object",
+      "required": ["owner", "repo", "url", "filename"],
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Parent repository owner"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Parent repository name"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/",
+          "description": "Parent repository URL"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Parent note filename"
+        }
+      }
+    },
+    "link_follow": {
+      "type": "object",
+      "required": ["enabled", "depth_limit", "dedupe_strategy", "ordering"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether link-follow is enabled for this fixture"
+        },
+        "depth_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum depth for link-follow"
+        },
+        "dedupe_strategy": {
+          "type": "string",
+          "enum": ["url_deduplication", "repo_deduplication"],
+          "description": "Dedupe strategy for discovered links"
+        },
+        "ordering": {
+          "type": "string",
+          "enum": ["alphabetical_by_url", "alphabetical_by_filename", "discovery_order"],
+          "description": "Ordering strategy for children"
+        }
+      }
+    },
+    "children": {
+      "type": "array",
+      "description": "Expected children discovered from parent README",
+      "items": {
+        "type": "object",
+        "required": [
+          "url",
+          "owner",
+          "repo",
+          "filename",
+          "discovery_source",
+          "depth"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://github\\.com/",
+            "description": "Child repository URL"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Child repository owner"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Child repository name"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Child note filename (includes parent prefix)"
+          },
+          "discovery_source": {
+            "type": "string",
+            "enum": ["readme_link", "manual", "other"],
+            "description": "Source of the child link discovery"
+          },
+          "depth": {
+            "type": "integer",
+            "description": "Discovery depth from parent"
+          },
+          "link_text": {
+            "type": "string",
+            "description": "Text of the link in README"
+          },
+          "context_section": {
+            "type": "string",
+            "description": "Markdown section where link was found"
+          }
+        }
+      }
+    },
+    "discovered_links": {
+      "type": "object",
+      "required": ["total", "unique", "after_dedupe", "after_exclusions"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "description": "Total links discovered in README"
+        },
+        "unique": {
+          "type": "integer",
+          "description": "Unique links (first dedupe pass)"
+        },
+        "after_dedupe": {
+          "type": "integer",
+          "description": "Links after deduplication"
+        },
+        "after_exclusions": {
+          "type": "integer",
+          "description": "Final child count after exclusion rules"
+        }
+      }
+    },
+    "excluded_links": {
+      "type": "array",
+      "description": "Links that were excluded",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["self_reference", "non_github", "has_path_beyond_repo", "tree_path"]
+          }
+        }
+      }
+    },
+    "exclusion_reasons": {
+      "type": "object",
+      "description": "Count of exclusions by reason",
+      "properties": {
+        "self_reference": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "URLs excluded for being self-referential"
+        },
+        "non_github": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "URLs excluded for not being github.com"
+        },
+        "has_path_beyond_repo": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "URLs excluded for having paths beyond /owner/repo"
+        },
+        "tree_path": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "URLs excluded for being tree/ paths (monorepo)"
+        }
+      }
+    },
+    "child_frontmatter_template": {
+      "type": "object",
+      "description": "Template frontmatter structure for child notes",
+      "properties": {
+        "source": { "type": "string" },
+        "title": { "type": "string" },
+        "filename": { "type": "string" },
+        "type": { "type": "string" },
+        "site": { "type": "string" },
+        "extra": {
+          "type": "object",
+          "properties": {
+            "github_owner": { "type": "string" },
+            "github_repo": { "type": "string" },
+            "github_package_name": { "type": "string" },
+            "github_discovered_from": { "type": "string" },
+            "github_discovery_depth": { "type": "integer" },
+            "github_sibling_of": { "type": "string" }
+          }
+        }
+      }
+    },
+    "assertions": {
+      "type": "object",
+      "required": ["child_count", "child_urls", "child_filenames", "depth_limit", "alphabetical_ordering"],
+      "properties": {
+        "child_count": {
+          "type": "object",
+          "required": ["expected", "operator"],
+          "properties": {
+            "expected": {
+              "type": "integer",
+              "description": "Expected number of children"
+            },
+            "operator": {
+              "type": "string",
+              "enum": ["===", ">", ">=", "<", "<="],
+              "description": "Comparison operator"
+            }
+          }
+        },
+        "child_urls": {
+          "type": "object",
+          "required": ["expected", "operator"],
+          "properties": {
+            "expected": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Expected child URLs"
+            },
+            "operator": {
+              "type": "string",
+              "enum": ["array_equals", "array_contains"],
+              "description": "Array comparison operator"
+            }
+          }
+        },
+        "child_filenames": {
+          "type": "object",
+          "required": ["expected", "operator"],
+          "properties": {
+            "expected": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Expected child filenames"
+            },
+            "operator": {
+              "type": "string",
+              "enum": ["array_equals", "array_contains"],
+              "description": "Array comparison operator"
+            }
+          }
+        },
+        "depth_limit": {
+          "type": "object",
+          "required": ["expected", "operator"],
+          "properties": {
+            "expected": {
+              "type": "integer",
+              "description": "Expected depth limit"
+            },
+            "operator": {
+              "type": "string",
+              "enum": ["===", ">", ">=", "<", "<="],
+              "description": "Comparison operator"
+            }
+          }
+        },
+        "alphabetical_ordering": {
+          "type": "object",
+          "required": ["by_url", "operator"],
+          "properties": {
+            "by_url": {
+              "type": "boolean",
+              "description": "Whether children should be ordered alphabetically by URL"
+            },
+            "operator": {
+              "type": "string",
+              "enum": ["===", "!=="],
+              "description": "Comparison operator"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "taskpad-plan-seed-fallback-patch",
+  "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+  "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+  "planPath": "/mock/path/to/fallback-artifact-parity/plan/multi-artifact.plan.md",
+  "planSha256": "d0a8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+  "mutationId": "plan-seed-tp005-2026-03-02",
+  "mutationOutcome": {
+    "action": "would-insert-plan",
+    "taskpadUpdatedLine": "- [x] planned-2026-03-02 TP005: Add focused tests for the new gate",
+    "planInsertHeading": "## TASKPAD Intake Slice (2026-03-02): Fallback-artifact parity gate",
+    "selectedBacklogLine": 3
+  },
+  "patch": {
+    "format": "unified-diff",
+    "taskpadTargetPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+    "planTargetPath": "/mock/path/to/fallback-artifact-parity/plan/multi-artifact.plan.md",
+    "taskpadPatchContent": null,
+    "planPatchContent": "--- a/fallback-artifact-parity/plan/multi-artifact.plan.md\n+++ b/fallback-artifact-parity/plan/multi-artifact.plan.md\n@@ -14,6 +14,7 @@\n - [x] **TP003**: Implement gate evaluation logic\n - [ ] **TP004**: Add fixture corpus covering pass/fail scenarios\n+- [ ] **TP005**: Add focused tests for the new gate\n \n ### Verification Commands\n "
+  },
+  "applyHint": "Apply both TASKPAD and IMPLEMENTATION_PLAN patches atomically."
+}

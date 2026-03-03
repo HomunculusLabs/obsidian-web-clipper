@@ -1,0 +1,4 @@
+{"messageId":"msg-unknown-001","recipientHandle":"@unknown_user","timestamp":"2026-02-20T10:00:00Z","channel":"X DM","workflowSentence":"This is from an unknown recipient"}
+{"messageId":"msg-valid-001","recipientHandle":"pilot_alpha","timestamp":"2026-02-20T11:00:00Z","channel":"X DM","workflowSentence":"This is from a known recipient"}
+{"messageId":"msg-unknown-002","recipientHandle":"random_person","timestamp":"2026-02-20T12:00:00Z","channel":"Discord DM","workflowSentence":"Another unknown recipient"}
+{"messageId":"msg-valid-002","recipientHandle":"pilot_bravo","timestamp":"2026-02-20T13:00:00Z","channel":"Discord DM","workflowSentence":"Another known recipient","decision":"advance"}

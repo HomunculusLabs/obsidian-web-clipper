@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "sliceId": "2026-03-02-verification-pack-execution-gate",
+  "packHash": "failtool123hash",
+  "workQueueFingerprint": "failtoolfp456",
+  "workQueueItems": [
+    {
+      "text": "- [ ] **TP005**: Add fixture corpus + tests for pass/fail/noop cases",
+      "marker": null,
+      "markerShape": null,
+      "hasVerifyClause": true,
+      "verifyCommand": "bun run tools/non-existent-tool.ts"
+    }
+  ],
+  "verificationCommands": [
+    "bun run tools/non-existent-tool-xyz123.ts"
+  ],
+  "metadata": {
+    "uncheckedCount": 1,
+    "plannedCount": 0,
+    "commandCount": 1,
+    "inputHash": "failtoolinputhash"
+  },
+  "generatedAt": "2026-03-02T21:00:00.000Z",
+  "sourceCommand": "taskpad:verification-pack",
+  "inputs": {
+    "taskpadPath": "TASKPAD.md",
+    "planPath": "IMPLEMENTATION_PLAN.md"
+  }
+}

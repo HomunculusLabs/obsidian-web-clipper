@@ -1,0 +1,9 @@
+{
+  "scenario": "missing-work-queue",
+  "description": "Missing-heading failure: Work Queue heading is missing from TASKPAD",
+  "expectedError": {
+    "message": "Missing required heading: ## Work Queue",
+    "ruleId": "MISSING_HEADING_WORK_QUEUE"
+  },
+  "expectedStatus": "error"
+}

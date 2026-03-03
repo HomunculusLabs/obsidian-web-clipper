@@ -1,0 +1,6 @@
+{"messageId":"msg-001","recipientHandle":"@testuser1","timestamp":"2026-02-15T10:30:00Z","channel":"X DM","workflowSentence":"Valid row"}
+{"messageId":"msg-002","recipientHandle":"@testuser2","timestamp":"2026-02-16T14:20:00Z","channel":"Invalid Channel","workflowSentence":"Invalid channel"}
+{"messageId":"msg-003","recipientHandle":"@testuser3","timestamp":"2026-02-17T09:15:00Z","channel":"X DM","workflowSentence":"Invalid decision","decision":"invalid-state"}
+{"messageId":"","recipientHandle":"@testuser4","timestamp":"2026-02-18T10:00:00Z","channel":"X DM","workflowSentence":"Empty message ID"}
+{"recipientHandle":"@testuser5","timestamp":"2026-02-19T10:00:00Z","channel":"X DM","workflowSentence":"Missing message ID field"}
+this is not valid json

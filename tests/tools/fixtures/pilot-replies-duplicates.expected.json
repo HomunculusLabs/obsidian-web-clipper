@@ -1,0 +1,88 @@
+{
+  "status": "partial",
+  "processed": 5,
+  "upserts": {
+    "responseLog": 3,
+    "eventLog": 3
+  },
+  "suppressed": 2,
+  "errors": [],
+  "responseLogUpserts": [
+    {
+      "recipientHandle": "pilot_alpha",
+      "fields": {
+        "workflowSentence": "First reply from alpha",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-15T10:30:00.000Z"
+      }
+    },
+    {
+      "recipientHandle": "pilot_bravo",
+      "fields": {
+        "workflowSentence": "First reply from bravo",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-15T11:00:00.000Z"
+      }
+    },
+    {
+      "recipientHandle": "pilot_charlie",
+      "fields": {
+        "workflowSentence": "Reply from charlie",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-15T13:00:00.000Z"
+      }
+    }
+  ],
+  "eventLogUpserts": [
+    {
+      "eventId": "RECEIVE_REPLY-pilot_alpha-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_alpha",
+      "eventTimestamp": "2026-02-15T10:30:00.000Z",
+      "payload": {
+        "channel": "X DM",
+        "workflowSentence": "First reply from alpha",
+        "replyTimestamp": "2026-02-15T10:30:00.000Z",
+        "messageId": "msg-001"
+      }
+    },
+    {
+      "eventId": "RECEIVE_REPLY-pilot_bravo-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_bravo",
+      "eventTimestamp": "2026-02-15T11:00:00.000Z",
+      "payload": {
+        "channel": "Discord DM",
+        "workflowSentence": "First reply from bravo",
+        "replyTimestamp": "2026-02-15T11:00:00.000Z",
+        "messageId": "msg-002"
+      }
+    },
+    {
+      "eventId": "RECEIVE_REPLY-pilot_charlie-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_charlie",
+      "eventTimestamp": "2026-02-15T13:00:00.000Z",
+      "payload": {
+        "channel": "Email",
+        "workflowSentence": "Reply from charlie",
+        "replyTimestamp": "2026-02-15T13:00:00.000Z",
+        "messageId": "msg-003"
+      }
+    }
+  ],
+  "suppressedEntries": [
+    {
+      "messageId": "msg-001",
+      "rowIndex": 3,
+      "recipientHandle": "pilot_alpha",
+      "reason": "DUPLICATE_MESSAGE_ID"
+    },
+    {
+      "messageId": "msg-002",
+      "rowIndex": 5,
+      "recipientHandle": "pilot_bravo",
+      "reason": "DUPLICATE_MESSAGE_ID"
+    }
+  ]
+}

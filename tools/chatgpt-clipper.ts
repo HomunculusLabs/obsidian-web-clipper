@@ -6,7 +6,7 @@
  * and save them as Obsidian-compatible markdown files.
  *
  * Usage:
- *   # Single conversation
+ *   # Single conversation (default: one note per conversation)
  *   bun run tools/chatgpt-clipper.ts https://chatgpt.com/c/abc123
  *
  *   # Multiple conversations
@@ -17,6 +17,9 @@
  *
  *   # Custom output directory
  *   bun run tools/chatgpt-clipper.ts --outdir ./my-clips https://chatgpt.com/c/abc123
+ *
+ *   # Opt in to one note per assistant response
+ *   bun run tools/chatgpt-clipper.ts --per-response https://chatgpt.com/c/abc123
  *
  *   # With Obsidian vault integration (opens obsidian:// URIs)
  *   bun run tools/chatgpt-clipper.ts --obsidian --vault "My Vault" https://chatgpt.com/c/abc123
@@ -54,11 +57,13 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type SaveMode = "conversation" | "per-response";
+
 interface CLIOptions extends CommonCLIOptions {
   urls: string[];
   outdir: string;
   obsidian: boolean;
-  perResponse: boolean;
+  saveMode: SaveMode;
 }
 
 interface ExtractedResponse {
@@ -125,7 +130,7 @@ function parseArgs(argv: string[], log: Logger): CLIOptions {
     headless: true,
     wait: 8000,
     tags: ["chatgpt", "web-clip"],
-    perResponse: true,
+    saveMode: "conversation",
     json: false,
     stdout: false,
   };
@@ -169,8 +174,11 @@ function parseArgs(argv: string[], log: Logger): CLIOptions {
     } else if (arg === "--tags") {
       i++;
       opts.tags = (argv[i] || "").split(",").map((t) => t.trim()).filter(Boolean);
+    } else if (arg === "--per-response") {
+      opts.saveMode = "per-response";
     } else if (arg === "--merged") {
-      opts.perResponse = false;
+      // Backward-compatible alias for conversation mode.
+      opts.saveMode = "conversation";
     } else if (arg === "--json") {
       opts.json = true;
     } else if (arg === "--stdout") {
@@ -199,6 +207,10 @@ ChatGPT Headless Clipper — Extract ChatGPT responses to Obsidian markdown
 USAGE:
   bun run tools/chatgpt-clipper.ts [OPTIONS] <URL> [<URL> ...]
 
+SAVE MODE:
+  Default is conversation mode (one note/save per conversation).
+  Use --per-response to opt in to one note/save per assistant response.
+
 OPTIONS:
   --file, -f <path>     Read URLs from a text file (one per line)
   --outdir, -o <dir>    Output directory (default: ./chatgpt-clips)
@@ -211,14 +223,18 @@ OPTIONS:
   --no-headless         Show the browser window
   --wait <ms>           Wait time for page load (default: 8000)
   --tags <a,b,c>        Comma-separated tags (default: "chatgpt,web-clip")
-  --merged              Save all responses in one file per conversation
+  --per-response        Opt in to one note/save per assistant response
+  --merged              Backward-compatible alias for conversation mode
   --json                Output structured JSON to stdout (for LLM tool calls)
   --stdout              Dump raw markdown to stdout (for piping)
   --help, -h            Show this help message
 
 EXAMPLES:
-  # Clip a single conversation
+  # Clip a single conversation (default: one note per conversation)
   bun run tools/chatgpt-clipper.ts https://chatgpt.com/c/abc123
+
+  # Opt in to one note per assistant response
+  bun run tools/chatgpt-clipper.ts --per-response https://chatgpt.com/c/abc123
 
   # Clip multiple conversations from a file
   bun run tools/chatgpt-clipper.ts --file my-urls.txt --outdir ./clips
@@ -342,6 +358,69 @@ function createChatGptFrontmatter(
   };
 }
 
+interface ConversationDocument {
+  title: string;
+  content: string;
+}
+
+function buildConversationDocuments(
+  conv: ConversationResult,
+  opts: CLIOptions
+): ConversationDocument[] {
+  if (opts.saveMode === "conversation") {
+    const fileTitle = sanitizeFilename(conv.title);
+    const noteTitle = conv.title.trim() || "ChatGPT Conversation";
+
+    const responseSections = conv.responses
+      .map((resp) => `### Response ${resp.index}\n\n${resp.markdown}`)
+      .join("\n\n---\n\n");
+
+    const body = [
+      `# ${noteTitle}`,
+      "",
+      "## Source",
+      conv.url,
+      "",
+      `## Responses (${conv.responses.length})`,
+      "",
+      responseSections,
+      "",
+    ].join("\n");
+
+    return [
+      {
+        title: fileTitle,
+        content: buildClipMarkdown(
+          createChatGptFrontmatter(noteTitle, conv.url, opts.tags, {
+            page_type: "chatgpt",
+            response_count: String(conv.responses.length),
+          }),
+          body
+        ),
+      },
+    ];
+  }
+
+  return conv.responses.map((resp) => {
+    const title = sanitizeFilename(
+      `${conv.title} - Response ${resp.index} - ${resp.preview}`
+    );
+    const body = `# ${resp.preview}\n\n${resp.markdown}\n`;
+
+    return {
+      title,
+      content: buildClipMarkdown(
+        createChatGptFrontmatter(title, conv.url, opts.tags, {
+          page_type: "chatgpt",
+          conversation_title: conv.title,
+          response_index: String(resp.index),
+        }),
+        body
+      ),
+    };
+  });
+}
+
 async function saveConversation(
   conv: ConversationResult,
   opts: CLIOptions,
@@ -354,7 +433,7 @@ async function saveConversation(
 
   // --stdout mode: dump markdown directly to stdout
   if (opts.stdout) {
-    if (!opts.perResponse) {
+    if (opts.saveMode === "conversation") {
       // Merged
       console.log(`# ${conv.title}\n`);
       console.log(`> Source: ${conv.url}\n`);
@@ -374,29 +453,20 @@ async function saveConversation(
   // --json mode: accumulate results (handled in main)
   if (opts.json) return;
 
-  const outdir = resolve(opts.outdir);
-  await mkdir(outdir, { recursive: true });
+  const documents = buildConversationDocuments(conv, opts);
 
   if (opts.obsidian) {
-    for (const resp of conv.responses) {
-      const title = sanitizeFilename(`${conv.title} - Response ${resp.index}`);
-      const body = `# ${resp.preview}\n\n${resp.markdown}`;
-      const content = buildClipMarkdown(
-        createChatGptFrontmatter(title, conv.url, opts.tags, {
-          page_type: "chatgpt",
-          conversation_title: conv.title,
-        }),
-        body
-      );
-      const filePath = opts.folder ? `${opts.folder}/${title}` : title;
-      const uri = `obsidian://new?vault=${encodeURIComponent(opts.vault)}&file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`;
+    const { exec } = await import("node:child_process");
 
-      const { exec } = await import("node:child_process");
+    for (const doc of documents) {
+      const filePath = opts.folder ? `${opts.folder}/${doc.title}` : doc.title;
+      const uri = `obsidian://new?vault=${encodeURIComponent(opts.vault)}&file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(doc.content)}`;
+
       const platform = process.platform;
       const cmd = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
       exec(`${cmd} '${uri}'`);
 
-      log(`  📎 Sent to Obsidian: ${title}`);
+      log(`  📎 Sent to Obsidian: ${doc.title}`);
       await new Promise((r) => setTimeout(r, 1000));
     }
     return;
@@ -404,25 +474,16 @@ async function saveConversation(
 
   // --cli mode: use obsidian-cli directly for file creation
   if (opts.cli) {
-    for (const resp of conv.responses) {
-      const title = sanitizeFilename(`${conv.title} - Response ${resp.index}`);
-      const body = `# ${resp.preview}\n\n${resp.markdown}`;
-      const content = buildClipMarkdown(
-        createChatGptFrontmatter(title, conv.url, opts.tags, {
-          page_type: "chatgpt",
-          conversation_title: conv.title,
-        }),
-        body
-      );
-      const filePath = opts.folder ? `${opts.folder}/${title}` : title;
+    for (const doc of documents) {
+      const filePath = opts.folder ? `${opts.folder}/${doc.title}` : doc.title;
 
       const result: CliSaveResult = await saveViaCli(
         { cliPath: opts.cliPath, vault: opts.vault, enabled: true },
-        { filePath, content, overwrite: true }
+        { filePath, content: doc.content, overwrite: true }
       );
 
       if (result.success) {
-        log(`  📎 Saved via CLI: ${title}`);
+        log(`  📎 Saved via CLI: ${doc.title}`);
       } else {
         log(`  ✗ CLI save failed: ${result.error}`);
         log(`    Command: ${result.command}`);
@@ -432,43 +493,12 @@ async function saveConversation(
     return;
   }
 
-  if (!opts.perResponse) {
-    const title = sanitizeFilename(conv.title);
+  const outdir = resolve(opts.outdir);
+  await mkdir(outdir, { recursive: true });
 
-    let body = `# ${conv.title}\n\n`;
-    for (const resp of conv.responses) {
-      body += `---\n\n## Response ${resp.index}\n\n${resp.markdown}\n\n`;
-    }
-
-    const content = buildClipMarkdown(
-      createChatGptFrontmatter(title, conv.url, opts.tags, {
-        page_type: "chatgpt",
-        response_count: String(conv.responses.length),
-      }),
-      body
-    );
-
-    const filePath = join(outdir, `${title}.md`);
-    await writeFile(filePath, content, "utf-8");
-    log(`  💾 Saved: ${filePath}`);
-    return;
-  }
-
-  for (const resp of conv.responses) {
-    const title = sanitizeFilename(
-      `${conv.title} - Response ${resp.index} - ${resp.preview}`
-    );
-    const body = `# ${resp.preview}\n\n${resp.markdown}\n`;
-    const content = buildClipMarkdown(
-      createChatGptFrontmatter(title, conv.url, opts.tags, {
-        page_type: "chatgpt",
-        conversation_title: conv.title,
-        response_index: String(resp.index),
-      }),
-      body
-    );
-    const filePath = join(outdir, `${title}.md`);
-    await writeFile(filePath, content, "utf-8");
+  for (const doc of documents) {
+    const filePath = join(outdir, `${doc.title}.md`);
+    await writeFile(filePath, doc.content, "utf-8");
     log(`  💾 Saved: ${filePath}`);
   }
 }

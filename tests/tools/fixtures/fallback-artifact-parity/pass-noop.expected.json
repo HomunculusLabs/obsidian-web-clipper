@@ -1,0 +1,37 @@
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/pass-noop.taskpad.md",
+    "planPath": "/mock/path/to/fallback-artifact-parity/plan/pass-noop.plan.md"
+  },
+  "artifacts": [
+    {
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/pass-noop.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/pass-noop.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "lifecycleState": "noop",
+      "evidence": {
+        "artifactExists": true,
+        "artifactSha256": "e367ac12769e5bc375439dd8a4ef49c1d49dc33b8e954a9a55eae1e84146d558",
+        "taskpadSha256": "e367ac12769e5bc375439dd8a4ef49c1d49dc33b8e954a9a55eae1e84146d558",
+        "hashMatches": true,
+        "applyEvidence": {
+          "status": "noop",
+          "reasonCode": null,
+          "appliedAt": "2026-03-02T00:35:00.000Z",
+          "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/pass-noop.artifact.json"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "totalArtifacts": 1,
+    "resolvedArtifacts": 1,
+    "pendingArtifacts": 0,
+    "rejectedArtifacts": 0,
+    "staleArtifacts": 0
+  },
+  "violations": [],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

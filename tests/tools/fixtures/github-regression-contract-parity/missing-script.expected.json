@@ -1,0 +1,120 @@
+{
+  "status": "fail",
+  "inputs": {
+    "fixturesDocPath": "FIXTURES_DIR/github-regression-contract-parity/missing-script.md",
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/missing-script.package.json",
+    "projectRoot": "FIXTURES_DIR/.."
+  },
+  "docAnalysis": {
+    "docPath": "FIXTURES_DIR/github-regression-contract-parity/missing-script.md",
+    "references": [
+      {
+        "lineNumber": 7,
+        "rawReference": "bun test tests/templates/github.test.ts",
+        "normalizedReference": "tests/templates/github.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 12,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 13,
+        "rawReference": "bun run nonexistent:script",
+        "normalizedReference": "nonexistent:script",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      }
+    ],
+    "referenceCounts": {
+      "testFiles": 1,
+      "verificationCommands": 2,
+      "packageScripts": 2,
+      "toolPaths": 0
+    },
+    "totalReferences": 3
+  },
+  "commandSurface": {
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/missing-script.package.json",
+    "packageScripts": {
+      "test:github:reported-failures": "bun test tests/templates/github.test.ts tests/e2e/headless-clip-harness.test.ts"
+    },
+    "toolPaths": []
+  },
+  "validations": [
+    {
+      "reference": {
+        "lineNumber": 7,
+        "rawReference": "bun test tests/templates/github.test.ts",
+        "normalizedReference": "tests/templates/github.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "message": "Test file does not exist: tests/templates/github.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "reference": {
+        "lineNumber": 12,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    },
+    {
+      "reference": {
+        "lineNumber": 13,
+        "rawReference": "bun run nonexistent:script",
+        "normalizedReference": "nonexistent:script",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY003_MISSING_PACKAGE_SCRIPT",
+      "message": "Package script does not exist: nonexistent:script",
+      "remediation": "Add the script to package.json \"scripts\" section or update the reference"
+    }
+  ],
+  "summary": {
+    "totalReferences": 3,
+    "validReferences": 1,
+    "invalidReferences": 2,
+    "violationCounts": {
+      "GH_PARITY001_MISSING_TEST_FILE": 1,
+      "GH_PARITY003_MISSING_PACKAGE_SCRIPT": 1
+    },
+    "status": "fail"
+  },
+  "violations": [
+    {
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/missing-script.md",
+      "lineNumber": 7,
+      "rawReference": "bun test tests/templates/github.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file does not exist: tests/templates/github.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "ruleId": "GH_PARITY003_MISSING_PACKAGE_SCRIPT",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/missing-script.md",
+      "lineNumber": 13,
+      "rawReference": "bun run nonexistent:script",
+      "referenceType": "package-script",
+      "message": "Package script does not exist: nonexistent:script",
+      "remediation": "Add the script to package.json \"scripts\" section or update the reference"
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

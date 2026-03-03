@@ -27,8 +27,18 @@
     </nav>
 
     <div class="tab-content active" id="tabClip">
-      <div class="content clip-layout">
-        <details class="popup-section" open>
+      <div class="content-shell">
+        <aside class="clip-sidebar" aria-label="Clip section navigation">
+          <span class="clip-sidebar-title">Sections</span>
+          <button type="button" class="sidebar-link active" data-target="section-basic">Basic</button>
+          <button type="button" class="sidebar-link" data-target="section-tags">Tags</button>
+          <button type="button" class="sidebar-link" data-target="section-template">Template</button>
+          <button type="button" class="sidebar-link" data-target="section-advanced">Advanced</button>
+          <button type="button" class="sidebar-link" data-target="clipBtn">Clip</button>
+        </aside>
+
+        <div class="content clip-layout" id="clipContent">
+        <details class="popup-section" id="section-basic" open>
           <summary class="section-summary">Basic</summary>
           <div class="section-body">
             <div class="field">
@@ -65,7 +75,7 @@
           </div>
         </details>
 
-        <details class="popup-section" open>
+        <details class="popup-section" id="section-tags" open>
           <summary class="section-summary">Tags</summary>
           <div class="section-body">
             <div class="field">
@@ -80,7 +90,7 @@
           </div>
         </details>
 
-        <details class="popup-section" open>
+        <details class="popup-section" id="section-template" open>
           <summary class="section-summary">Template</summary>
           <div class="section-body">
             <div class="template-indicator" id="templateIndicator" style="display: none;">
@@ -97,7 +107,7 @@
           </div>
         </details>
 
-        <details class="popup-section" open>
+        <details class="popup-section" id="section-advanced" open>
           <summary class="section-summary">Advanced</summary>
           <div class="section-body">
             <div class="selection-indicator" id="selectionIndicator" style="display: none;">
@@ -165,6 +175,7 @@
         </button>
 
         <div class="status" id="status"></div>
+      </div>
       </div>
     </div>
 

@@ -1,0 +1,25 @@
+{
+  "passed": false,
+  "exitCode": 1,
+  "errorCount": 1,
+  "errors": [
+    {
+      "ruleId": "INVALID_TRANSITION",
+      "severity": "error",
+      "eventId": "SEND_FOLLOWUP-test_user-0001",
+      "recipientHandle": "test_user",
+      "currentState": "REPLIED",
+      "eventType": "SEND_FOLLOWUP",
+      "message": "Cannot send follow-up after reply received",
+      "validTransitions": ["UPDATE_DECISION", "UPDATE_WTP", "UPDATE_OBJECTION", "MARK_FAILED", "MARK_BLOCKED"]
+    }
+  ],
+  "stderrContains": [
+    "Lifecycle transition validation failed with 1 error",
+    "[INVALID_TRANSITION] Cannot send follow-up after reply received",
+    "Event ID: SEND_FOLLOWUP-test_user-0001",
+    "Recipient: test_user",
+    "Current State: REPLIED",
+    "Attempted: SEND_FOLLOWUP"
+  ]
+}

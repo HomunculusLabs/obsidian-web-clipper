@@ -1,0 +1,3 @@
+{"messageId":"existing-msg-001","recipientHandle":"pilot_alpha","timestamp":"2026-02-21T10:30:00Z","channel":"X DM","workflowSentence":"Duplicate of existing message in event log"}
+{"messageId":"new-msg-001","recipientHandle":"pilot_bravo","timestamp":"2026-02-21T11:00:00Z","channel":"Discord DM","workflowSentence":"New unique message"}
+{"messageId":"existing-msg-002","recipientHandle":"pilot_bravo","timestamp":"2026-02-21T12:00:00Z","channel":"Discord DM","workflowSentence":"Duplicate of existing message in event log"}

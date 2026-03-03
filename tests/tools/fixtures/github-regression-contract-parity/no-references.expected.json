@@ -1,0 +1,50 @@
+{
+  "status": "fail",
+  "inputs": {
+    "fixturesDocPath": "FIXTURES_DIR/github-regression-contract-parity/no-references.md",
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/no-references.package.json",
+    "projectRoot": "FIXTURES_DIR/.."
+  },
+  "docAnalysis": {
+    "docPath": "FIXTURES_DIR/github-regression-contract-parity/no-references.md",
+    "references": [],
+    "referenceCounts": {
+      "testFiles": 0,
+      "verificationCommands": 0,
+      "packageScripts": 0,
+      "toolPaths": 0
+    },
+    "totalReferences": 0
+  },
+  "commandSurface": {
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/no-references.package.json",
+    "packageScripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "bun test"
+    },
+    "toolPaths": []
+  },
+  "validations": [],
+  "summary": {
+    "totalReferences": 0,
+    "validReferences": 0,
+    "invalidReferences": 0,
+    "violationCounts": {
+      "GH_PARITY009_NO_VERIFICATION_REFERENCES": 1
+    },
+    "status": "fail"
+  },
+  "violations": [
+    {
+      "ruleId": "GH_PARITY009_NO_VERIFICATION_REFERENCES",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/no-references.md",
+      "lineNumber": 1,
+      "rawReference": "",
+      "referenceType": "test-file",
+      "message": "No verification references found in contract documentation",
+      "remediation": "Add test file, package script, or tool path references to the contract doc"
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

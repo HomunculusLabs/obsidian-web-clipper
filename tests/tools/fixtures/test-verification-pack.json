@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "sliceId": "2026-03-02-slice",
+  "packHash": "abc123def456",
+  "workQueueFingerprint": "be19bf1068e6df7731bb1cad2bf5fbef3c95e76b5d1cdd446f31bf2b7ea743e4",
+  "workQueueItems": [
+    {
+      "text": "- [ ] **TP004**: Compose gate output with verification-pack lineage",
+      "marker": null,
+      "markerShape": null,
+      "hasVerifyClause": true,
+      "verifyCommand": "bun run typecheck"
+    }
+  ],
+  "verificationCommands": [
+    "bun run typecheck"
+  ],
+  "metadata": {
+    "uncheckedCount": 1,
+    "plannedCount": 0,
+    "commandCount": 1,
+    "inputHash": "inputhash123"
+  },
+  "generatedAt": "2026-03-02T21:00:00.000Z",
+  "sourceCommand": "taskpad:verification-pack",
+  "inputs": {
+    "taskpadPath": "TASKPAD.md",
+    "planPath": "IMPLEMENTATION_PLAN.md"
+  }
+}

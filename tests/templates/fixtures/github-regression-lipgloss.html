@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub - charmbracelet/lipgloss: Style definitions for nice terminal layouts</title>
+  <meta name="description" content="lipgloss - Style definitions for nice terminal layouts">
+</head>
+<body>
+  <div class="application-main">
+    <main>
+      <div class="repository-content">
+        <div class="d-flex">
+          <h1 class="sr-only">lipgloss</h1>
+          <span class="author">
+            <a href="/charmbracelet">charmbracelet</a>
+          </span>
+          <span class="path-divider">/</span>
+          <strong itemprop="name">
+            <a href="/charmbracelet/lipgloss">lipgloss</a>
+          </strong>
+          <span class="Label Label--secondary v-align-middle">Public</span>
+        </div>
+
+        <div class="f4 mt-3">
+          <p>Style definitions for nice terminal layouts</p>
+        </div>
+
+        <div class="d-flex mb-3">
+          <a class="Link--muted" href="/charmbracelet/lipgloss/stargazers" data-ga-click="star button">
+            <svg class="octicon octicon-star"></svg>
+            <span>17.2k</span>
+          </a>
+          <a class="Link--muted" href="/charmbracelet/lipgloss/network/members" data-ga-click="fork button">
+            <svg class="octicon octicon-repo-forked"></svg>
+            <span>324</span>
+          </a>
+          <a class="Link--muted" href="/charmbracelet/lipgloss/watchers">
+            <svg class="octicon octicon-eye"></svg>
+            <span>76</span>
+          </a>
+        </div>
+
+        <div class="Layout-sidebar">
+          <span itemprop="programmingLanguage" data-ga-click="language">Go</span>
+        </div>
+
+        <div class="topic-tag-list">
+          <a class="topic-tag" href="/topics/terminal">terminal</a>
+          <a class="topic-tag" href="/topics/tui">tui</a>
+          <a class="topic-tag" href="/topics/styling">styling</a>
+        </div>
+
+        <div class="Box mb-3">
+          <div class="Box-header">
+            <h2 class="Box-title">README.md</h2>
+            <button class="octicon-pencil" aria-label="Edit file"></button>
+            <button data-clipboard-target="#readme-content">Copy</button>
+          </div>
+          <div class="Box-body">
+            <article class="markdown-body" id="readme-content">
+              <h1>Lip Gloss</h1>
+              <p>Style definitions for nice terminal layouts.</p>
+
+              <p>Lip Gloss is a styling library for terminal user interfaces (TUIs). It provides a simple and intuitive way to define styles for text, borders, and other elements in terminal applications.</p>
+
+              <h2>Installation</h2>
+              <pre><code>go install github.com/charmbracelet/lipgloss@latest</code></pre>
+
+              <h2>Features</h2>
+              <ul>
+                <li>Clean, intuitive API</li>
+                <li>ANSI color support</li>
+                <li>Color palettes</li>
+                <li>Border styles</li>
+                <li>Width and height constraints</li>
+                <li>Alignment</li>
+              </ul>
+
+              <h2>Usage</h2>
+              <pre><code>package main
+
+import (
+    "github.com/charmbracelet/lipgloss"
+)
+
+var style = lipgloss.NewStyle().
+    Foreground(lipgloss.Color("FAFAFA")).
+    Background(lipgloss.Color("7D56F4")).
+    Padding(1, 2).
+    Italic(true)
+
+func main() {
+    fmt.Println(style.Render("Hello, Lip Gloss!"))
+}</code></pre>
+
+              <h2>Related Projects</h2>
+              <p>Lip Gloss is part of the Charmbracelet ecosystem. Check out these related projects:</p>
+              <ul>
+                <li><a href="https://github.com/charmbracelet/bubbletea">charmbracelet/bubbletea</a> - A powerful little TUI framework</li>
+                <li><a href="https://github.com/charmbracelet/vhs">charmbracelet/vhs</a> - Video for Shell</li>
+                <li><a href="https://github.com/charmbracelet/gum">charmbracelet/gum</a> - Gum: A tool for glamorous shell scripts</li>
+              </ul>
+
+              <h2>Contributing</h2>
+              <p>We love pull requests! Feel free to contribute.</p>
+
+              <h2>License</h2>
+              <p>MIT License - see LICENSE file for details.</p>
+
+              <a class="anchor" href="#installation" aria-hidden="true"></a>
+            </article>
+          </div>
+        </div>
+
+        <div class="file-navigation">
+          <a href="/charmbracelet/lipgloss/tree/main/style">style/</a>
+          <a href="/charmbracelet/lipgloss/blob/main/go.mod">go.mod</a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

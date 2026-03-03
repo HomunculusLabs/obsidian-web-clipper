@@ -1,0 +1,50 @@
+{
+  "status": "ok",
+  "threshold": {
+    "minSent": 10,
+    "minReplies": 3,
+    "source": "/Users/t3rpz/projects/obsidian-web-clipper/tests/tools/fixtures/pilot-sample-gap-planner-under-threshold.brief.md#pilot-cta"
+  },
+  "currentState": {
+    "totalSent": 6,
+    "totalReplied": 2,
+    "pending": 4,
+    "coldAged": 0,
+    "byChannel": {
+      "Discord DM": {
+        "sent": 2,
+        "replied": 1
+      },
+      "Email": {
+        "sent": 2,
+        "replied": 0
+      },
+      "X DM": {
+        "sent": 2,
+        "replied": 1
+      }
+    }
+  },
+  "gap": {
+    "remainingSent": 4,
+    "requiredBatches": 2,
+    "channelMix": [
+      {
+        "channel": "Discord DM",
+        "count": 1
+      },
+      {
+        "channel": "Email",
+        "count": 1
+      },
+      {
+        "channel": "X DM",
+        "count": 1
+      }
+    ],
+    "latestSendBy": "2026-03-02T16:00:00Z"
+  },
+  "thresholdMet": false,
+  "recommendation": "SEND_MORE",
+  "timestamp": "2026-03-01T16:00:00Z"
+}

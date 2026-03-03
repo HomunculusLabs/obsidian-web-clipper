@@ -1,0 +1,92 @@
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+    "planPath": "/mock/path/to/fallback-artifact-parity/plan/multi-artifact.plan.md"
+  },
+  "artifacts": [
+    {
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/multi-artifact-newest.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "lifecycleState": "applied",
+      "evidence": {
+        "artifactExists": true,
+        "artifactSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "hashMatches": true,
+        "applyEvidence": {
+          "status": "applied",
+          "reasonCode": null,
+          "appliedAt": "2026-03-02T00:40:00.000Z",
+          "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/multi-artifact-newest.artifact.json"
+        }
+      }
+    },
+    {
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-plan-seed/multi-artifact-newest.artifact.json",
+      "artifactKind": "taskpad-plan-seed-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+      "mutatorSource": "taskpad:plan-seed",
+      "lifecycleState": "applied",
+      "evidence": {
+        "artifactExists": true,
+        "artifactSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "hashMatches": true,
+        "applyEvidence": {
+          "status": "applied",
+          "reasonCode": null,
+          "appliedAt": "2026-03-02T00:41:00.000Z",
+          "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-plan-seed/multi-artifact-newest.artifact.json"
+        }
+      }
+    },
+    {
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/multi-artifact-older.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "lifecycleState": "stale",
+      "evidence": {
+        "artifactExists": true,
+        "artifactSha256": "b9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "hashMatches": false,
+        "applyEvidence": {
+          "status": null,
+          "reasonCode": null,
+          "appliedAt": null,
+          "artifactPath": null
+        }
+      }
+    }
+  ],
+  "summary": {
+    "totalArtifacts": 3,
+    "resolvedArtifacts": 2,
+    "pendingArtifacts": 0,
+    "rejectedArtifacts": 0,
+    "staleArtifacts": 1
+  },
+  "violations": [
+    {
+      "ruleId": "FAP004_STALE_ARTIFACT",
+      "severity": "warning",
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/multi-artifact-older.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "details": {
+        "lifecycleState": "stale",
+        "artifactExists": true,
+        "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "artifactSha256": "b9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "hashMatches": false
+      },
+      "remediation": "This artifact has been superseded by a newer artifact for the same TASKPAD. The newer artifact should be applied instead."
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

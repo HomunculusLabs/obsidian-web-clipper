@@ -1,0 +1,8 @@
+{
+  "name": "test",
+  "scripts": {
+    "taskpad:auto-ideation": "bun tools/taskpad-auto-ideation.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  }
+}

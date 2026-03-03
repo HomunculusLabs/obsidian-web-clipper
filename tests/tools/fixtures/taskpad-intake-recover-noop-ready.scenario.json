@@ -1,0 +1,23 @@
+{
+  "name": "noop-ready",
+  "steps": [
+    {
+      "script": "taskpad:queue-health",
+      "exitCode": 0,
+      "stdout": "TASKPAD queue health: PASS\n- totalUnchecked: 1\n",
+      "stderr": ""
+    },
+    {
+      "script": "plan:integrity",
+      "exitCode": 0,
+      "stdout": "IMPLEMENTATION_PLAN integrity: PASS\n",
+      "stderr": ""
+    },
+    {
+      "script": "verify:taskpad:intake:full",
+      "exitCode": 0,
+      "stdout": "verify intake full: PASS\n",
+      "stderr": ""
+    }
+  ]
+}

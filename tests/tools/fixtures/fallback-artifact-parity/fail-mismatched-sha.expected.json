@@ -1,0 +1,54 @@
+{
+  "status": "fail",
+  "inputs": {
+    "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-mismatched-sha.taskpad.md",
+    "planPath": "/mock/path/to/fallback-artifact-parity/plan/pass-applied.plan.md"
+  },
+  "artifacts": [
+    {
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/fail-mismatched-sha.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-mismatched-sha.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "lifecycleState": "rejected",
+      "evidence": {
+        "artifactExists": true,
+        "artifactSha256": "a8f5f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e8",
+        "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "hashMatches": false,
+        "applyEvidence": {
+          "status": "rejected",
+          "reasonCode": "ERR_TASKPAD_HASH_MISMATCH",
+          "appliedAt": "2026-03-02T00:45:00.000Z",
+          "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/fail-mismatched-sha.artifact.json"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "totalArtifacts": 1,
+    "resolvedArtifacts": 0,
+    "pendingArtifacts": 0,
+    "rejectedArtifacts": 1,
+    "staleArtifacts": 0
+  },
+  "violations": [
+    {
+      "ruleId": "FAP010_REJECTED_ARTIFACT",
+      "severity": "error",
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/fail-mismatched-sha.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-mismatched-sha.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "details": {
+        "lifecycleState": "rejected",
+        "artifactExists": true,
+        "taskpadSha256": "c9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+        "artifactSha256": "a8f5f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e8",
+        "hashMatches": false
+      },
+      "remediation": "Artifact was rejected by apply-fallback. Review rejection reason and either fix the underlying issue or remove the artifact."
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

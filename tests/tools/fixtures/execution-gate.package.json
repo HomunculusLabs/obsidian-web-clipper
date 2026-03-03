@@ -1,0 +1,11 @@
+{
+  "name": "obsidian-web-clipper-test",
+  "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "taskpad:verification-pack": "bun run tools/taskpad-verification-pack.ts",
+    "taskpad:verification-pack-contract": "bun run tools/taskpad-verification-pack-contract.ts",
+    "taskpad:verification-pack-execution-gate": "bun run tools/taskpad-verification-pack-execution-gate.ts"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "FIXTURES_DIR/taskpad-planned-command-parity-no-command-reference.taskpad.md",
+    "planPath": "FIXTURES_DIR/taskpad-planned-command-parity-no-command-reference.plan.md",
+    "packagePath": "FIXTURES_DIR/taskpad-planned-command-parity-no-command-reference.package.json"
+  },
+  "taskpadAnalysis": {
+    "plannedItems": [
+      {
+        "lineNumber": 4,
+        "rawText": "- [ ] planned-2026-03-01 Task without Verify clause",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Task without Verify clause",
+        "verifyCommands": []
+      },
+      {
+        "lineNumber": 5,
+        "rawText": "- [ ] planned-2026-03-01 Another task without command reference",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Another task without command reference",
+        "verifyCommands": []
+      }
+    ],
+    "plannedCount": 2
+  },
+  "planAnalysis": {
+    "activeSlice": {
+      "heading": "## TASKPAD Intake Slice (2026-03-01): Test Slice No Command Reference",
+      "line": 3,
+      "date": "2026-03-01"
+    },
+    "verificationCommands": [
+      {
+        "command": "typecheck",
+        "lineNumber": 13
+      }
+    ],
+    "verificationCommandCount": 1
+  },
+  "commandSurface": {
+    "packageScripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "bun test"
+    },
+    "toolPaths": []
+  },
+  "parityCheck": {
+    "plannedCommands": [
+      {
+        "source": "verification-block",
+        "sourceLine": 13,
+        "sourceItem": "Verification: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      }
+    ],
+    "summary": {
+      "totalPlannedCommands": 1,
+      "validCommands": 1,
+      "invalidCommands": 0,
+      "invalidCommandCount": 0
+    }
+  },
+  "violations": [
+    {
+      "ruleId": "PARITY005_NO_COMMAND_REFERENCE",
+      "severity": "warning",
+      "source": "work-queue",
+      "sourceLine": 4,
+      "sourceItem": "- [ ] planned-2026-03-01 Task without Verify clause",
+      "command": "",
+      "details": {},
+      "remediation": "Add a Verify: clause to the planned item with a valid command reference, or ensure the active slice's Verification Commands block covers this item."
+    },
+    {
+      "ruleId": "PARITY005_NO_COMMAND_REFERENCE",
+      "severity": "warning",
+      "source": "work-queue",
+      "sourceLine": 5,
+      "sourceItem": "- [ ] planned-2026-03-01 Another task without command reference",
+      "command": "",
+      "details": {},
+      "remediation": "Add a Verify: clause to the planned item with a valid command reference, or ensure the active slice's Verification Commands block covers this item."
+    }
+  ]
+}

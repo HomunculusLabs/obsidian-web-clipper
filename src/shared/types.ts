@@ -63,6 +63,51 @@ export interface ReadingStats {
   estimatedReadingTimeMinutes?: number;
 }
 
+export interface SeedFinderPotencyValue {
+  /** Raw potency value as seen on page (e.g., "<1%", "18-22%") */
+  raw?: string;
+  minPercent?: number;
+  maxPercent?: number;
+  comparator?: "<" | "<=" | ">" | ">=" | "~";
+}
+
+export interface SeedFinderPotencyProfile {
+  thc?: SeedFinderPotencyValue;
+  cbd?: SeedFinderPotencyValue;
+}
+
+export interface SeedFinderFloweringProfile {
+  /** Raw flowering value as seen on page (e.g., "63-70 days", "9-10 weeks") */
+  raw?: string;
+  minDays?: number;
+  maxDays?: number;
+  minWeeks?: number;
+  maxWeeks?: number;
+  harvestWindow?: string;
+}
+
+export interface SeedFinderStrainProfileRawSourceValues {
+  lineage?: string;
+  lineageParents?: string | string[];
+  thc?: string;
+  cbd?: string;
+  flowering?: string;
+  breeder?: string;
+  aroma?: string | string[];
+  effects?: string | string[];
+}
+
+export interface SeedFinderStrainProfile {
+  lineage?: string;
+  lineageParents?: string[];
+  potency?: SeedFinderPotencyProfile;
+  flowering?: SeedFinderFloweringProfile;
+  breeder?: string;
+  aroma?: string[];
+  effects?: string[];
+  rawSourceValues?: SeedFinderStrainProfileRawSourceValues;
+}
+
 export interface ClipMetadata {
   url: string;
   title: string;
@@ -124,6 +169,19 @@ export interface ClipMetadata {
 
   /** Name of the site template used for extraction (if any) */
   templateUsed?: string;
+
+  // --- SeedFinder strain profile metadata ---
+
+  /** Full normalized SeedFinder strain profile */
+  seedFinderProfile?: SeedFinderStrainProfile;
+
+  // Legacy compatibility fields (kept while full profile rollout lands)
+
+  /** Normalized lineage string (e.g., "Blueberry x Haze") */
+  lineage?: string;
+
+  /** Optional parent list derived from normalized lineage */
+  lineageParents?: string[];
 
   // --- Twitter/X specific metadata (Task 51) ---
 

@@ -1,0 +1,3 @@
+{"recipientKey":"aligned_alpha","messageId":"msg-aligned-alpha-001","sourceExportHash":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","responseTimestamp":"2026-02-28T00:00:00Z","channel":"X DM"}
+{"recipientKey":"aligned_bravo","messageId":"msg-aligned-bravo-001","sourceExportHash":"b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3","responseTimestamp":"2026-02-27T00:00:00Z","channel":"Discord DM"}
+{"recipientKey":"aligned_charlie","messageId":"msg-aligned-charlie-001","sourceExportHash":"c3d4e5f6a7b8c3d4e5f6a7b8c3d4e5f6a7b8c3d4e5f6a7b8c3d4e5f6a7b8c3d4","responseTimestamp":"2026-02-26T00:00:00Z","channel":"Email"}

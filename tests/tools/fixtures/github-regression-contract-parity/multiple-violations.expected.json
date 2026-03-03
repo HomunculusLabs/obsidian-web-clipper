@@ -1,0 +1,197 @@
+{
+  "status": "fail",
+  "inputs": {
+    "fixturesDocPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.package.json",
+    "projectRoot": "FIXTURES_DIR/.."
+  },
+  "docAnalysis": {
+    "docPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+    "references": [
+      {
+        "lineNumber": 7,
+        "rawReference": "bun test tests/templates/github-regression.test.ts",
+        "normalizedReference": "tests/templates/github-regression.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 8,
+        "rawReference": "bun test tests/e2e/headless-clip-harness-regression.test.ts",
+        "normalizedReference": "tests/e2e/headless-clip-harness-regression.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 9,
+        "rawReference": "bun test tests/templates/nonexistent.test.ts",
+        "normalizedReference": "tests/templates/nonexistent.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 14,
+        "rawReference": "bun run nonexistent:script",
+        "normalizedReference": "nonexistent:script",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 15,
+        "rawReference": "bun run another:missing:script",
+        "normalizedReference": "another:missing:script",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      }
+    ],
+    "referenceCounts": {
+      "testFiles": 3,
+      "verificationCommands": 2,
+      "packageScripts": 2,
+      "toolPaths": 0
+    },
+    "totalReferences": 5
+  },
+  "commandSurface": {
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.package.json",
+    "packageScripts": {
+      "typecheck": "tsc --noEmit"
+    },
+    "toolPaths": []
+  },
+  "validations": [
+    {
+      "reference": {
+        "lineNumber": 7,
+        "rawReference": "bun test tests/templates/github-regression.test.ts",
+        "normalizedReference": "tests/templates/github-regression.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY005_STALE_TEST_REFERENCE",
+      "message": "Test file reference is deprecated",
+      "remediation": "Update to canonical test file: tests/templates/github.test.ts",
+      "canonicalCommand": "tests/templates/github.test.ts"
+    },
+    {
+      "reference": {
+        "lineNumber": 8,
+        "rawReference": "bun test tests/e2e/headless-clip-harness-regression.test.ts",
+        "normalizedReference": "tests/e2e/headless-clip-harness-regression.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY005_STALE_TEST_REFERENCE",
+      "message": "Test file reference is deprecated",
+      "remediation": "Update to canonical test file: tests/e2e/headless-clip-harness.test.ts",
+      "canonicalCommand": "tests/e2e/headless-clip-harness.test.ts"
+    },
+    {
+      "reference": {
+        "lineNumber": 9,
+        "rawReference": "bun test tests/templates/nonexistent.test.ts",
+        "normalizedReference": "tests/templates/nonexistent.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "message": "Test file does not exist: tests/templates/nonexistent.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "reference": {
+        "lineNumber": 14,
+        "rawReference": "bun run nonexistent:script",
+        "normalizedReference": "nonexistent:script",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY003_MISSING_PACKAGE_SCRIPT",
+      "message": "Package script does not exist: nonexistent:script",
+      "remediation": "Add the script to package.json \"scripts\" section or update the reference"
+    },
+    {
+      "reference": {
+        "lineNumber": 15,
+        "rawReference": "bun run another:missing:script",
+        "normalizedReference": "another:missing:script",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY003_MISSING_PACKAGE_SCRIPT",
+      "message": "Package script does not exist: another:missing:script",
+      "remediation": "Add the script to package.json \"scripts\" section or update the reference"
+    }
+  ],
+  "summary": {
+    "totalReferences": 5,
+    "validReferences": 0,
+    "invalidReferences": 5,
+    "violationCounts": {
+      "GH_PARITY001_MISSING_TEST_FILE": 1,
+      "GH_PARITY003_MISSING_PACKAGE_SCRIPT": 2,
+      "GH_PARITY005_STALE_TEST_REFERENCE": 2
+    },
+    "status": "fail"
+  },
+  "violations": [
+    {
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+      "lineNumber": 9,
+      "rawReference": "bun test tests/templates/nonexistent.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file does not exist: tests/templates/nonexistent.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "ruleId": "GH_PARITY003_MISSING_PACKAGE_SCRIPT",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+      "lineNumber": 14,
+      "rawReference": "bun run nonexistent:script",
+      "referenceType": "package-script",
+      "message": "Package script does not exist: nonexistent:script",
+      "remediation": "Add the script to package.json \"scripts\" section or update the reference"
+    },
+    {
+      "ruleId": "GH_PARITY003_MISSING_PACKAGE_SCRIPT",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+      "lineNumber": 15,
+      "rawReference": "bun run another:missing:script",
+      "referenceType": "package-script",
+      "message": "Package script does not exist: another:missing:script",
+      "remediation": "Add the script to package.json \"scripts\" section or update the reference"
+    },
+    {
+      "ruleId": "GH_PARITY005_STALE_TEST_REFERENCE",
+      "severity": "warning",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+      "lineNumber": 7,
+      "rawReference": "bun test tests/templates/github-regression.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file reference is deprecated",
+      "remediation": "Update to canonical test file: tests/templates/github.test.ts",
+      "canonicalCommand": "tests/templates/github.test.ts"
+    },
+    {
+      "ruleId": "GH_PARITY005_STALE_TEST_REFERENCE",
+      "severity": "warning",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/multiple-violations.md",
+      "lineNumber": 8,
+      "rawReference": "bun test tests/e2e/headless-clip-harness-regression.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file reference is deprecated",
+      "remediation": "Update to canonical test file: tests/e2e/headless-clip-harness.test.ts",
+      "canonicalCommand": "tests/e2e/headless-clip-harness.test.ts"
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

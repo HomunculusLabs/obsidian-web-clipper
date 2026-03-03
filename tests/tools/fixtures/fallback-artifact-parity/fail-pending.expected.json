@@ -1,0 +1,54 @@
+{
+  "status": "fail",
+  "inputs": {
+    "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-pending.taskpad.md",
+    "planPath": "/mock/path/to/fallback-artifact-parity/plan/pass-applied.plan.md"
+  },
+  "artifacts": [
+    {
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/fail-pending.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-pending.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "lifecycleState": "pending",
+      "evidence": {
+        "artifactExists": true,
+        "artifactSha256": "a8f5f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e8",
+        "taskpadSha256": "e367ac12769e5bc375439dd8a4ef49c1d49dc33b8e954a9a55eae1e84146d558",
+        "hashMatches": false,
+        "applyEvidence": {
+          "status": null,
+          "reasonCode": null,
+          "appliedAt": null,
+          "artifactPath": null
+        }
+      }
+    }
+  ],
+  "summary": {
+    "totalArtifacts": 1,
+    "resolvedArtifacts": 0,
+    "pendingArtifacts": 1,
+    "rejectedArtifacts": 0,
+    "staleArtifacts": 0
+  },
+  "violations": [
+    {
+      "ruleId": "FAP001_PENDING_ARTIFACT",
+      "severity": "error",
+      "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/fail-pending.artifact.json",
+      "artifactKind": "taskpad-auto-ideation-fallback-patch",
+      "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-pending.taskpad.md",
+      "mutatorSource": "taskpad:auto-ideation",
+      "details": {
+        "lifecycleState": "pending",
+        "artifactExists": true,
+        "taskpadSha256": "e367ac12769e5bc375439dd8a4ef49c1d49dc33b8e954a9a55eae1e84146d558",
+        "artifactSha256": "a8f5f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e8",
+        "hashMatches": false
+      },
+      "remediation": "Apply fallback artifact using taskpad:apply-fallback or explicitly reject it."
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

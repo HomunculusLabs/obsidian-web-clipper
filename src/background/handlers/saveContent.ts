@@ -1,25 +1,51 @@
 /**
- * Handler for saving content via the save pipeline (URI → clipboard fallback).
+ * Handler for saving content via the save pipeline.
  *
  * This handler is used by content scripts (like the ChatGPT injector) to save
- * content to Obsidian using the same fallback chain as the popup.
+ * content using the configured save method order with optional clipboard fallback.
  */
 
 import { tabsCreate } from "../../shared/chromeAsync";
 import { toErrorMessage } from "../../shared/errors";
+import type { SaveMethod } from "../../shared/obsidianCli";
 import { loadSettings } from "../../shared/settingsService";
 import { showClipSavedNotification } from "../../shared/notifications";
 import { incrementBadgeCounter } from "../../shared/badgeCounter";
 import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
+import { handleSaveToCli } from "./saveToCli";
 
 type SaveContentRequest = Extract<RuntimeRequest, { action: "saveContent" }>;
 
 const MAX_URI_CONTENT_CHARS = 180_000;
 
+type SaveAttemptResult = {
+  success: boolean;
+  error?: string;
+  vault?: string;
+};
+
 function getNoteTitleFromFilePath(filePath: string): string {
   const segments = filePath.split("/").filter(Boolean);
   const value = segments[segments.length - 1] || "Untitled";
   return value.trim() || "Untitled";
+}
+
+function resolveMethodOrder(
+  saveMethod: SaveMethod,
+  fallbackToClipboard: boolean
+): SaveMethod[] {
+  const order: SaveMethod[] =
+    saveMethod === "cli"
+      ? ["cli", "uri", "clipboard"]
+      : saveMethod === "clipboard"
+        ? ["clipboard"]
+        : ["uri", "clipboard"];
+
+  if (!fallbackToClipboard && saveMethod !== "clipboard") {
+    return order.filter((method) => method !== "clipboard");
+  }
+
+  return order;
 }
 
 /**
@@ -29,7 +55,7 @@ async function saveViaUri(
   vault: string,
   filePath: string,
   content: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<SaveAttemptResult> {
   const encodedContent = encodeURIComponent(content);
 
   if (encodedContent.length > MAX_URI_CONTENT_CHARS) {
@@ -49,7 +75,7 @@ async function saveViaUri(
 /**
  * Copy content to clipboard
  */
-async function saveViaClipboard(content: string): Promise<{ success: boolean; error?: string }> {
+async function saveViaClipboard(content: string): Promise<SaveAttemptResult> {
   const clipboard = navigator.clipboard as Clipboard | undefined;
   if (!clipboard) {
     return { success: false, error: "Clipboard API unavailable" };
@@ -64,9 +90,45 @@ async function saveViaClipboard(content: string): Promise<{ success: boolean; er
 }
 
 /**
+ * Save content via Obsidian CLI using the Native Messaging bridge handler.
+ */
+async function saveViaCli(
+  settings: Awaited<ReturnType<typeof loadSettings>>,
+  fallbackVault: string,
+  filePath: string,
+  content: string
+): Promise<SaveAttemptResult> {
+  const cliEnabled = settings.obsidianCli?.enabled === true;
+  const cliPath = (settings.obsidianCli?.cliPath || "").trim();
+  const cliVault = (settings.obsidianCli?.vault || fallbackVault).trim() || fallbackVault;
+
+  if (!cliEnabled) {
+    return { success: false, error: "CLI integration is not enabled" };
+  }
+
+  if (!cliPath) {
+    return { success: false, error: "CLI path is not configured" };
+  }
+
+  const response = await handleSaveToCli({
+    action: "saveToCli",
+    filePath,
+    content,
+    vault: cliVault,
+    cliPath
+  });
+
+  if (!response.success) {
+    return { success: false, error: response.error || "CLI save failed" };
+  }
+
+  return { success: true, vault: cliVault };
+}
+
+/**
  * Handle saveContent requests.
  *
- * Tries URI first, then falls back to clipboard if enabled.
+ * Uses settings.saveMethod to resolve save order while honoring fallbackToClipboard.
  */
 export async function handleSaveContent(request: SaveContentRequest): Promise<SaveContentResponse> {
   const { markdown, filePath, vault, fallbackToClipboard = true } = request;
@@ -84,29 +146,32 @@ export async function handleSaveContent(request: SaveContentRequest): Promise<Sa
     return { success: false, error: "Vault name is required" };
   }
 
-  // Try URI first
-  const uriResult = await saveViaUri(vault, filePath, markdown);
-  if (uriResult.success) {
-    const settings = await loadSettings();
-    void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), vault);
-    void incrementBadgeCounter(settings);
-    return { success: true, usedMethod: "uri" };
-  }
+  const settings = await loadSettings();
+  const methodOrder = resolveMethodOrder(settings.saveMethod || "uri", fallbackToClipboard);
 
-  // If URI failed and clipboard fallback is enabled, try clipboard
-  if (fallbackToClipboard) {
-    const clipboardResult = await saveViaClipboard(markdown);
-    if (clipboardResult.success) {
-      const settings = await loadSettings();
-      void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), vault);
-      void incrementBadgeCounter(settings);
-      return { success: true, usedMethod: "clipboard" };
+  let lastError: string | undefined;
+
+  for (const method of methodOrder) {
+    let targetVault = vault;
+    const result =
+      method === "cli"
+        ? await saveViaCli(settings, vault, filePath, markdown)
+        : method === "uri"
+          ? await saveViaUri(vault, filePath, markdown)
+          : await saveViaClipboard(markdown);
+
+    if (method === "cli" && result.success) {
+      targetVault = result.vault || vault;
     }
 
-    // Both failed - return clipboard error
-    return { success: false, error: clipboardResult.error || "Both URI and clipboard save failed" };
+    if (result.success) {
+      void showClipSavedNotification(settings, getNoteTitleFromFilePath(filePath), targetVault);
+      void incrementBadgeCounter(settings);
+      return { success: true, usedMethod: method };
+    }
+
+    lastError = result.error || lastError;
   }
 
-  // URI failed and no clipboard fallback
-  return { success: false, error: uriResult.error || "URI save failed" };
+  return { success: false, error: lastError || "Failed to save content" };
 }

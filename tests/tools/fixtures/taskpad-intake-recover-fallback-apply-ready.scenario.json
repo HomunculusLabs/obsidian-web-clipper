@@ -1,0 +1,41 @@
+{
+  "name": "fallback-apply-ready",
+  "steps": [
+    {
+      "script": "taskpad:queue-health",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "TASKPAD queue health: FAIL\nIntake blocked: both execution queues are empty.\n"
+    },
+    {
+      "script": "taskpad:auto-ideation",
+      "exitCode": 0,
+      "stdout": "TASKPAD auto-ideation: FALLBACK\nAUTO_IDEATION_JSON_START\n{\n  \"status\": \"fallback\",\n  \"artifactPath\": \"/tmp/taskpad.auto-ideation.patch.json\"\n}\nAUTO_IDEATION_JSON_END\n",
+      "stderr": ""
+    },
+    {
+      "script": "taskpad:apply-fallback",
+      "exitCode": 0,
+      "stdout": "TASKPAD apply-fallback: APPLIED\n",
+      "stderr": ""
+    },
+    {
+      "script": "taskpad:queue-health",
+      "exitCode": 0,
+      "stdout": "TASKPAD queue health: PASS\n- totalUnchecked: 1\n",
+      "stderr": ""
+    },
+    {
+      "script": "plan:integrity",
+      "exitCode": 0,
+      "stdout": "IMPLEMENTATION_PLAN integrity: PASS\n",
+      "stderr": ""
+    },
+    {
+      "script": "verify:taskpad:intake:full",
+      "exitCode": 0,
+      "stdout": "verify intake full: PASS\n",
+      "stderr": ""
+    }
+  ]
+}

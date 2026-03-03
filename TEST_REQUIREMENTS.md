@@ -1,25 +1,50 @@
 # TEST_REQUIREMENTS — Obsidian Web Clipper
 
-This file defines the checks used for Y/N gates in `IMPLEMENTATION_PLAN.md`.
+This file defines the current quality gates used by `IMPLEMENTATION_PLAN.md` tasks.
 
-## Automated checks (must pass before marking a task complete)
+## Automated gates (required before task completion)
 
-### Typecheck
+### Core quality gate (single command)
 ```bash
-bun run typecheck      # tsc --noEmit
+bun run test:quality:headless
+# runs: typecheck + SeedFinder regression + SeedFinder smoke + headless harness
 ```
 
-### Build
+### Equivalent explicit command stack
 ```bash
-bun run build          # Must produce dist/ without errors
+bun run typecheck
+bun run test:seedfinder
+bun run test:seedfinder:smoke
+bun run test:e2e:headless
 ```
 
-### Tests (once test infra exists — Phase 7 Task 98+)
+### Additional automated checks (run when relevant)
 ```bash
-bun test               # Bun test runner
+bun run build
+bun test
 ```
 
-## Unit test priorities (when test infra is set up)
+### Intake gate checks (required for intake loops)
+```bash
+# 1) Validate TASKPAD queue is not empty
+bun run taskpad:queue-health -- --taskpad "/absolute/path/to/TASKPAD.md"
+
+# 2) Validate newest IMPLEMENTATION_PLAN intake slice contract
+bun run plan:integrity -- --plan IMPLEMENTATION_PLAN.md
+
+# 3) Run full intake gate in one command (typecheck + both gates)
+bun run verify:taskpad:intake:full -- \
+  --taskpad "/absolute/path/to/TASKPAD.md" \
+  --plan IMPLEMENTATION_PLAN.md
+```
+
+If queue-health fails due to zero unchecked items, add one canonical seed:
+
+```markdown
+- [ ] planned-YYYY-MM-DD <actionable next step>
+```
+
+## Unit test priorities
 
 ### Shared utilities (`src/shared/`)
 - `sanitize.ts`: filename sanitization edge cases (unicode, long names, special chars)
@@ -38,17 +63,26 @@ bun test               # Bun test runner
 - Each site template: test with fixture HTML → expected markdown output
 - Template matching: correct template selected for URL patterns
 
-### CLI Tools (`tools/`)
+### CLI tools (`tools/`)
 - JSON output format correctness
 - Error handling for invalid URLs
 - Auth-required page detection
+- CLI save contract behavior (`saveViaCli` payload/path assertions)
 
-### Tag/Title Suggestions (`src/shared/`)
+### Harness / integration (`tests/e2e/`)
+- Headless test-vault harness scenarios:
+  - generic web clip output + frontmatter stability
+  - SeedFinder profile integrity through extraction/serialization
+  - CLI save path contract via safe process mocking
+
+### Tag/title suggestions (`src/shared/`)
 - Domain-based tag suggestions
 - Keyword extraction accuracy
 - Title cleanup (site name removal, entity decoding)
 
-## Manual acceptance tests
+## Manual acceptance tests (non-automated checks)
+
+Run these for UX/runtime changes that automated suites do not fully cover.
 
 ### Extension basic flow
 - Install extension from `dist/`

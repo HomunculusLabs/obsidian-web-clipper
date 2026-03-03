@@ -1,0 +1,9 @@
+{
+  "status": "rejected",
+  "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/fail-mismatched-sha.taskpad.md",
+  "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/fail-mismatched-sha.artifact.json",
+  "reasonCode": "ERR_TASKPAD_HASH_MISMATCH",
+  "message": "TASKPAD hash mismatch: expected a8f5f167..., got c9f8f167...",
+  "remediationHint": "The TASKPAD changed after artifact generation. Re-run taskpad:auto-ideation for the current TASKPAD and apply the new artifact.",
+  "appliedAt": "2026-03-02T00:45:00.000Z"
+}

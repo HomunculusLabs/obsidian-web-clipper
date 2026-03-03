@@ -1,0 +1,52 @@
+{
+  "scenario": "queue-empty-with-theme-and-risk-signals",
+  "description": "Queue-empty state with one completed prior slice theme and one active quality risk should preserve deterministic top-3 ordering.",
+  "expectedOrder": ["AIC001", "AIC002", "AIC003"],
+  "expectedTop3": [
+    {
+      "id": "AIC001",
+      "scoreBreakdown": {
+        "intakeGate": 70,
+        "recentSliceTheme": 0,
+        "qualityRisk": 0,
+        "total": 70
+      },
+      "stableSortKey": "dtotal:09930|dquality:10000|drecent:10000|dintake:09930|id:AIC001|title:auto-ideation deterministic ranking harness|bullet:- [ ] planned-YYYY-MM-DD add deterministic ranking fixtures for taskpad auto-ideation (exactly three candidates with stable tie-break ordering)",
+      "tieBreak": {
+        "canonicalCandidateId": "AIC001",
+        "canonicalTitle": "auto-ideation deterministic ranking harness",
+        "canonicalBullet": "- [ ] planned-YYYY-MM-DD add deterministic ranking fixtures for taskpad auto-ideation (exactly three candidates with stable tie-break ordering)"
+      }
+    },
+    {
+      "id": "AIC002",
+      "scoreBreakdown": {
+        "intakeGate": 45,
+        "recentSliceTheme": 20,
+        "qualityRisk": 0,
+        "total": 65
+      },
+      "stableSortKey": "dtotal:09935|dquality:10000|drecent:09980|dintake:09955|id:AIC002|title:recent-slice theme carry-forward guard|bullet:- [ ] planned-YYYY-MM-DD add active-slice recency guard so auto-ideation weights the newest completed themes (starting with Semantic dedupe guardrails for AUTO_IDEATION backlog seeding) before archived slices",
+      "tieBreak": {
+        "canonicalCandidateId": "AIC002",
+        "canonicalTitle": "recent-slice theme carry-forward guard",
+        "canonicalBullet": "- [ ] planned-YYYY-MM-DD add active-slice recency guard so auto-ideation weights the newest completed themes (starting with Semantic dedupe guardrails for AUTO_IDEATION backlog seeding) before archived slices"
+      }
+    },
+    {
+      "id": "AIC003",
+      "scoreBreakdown": {
+        "intakeGate": 45,
+        "recentSliceTheme": 0,
+        "qualityRisk": 18,
+        "total": 63
+      },
+      "stableSortKey": "dtotal:09937|dquality:09982|drecent:10000|dintake:09955|id:AIC003|title:quality-risk signal extraction hardening|bullet:- [ ] planned-YYYY-MM-DD harden unresolved quality-risk extraction so queue seeding surfaces remediation for: Ranking tie-break drift could silently reorder backlog seeding priorities.",
+      "tieBreak": {
+        "canonicalCandidateId": "AIC003",
+        "canonicalTitle": "quality-risk signal extraction hardening",
+        "canonicalBullet": "- [ ] planned-YYYY-MM-DD harden unresolved quality-risk extraction so queue seeding surfaces remediation for: Ranking tie-break drift could silently reorder backlog seeding priorities."
+      }
+    }
+  ]
+}

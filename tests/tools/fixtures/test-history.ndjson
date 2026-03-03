@@ -1,0 +1,1 @@
+{"version":1,"eventType":"pack-generated","eventId":"test-event-001","sliceId":"2026-03-02-slice","workQueueFingerprint":"be19bf1068e6df7731bb1cad2bf5fbef3c95e76b5d1cdd446f31bf2b7ea743e4","packHash":"abc123def456","driftRuleId":null,"generatedAt":"2026-03-02T21:00:00.000Z","sourceCommand":"taskpad:verification-pack"}

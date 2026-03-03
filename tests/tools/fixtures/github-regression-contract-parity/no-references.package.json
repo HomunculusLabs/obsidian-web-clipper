@@ -1,0 +1,7 @@
+{
+  "name": "obsidian-web-clipper",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  }
+}

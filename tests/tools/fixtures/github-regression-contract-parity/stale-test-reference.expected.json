@@ -1,0 +1,109 @@
+{
+  "status": "fail",
+  "inputs": {
+    "fixturesDocPath": "FIXTURES_DIR/github-regression-contract-parity/stale-test-reference.md",
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/stale-test-reference.package.json",
+    "projectRoot": "FIXTURES_DIR/.."
+  },
+  "docAnalysis": {
+    "docPath": "FIXTURES_DIR/github-regression-contract-parity/stale-test-reference.md",
+    "references": [
+      {
+        "lineNumber": 8,
+        "rawReference": "tests/templates/github-regression.test.ts",
+        "normalizedReference": "tests/templates/github-regression.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 9,
+        "rawReference": "tests/e2e/headless-clip-harness.test.ts",
+        "normalizedReference": "tests/e2e/headless-clip-harness.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 13,
+        "rawReference": "test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      }
+    ],
+    "referenceCounts": {
+      "testFiles": 2,
+      "verificationCommands": 1,
+      "packageScripts": 1,
+      "toolPaths": 0
+    },
+    "totalReferences": 3
+  },
+  "commandSurface": {
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/stale-test-reference.package.json",
+    "packageScripts": {
+      "test:github:reported-failures": "bun test tests/templates/github.test.ts tests/e2e/headless-clip-harness.test.ts"
+    },
+    "toolPaths": []
+  },
+  "validations": [
+    {
+      "reference": {
+        "lineNumber": 8,
+        "rawReference": "tests/templates/github-regression.test.ts",
+        "normalizedReference": "tests/templates/github-regression.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY005_STALE_TEST_REFERENCE",
+      "message": "Test file reference is deprecated",
+      "remediation": "Update to canonical test file: tests/templates/github.test.ts",
+      "canonicalCommand": "tests/templates/github.test.ts"
+    },
+    {
+      "reference": {
+        "lineNumber": 9,
+        "rawReference": "tests/e2e/headless-clip-harness.test.ts",
+        "normalizedReference": "tests/e2e/headless-clip-harness.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Test file exists and is accessible"
+    },
+    {
+      "reference": {
+        "lineNumber": 13,
+        "rawReference": "test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    }
+  ],
+  "summary": {
+    "totalReferences": 3,
+    "validReferences": 2,
+    "invalidReferences": 1,
+    "violationCounts": {
+      "GH_PARITY005_STALE_TEST_REFERENCE": 1
+    },
+    "status": "fail"
+  },
+  "violations": [
+    {
+      "ruleId": "GH_PARITY005_STALE_TEST_REFERENCE",
+      "severity": "warning",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/stale-test-reference.md",
+      "lineNumber": 8,
+      "rawReference": "tests/templates/github-regression.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file reference is deprecated",
+      "remediation": "Update to canonical test file: tests/templates/github.test.ts",
+      "canonicalCommand": "tests/templates/github.test.ts"
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

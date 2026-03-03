@@ -1,0 +1,4 @@
+{"messageId":"msg-valid-001","recipientHandle":"pilot_alpha","timestamp":"2026-02-22T10:00:00Z","channel":"X DM","workflowSentence":"Valid reply with valid decision","decision":"advance"}
+{"messageId":"msg-invalid-001","recipientHandle":"pilot_bravo","timestamp":"2026-02-22T11:00:00Z","channel":"Discord DM","workflowSentence":"Reply with invalid decision state","decision":"not-a-valid-state"}
+{"messageId":"msg-valid-002","recipientHandle":"pilot_charlie","timestamp":"2026-02-22T12:00:00Z","channel":"Email","workflowSentence":"Another valid reply with nurture decision","decision":"nurture"}
+{"messageId":"msg-invalid-002","recipientHandle":"pilot_alpha","timestamp":"2026-02-22T13:00:00Z","channel":"X DM","workflowSentence":"Another invalid decision","decision":"maybe"}

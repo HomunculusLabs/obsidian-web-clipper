@@ -1,0 +1,60 @@
+{
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "eventCount": 1,
+  "recipientCount": 1,
+  "batchId": "test-missing-event",
+  "check": {
+    "passed": false,
+    "runSheet": {
+      "passed": false,
+      "mismatches": [
+        {
+          "ruleId": "MISSING_EVENT",
+          "severity": "error",
+          "recipientHandle": "ghost_user",
+          "message": "Recipient \"ghost_user\" exists in provided run-sheet but has no events in event log",
+          "details": {
+            "providedRow": {
+              "recipientHandle": "ghost_user",
+              "channel": "X DM",
+              "sendStatus": "sent",
+              "sentTimestamp": "2026-02-27T08:00:00Z",
+              "artifactLink": "./test.md"
+            }
+          }
+        }
+      ],
+      "providedRowCount": 2,
+      "reconstructedRowCount": 1,
+      "matchingRowCount": 1
+    },
+    "responseLog": {
+      "passed": false,
+      "mismatches": [
+        {
+          "ruleId": "MISSING_EVENT",
+          "severity": "error",
+          "recipientHandle": "ghost_user",
+          "message": "Recipient \"ghost_user\" exists in provided response-log but has no events in event log",
+          "details": {
+            "providedRow": {
+              "recipientHandle": "ghost_user",
+              "sourceChannel": "X DM",
+              "workflowSentence": "no response yet",
+              "objectionType": "no response yet",
+              "wtp": "no response yet",
+              "nextStepDecision": "pending",
+              "decisionRationale": "Outreach sent/followed up 2026-02-27T08:00:00Z; awaiting first reply in CTA format.",
+              "responseState": "no response yet"
+            }
+          }
+        }
+      ],
+      "providedRowCount": 2,
+      "reconstructedRowCount": 1,
+      "matchingRowCount": 1
+    }
+  }
+}

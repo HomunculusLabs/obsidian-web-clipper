@@ -1,0 +1,48 @@
+{
+  "status": "partial",
+  "processed": 3,
+  "upserts": {
+    "responseLog": 1,
+    "eventLog": 1
+  },
+  "suppressed": 2,
+  "errors": [],
+  "responseLogUpserts": [
+    {
+      "recipientHandle": "pilot_bravo",
+      "fields": {
+        "workflowSentence": "New unique message",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-21T11:00:00.000Z"
+      }
+    }
+  ],
+  "eventLogUpserts": [
+    {
+      "eventId": "RECEIVE_REPLY-pilot_bravo-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_bravo",
+      "eventTimestamp": "2026-02-21T11:00:00.000Z",
+      "payload": {
+        "channel": "Discord DM",
+        "workflowSentence": "New unique message",
+        "replyTimestamp": "2026-02-21T11:00:00.000Z",
+        "messageId": "new-msg-001"
+      }
+    }
+  ],
+  "suppressedEntries": [
+    {
+      "messageId": "existing-msg-001",
+      "rowIndex": 1,
+      "recipientHandle": "pilot_alpha",
+      "reason": "DUPLICATE_MESSAGE_ID"
+    },
+    {
+      "messageId": "existing-msg-002",
+      "rowIndex": 3,
+      "recipientHandle": "pilot_bravo",
+      "reason": "DUPLICATE_MESSAGE_ID"
+    }
+  ]
+}

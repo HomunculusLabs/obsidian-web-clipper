@@ -1,0 +1,760 @@
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "FIXTURES_DIR/taskpad-planned-command-parity-undetected-regression.taskpad.md",
+    "planPath": "FIXTURES_DIR/taskpad-planned-command-parity-undetected-regression.plan.md",
+    "packagePath": "FIXTURES_DIR/taskpad-planned-command-parity-undetected-regression.package.json"
+  },
+  "taskpadAnalysis": {
+    "plannedItems": [
+      {
+        "lineNumber": 5,
+        "rawText": "- [ ] planned-2026-03-01 First item in Work Queue section Verify: typecheck",
+        "plannedDate": "2026-03-01",
+        "markerShape": "unparenthesized",
+        "sourceText": "First item in Work Queue section",
+        "verifyCommands": [
+          "typecheck"
+        ]
+      },
+      {
+        "lineNumber": 6,
+        "rawText": "- [ ] (planned-2026-03-02) Second item with parenthesized Verify: test",
+        "plannedDate": "2026-03-02",
+        "markerShape": "parenthesized",
+        "sourceText": "Second item with parenthesized",
+        "verifyCommands": [
+          "test"
+        ]
+      },
+      {
+        "lineNumber": 9,
+        "rawText": "- [ ] (planned-2026-03-20) Last item in Work Queue section Verify: lint",
+        "plannedDate": "2026-03-20",
+        "markerShape": "parenthesized",
+        "sourceText": "Last item in Work Queue section",
+        "verifyCommands": [
+          "lint"
+        ]
+      },
+      {
+        "lineNumber": 12,
+        "rawText": "- [ ] planned-2026-03-03 Task with \"planned-2026-03-99\" in quotes - should only detect the marker Verify: format",
+        "plannedDate": "2026-03-03",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with \"planned-2026-03-99\" in quotes - should only detect the marker",
+        "verifyCommands": [
+          "format"
+        ]
+      },
+      {
+        "lineNumber": 13,
+        "rawText": "- [ ] (planned-2026-03-04) Task with (planned-2026-03-88) in text - should only detect the marker Verify: taskpad:auto-ideation",
+        "plannedDate": "2026-03-04",
+        "markerShape": "parenthesized",
+        "sourceText": "Task with (planned-2026-03-88) in text - should only detect the marker",
+        "verifyCommands": [
+          "taskpad:auto-ideation"
+        ]
+      },
+      {
+        "lineNumber": 14,
+        "rawText": "- [ ] planned-2026-03-05 Task mentioning planned-2026-03-07 as a dependency - should detect this item only Verify: taskpad:plan-seed",
+        "plannedDate": "2026-03-05",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task mentioning planned-2026-03-07 as a dependency - should detect this item only",
+        "verifyCommands": [
+          "taskpad:plan-seed"
+        ]
+      },
+      {
+        "lineNumber": 17,
+        "rawText": "- [ ] planned-2026-03-06 Task with *bold* and _italic_ text Verify: pilot:sample-gap-planner",
+        "plannedDate": "2026-03-06",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with *bold* and _italic_ text",
+        "verifyCommands": [
+          "pilot:sample-gap-planner"
+        ]
+      },
+      {
+        "lineNumber": 18,
+        "rawText": "- [ ] (planned-2026-03-07) Task with `code` and [links](https://example.com) Verify: pilot:price-signal",
+        "plannedDate": "2026-03-07",
+        "markerShape": "parenthesized",
+        "sourceText": "Task with `code` and [links](https://example.com)",
+        "verifyCommands": [
+          "pilot:price-signal"
+        ]
+      },
+      {
+        "lineNumber": 19,
+        "rawText": "- [ ] planned-2026-03-08 Task with escaped characters: &amp; &lt; &gt; Verify: taskpad:intake-autoplan",
+        "plannedDate": "2026-03-08",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with escaped characters: &amp; &lt; &gt;",
+        "verifyCommands": [
+          "taskpad:intake-autoplan"
+        ]
+      },
+      {
+        "lineNumber": 20,
+        "rawText": "- [ ] planned-2026-03-09 Task with multiple commands: Verify: typecheck, test, lint, format",
+        "plannedDate": "2026-03-09",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with multiple commands:",
+        "verifyCommands": [
+          "typecheck",
+          "test",
+          "lint",
+          "format"
+        ]
+      },
+      {
+        "lineNumber": 21,
+        "rawText": "- [ ] (planned-2026-03-10) Task with \"and\" separator: Verify: typecheck and test and lint",
+        "plannedDate": "2026-03-10",
+        "markerShape": "parenthesized",
+        "sourceText": "Task with \"and\" separator:",
+        "verifyCommands": [
+          "typecheck",
+          "test",
+          "lint"
+        ]
+      },
+      {
+        "lineNumber": 22,
+        "rawText": "- [ ] planned-2026-03-11 Task with mixed separators: Verify: typecheck, test and lint, format",
+        "plannedDate": "2026-03-11",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with mixed separators:",
+        "verifyCommands": [
+          "typecheck",
+          "test",
+          "lint",
+          "format"
+        ]
+      },
+      {
+        "lineNumber": 23,
+        "rawText": "- [ ] planned-2026-03-12 Verify: taskpad:queue-health",
+        "plannedDate": "2026-03-12",
+        "markerShape": "unparenthesized",
+        "sourceText": "",
+        "verifyCommands": [
+          "taskpad:queue-health"
+        ]
+      },
+      {
+        "lineNumber": 24,
+        "rawText": "- [ ] (planned-2026-03-13) Verify: taskpad:planned-command-parity",
+        "plannedDate": "2026-03-13",
+        "markerShape": "parenthesized",
+        "sourceText": "",
+        "verifyCommands": [
+          "taskpad:planned-command-parity"
+        ]
+      },
+      {
+        "lineNumber": 25,
+        "rawText": "* [ ] planned-2026-03-14 Asterisk bullet with planned marker Verify: typecheck",
+        "plannedDate": "2026-03-14",
+        "markerShape": "unparenthesized",
+        "sourceText": "Asterisk bullet with planned marker",
+        "verifyCommands": [
+          "typecheck"
+        ]
+      },
+      {
+        "lineNumber": 26,
+        "rawText": "+ [ ] (planned-2026-03-15) Plus bullet with parenthesized marker Verify: test",
+        "plannedDate": "2026-03-15",
+        "markerShape": "parenthesized",
+        "sourceText": "Plus bullet with parenthesized marker",
+        "verifyCommands": [
+          "test"
+        ]
+      },
+      {
+        "lineNumber": 27,
+        "rawText": "- [ ] planned-2026-03-16 Task with 2026-03-17 as a reference date - should detect marker Verify: lint",
+        "plannedDate": "2026-03-16",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with 2026-03-17 as a reference date - should detect marker",
+        "verifyCommands": [
+          "lint"
+        ]
+      },
+      {
+        "lineNumber": 28,
+        "rawText": "- [ ] (planned-2026-03-17) Task mentioning PR #2026 as a reference - should detect marker Verify: format",
+        "plannedDate": "2026-03-17",
+        "markerShape": "parenthesized",
+        "sourceText": "Task mentioning PR #2026 as a reference - should detect marker",
+        "verifyCommands": [
+          "format"
+        ]
+      },
+      {
+        "lineNumber": 29,
+        "rawText": "- [ ] planned-2026-03-18 Item just before Execution Queue Verify: taskpad:auto-ideation",
+        "plannedDate": "2026-03-18",
+        "markerShape": "unparenthesized",
+        "sourceText": "Item just before Execution Queue",
+        "verifyCommands": [
+          "taskpad:auto-ideation"
+        ]
+      },
+      {
+        "lineNumber": 31,
+        "rawText": "- [ ] planned-2026-03-21 Item in second Work Queue section - should be detected Verify: pilot:sample-gap-planner",
+        "plannedDate": "2026-03-21",
+        "markerShape": "unparenthesized",
+        "sourceText": "Item in second Work Queue section - should be detected",
+        "verifyCommands": [
+          "pilot:sample-gap-planner"
+        ]
+      },
+      {
+        "lineNumber": 32,
+        "rawText": "- [ ] planned-2026-03-23 Task with unicode: café, naïve, résumé Verify: taskpad:intake-autoplan",
+        "plannedDate": "2026-03-23",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with unicode: café, naïve, résumé",
+        "verifyCommands": [
+          "taskpad:intake-autoplan"
+        ]
+      },
+      {
+        "lineNumber": 33,
+        "rawText": "- [ ] (planned-2026-03-24) Task with emoji in description 🎯 📊 ✅ Verify: taskpad:queue-health",
+        "plannedDate": "2026-03-24",
+        "markerShape": "parenthesized",
+        "sourceText": "Task with emoji in description 🎯 📊 ✅",
+        "verifyCommands": [
+          "taskpad:queue-health"
+        ]
+      },
+      {
+        "lineNumber": 35,
+        "rawText": "- [ ] planned-2026-03-25 This is a very long task description that contains a lot of text and continues for quite some time but should still be correctly detected and parsed by the planned marker detection algorithm regardless of how much text comes after the marker itself Verify: taskpad:planned-command-parity",
+        "plannedDate": "2026-03-25",
+        "markerShape": "unparenthesized",
+        "sourceText": "This is a very long task description that contains a lot of text and continues for quite some time but should still be correctly detected and parsed by the planned marker detection algorithm regardless of how much text comes after the marker itself",
+        "verifyCommands": [
+          "taskpad:planned-command-parity"
+        ]
+      }
+    ],
+    "plannedCount": 23,
+    "markerShapeStats": {
+      "unparenthesizedCount": 12,
+      "parenthesizedCount": 11,
+      "totalCount": 23,
+      "parenthesizedPercentage": 48,
+      "unparenthesizedPercentage": 52,
+      "hasMixedStyles": true
+    }
+  },
+  "planAnalysis": {
+    "activeSlice": {
+      "heading": "## TASKPAD Intake Slice (2026-03-01): Undetected Item Regression Test",
+      "line": 3,
+      "date": "2026-03-01"
+    },
+    "verificationCommands": [
+      {
+        "command": "typecheck",
+        "lineNumber": 20
+      },
+      {
+        "command": "test",
+        "lineNumber": 21
+      },
+      {
+        "command": "lint",
+        "lineNumber": 22
+      },
+      {
+        "command": "format",
+        "lineNumber": 23
+      },
+      {
+        "command": "taskpad:auto-ideation",
+        "lineNumber": 24
+      },
+      {
+        "command": "taskpad:plan-seed",
+        "lineNumber": 25
+      },
+      {
+        "command": "pilot:sample-gap-planner",
+        "lineNumber": 26
+      },
+      {
+        "command": "pilot:price-signal",
+        "lineNumber": 27
+      },
+      {
+        "command": "taskpad:intake-autoplan",
+        "lineNumber": 28
+      },
+      {
+        "command": "taskpad:queue-health",
+        "lineNumber": 29
+      },
+      {
+        "command": "taskpad:planned-command-parity",
+        "lineNumber": 30
+      }
+    ],
+    "verificationCommandCount": 11
+  },
+  "commandSurface": {
+    "packageScripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "bun test",
+      "lint": "eslint .",
+      "format": "prettier --check .",
+      "taskpad:auto-ideation": "bun run tools/taskpad-auto-ideation.ts",
+      "taskpad:plan-seed": "bun run tools/taskpad-plan-seed.ts",
+      "pilot:sample-gap-planner": "bun run tools/pilot-sample-gap-planner.ts",
+      "pilot:price-signal": "bun run tools/pilot-price-signal.ts",
+      "taskpad:intake-autoplan": "bun run tools/taskpad-intake-autoplan.ts",
+      "taskpad:queue-health": "bun run tools/taskpad-queue-health.ts",
+      "taskpad:planned-command-parity": "bun run tools/taskpad-planned-command-parity.ts"
+    },
+    "toolPaths": []
+  },
+  "parityCheck": {
+    "plannedCommands": [
+      {
+        "source": "work-queue",
+        "sourceLine": 5,
+        "sourceItem": "- [ ] planned-2026-03-01 First item in Work Queue section Verify: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 6,
+        "sourceItem": "- [ ] (planned-2026-03-02) Second item with parenthesized Verify: test",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 9,
+        "sourceItem": "- [ ] (planned-2026-03-20) Last item in Work Queue section Verify: lint",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 12,
+        "sourceItem": "- [ ] planned-2026-03-03 Task with \"planned-2026-03-99\" in quotes - should only detect the marker Verify: format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 13,
+        "sourceItem": "- [ ] (planned-2026-03-04) Task with (planned-2026-03-88) in text - should only detect the marker Verify: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 14,
+        "sourceItem": "- [ ] planned-2026-03-05 Task mentioning planned-2026-03-07 as a dependency - should detect this item only Verify: taskpad:plan-seed",
+        "command": "taskpad:plan-seed",
+        "rawCommand": "taskpad:plan-seed",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 17,
+        "sourceItem": "- [ ] planned-2026-03-06 Task with *bold* and _italic_ text Verify: pilot:sample-gap-planner",
+        "command": "pilot:sample-gap-planner",
+        "rawCommand": "pilot:sample-gap-planner",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 18,
+        "sourceItem": "- [ ] (planned-2026-03-07) Task with `code` and [links](https://example.com) Verify: pilot:price-signal",
+        "command": "pilot:price-signal",
+        "rawCommand": "pilot:price-signal",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 19,
+        "sourceItem": "- [ ] planned-2026-03-08 Task with escaped characters: &amp; &lt; &gt; Verify: taskpad:intake-autoplan",
+        "command": "taskpad:intake-autoplan",
+        "rawCommand": "taskpad:intake-autoplan",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 20,
+        "sourceItem": "- [ ] planned-2026-03-09 Task with multiple commands: Verify: typecheck, test, lint, format",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 20,
+        "sourceItem": "- [ ] planned-2026-03-09 Task with multiple commands: Verify: typecheck, test, lint, format",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 20,
+        "sourceItem": "- [ ] planned-2026-03-09 Task with multiple commands: Verify: typecheck, test, lint, format",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 20,
+        "sourceItem": "- [ ] planned-2026-03-09 Task with multiple commands: Verify: typecheck, test, lint, format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 21,
+        "sourceItem": "- [ ] (planned-2026-03-10) Task with \"and\" separator: Verify: typecheck and test and lint",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 21,
+        "sourceItem": "- [ ] (planned-2026-03-10) Task with \"and\" separator: Verify: typecheck and test and lint",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 21,
+        "sourceItem": "- [ ] (planned-2026-03-10) Task with \"and\" separator: Verify: typecheck and test and lint",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 22,
+        "sourceItem": "- [ ] planned-2026-03-11 Task with mixed separators: Verify: typecheck, test and lint, format",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 22,
+        "sourceItem": "- [ ] planned-2026-03-11 Task with mixed separators: Verify: typecheck, test and lint, format",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 22,
+        "sourceItem": "- [ ] planned-2026-03-11 Task with mixed separators: Verify: typecheck, test and lint, format",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 22,
+        "sourceItem": "- [ ] planned-2026-03-11 Task with mixed separators: Verify: typecheck, test and lint, format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 23,
+        "sourceItem": "- [ ] planned-2026-03-12 Verify: taskpad:queue-health",
+        "command": "taskpad:queue-health",
+        "rawCommand": "taskpad:queue-health",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 24,
+        "sourceItem": "- [ ] (planned-2026-03-13) Verify: taskpad:planned-command-parity",
+        "command": "taskpad:planned-command-parity",
+        "rawCommand": "taskpad:planned-command-parity",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 25,
+        "sourceItem": "* [ ] planned-2026-03-14 Asterisk bullet with planned marker Verify: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 26,
+        "sourceItem": "+ [ ] (planned-2026-03-15) Plus bullet with parenthesized marker Verify: test",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 27,
+        "sourceItem": "- [ ] planned-2026-03-16 Task with 2026-03-17 as a reference date - should detect marker Verify: lint",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 28,
+        "sourceItem": "- [ ] (planned-2026-03-17) Task mentioning PR #2026 as a reference - should detect marker Verify: format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 29,
+        "sourceItem": "- [ ] planned-2026-03-18 Item just before Execution Queue Verify: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 31,
+        "sourceItem": "- [ ] planned-2026-03-21 Item in second Work Queue section - should be detected Verify: pilot:sample-gap-planner",
+        "command": "pilot:sample-gap-planner",
+        "rawCommand": "pilot:sample-gap-planner",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 32,
+        "sourceItem": "- [ ] planned-2026-03-23 Task with unicode: café, naïve, résumé Verify: taskpad:intake-autoplan",
+        "command": "taskpad:intake-autoplan",
+        "rawCommand": "taskpad:intake-autoplan",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 33,
+        "sourceItem": "- [ ] (planned-2026-03-24) Task with emoji in description 🎯 📊 ✅ Verify: taskpad:queue-health",
+        "command": "taskpad:queue-health",
+        "rawCommand": "taskpad:queue-health",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 35,
+        "sourceItem": "- [ ] planned-2026-03-25 This is a very long task description that contains a lot of text and continues for quite some time but should still be correctly detected and parsed by the planned marker detection algorithm regardless of how much text comes after the marker itself Verify: taskpad:planned-command-parity",
+        "command": "taskpad:planned-command-parity",
+        "rawCommand": "taskpad:planned-command-parity",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 20,
+        "sourceItem": "Verification: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 21,
+        "sourceItem": "Verification: test",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 22,
+        "sourceItem": "Verification: lint",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 23,
+        "sourceItem": "Verification: format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 24,
+        "sourceItem": "Verification: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 25,
+        "sourceItem": "Verification: taskpad:plan-seed",
+        "command": "taskpad:plan-seed",
+        "rawCommand": "taskpad:plan-seed",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 26,
+        "sourceItem": "Verification: pilot:sample-gap-planner",
+        "command": "pilot:sample-gap-planner",
+        "rawCommand": "pilot:sample-gap-planner",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 27,
+        "sourceItem": "Verification: pilot:price-signal",
+        "command": "pilot:price-signal",
+        "rawCommand": "pilot:price-signal",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 28,
+        "sourceItem": "Verification: taskpad:intake-autoplan",
+        "command": "taskpad:intake-autoplan",
+        "rawCommand": "taskpad:intake-autoplan",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 29,
+        "sourceItem": "Verification: taskpad:queue-health",
+        "command": "taskpad:queue-health",
+        "rawCommand": "taskpad:queue-health",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 30,
+        "sourceItem": "Verification: taskpad:planned-command-parity",
+        "command": "taskpad:planned-command-parity",
+        "rawCommand": "taskpad:planned-command-parity",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      }
+    ],
+    "summary": {
+      "totalPlannedCommands": 46,
+      "validCommands": 46,
+      "invalidCommands": 0,
+      "invalidCommandCount": 0
+    }
+  },
+  "violations": []
+}

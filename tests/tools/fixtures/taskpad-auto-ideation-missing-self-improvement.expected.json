@@ -1,0 +1,9 @@
+{
+  "scenario": "missing-self-improvement",
+  "description": "Missing-heading failure: Self-Improvement Backlog heading is missing from TASKPAD (default target queue)",
+  "expectedError": {
+    "message": "Missing required heading: ## Self-Improvement Backlog",
+    "ruleId": "MISSING_HEADING_SELF_IMPROVEMENT"
+  },
+  "expectedStatus": "error"
+}

@@ -36,7 +36,7 @@ export type RuntimeRequest =
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
-  | { success: true; usedMethod: "uri" | "clipboard" }
+  | { success: true; usedMethod: "cli" | "uri" | "clipboard" }
   | { success: false; error: string };
 
 export type SaveToCliResponse =

@@ -1,0 +1,81 @@
+{
+  "status": "success",
+  "processed": 3,
+  "upserts": {
+    "responseLog": 3,
+    "eventLog": 3
+  },
+  "suppressed": 0,
+  "errors": [],
+  "responseLogUpserts": [
+    {
+      "recipientHandle": "pilot_alpha",
+      "fields": {
+        "workflowSentence": "Interested in the product",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-15T10:30:00.000Z"
+      }
+    },
+    {
+      "recipientHandle": "pilot_bravo",
+      "fields": {
+        "workflowSentence": "Asked about pricing",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-16T14:20:00.000Z",
+        "decisionState": "advance"
+      }
+    },
+    {
+      "recipientHandle": "pilot_charlie",
+      "fields": {
+        "workflowSentence": "Requested demo",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-17T09:15:00.000Z",
+        "decisionState": "nurture",
+        "objectionType": "timing"
+      }
+    }
+  ],
+  "eventLogUpserts": [
+    {
+      "eventId": "RECEIVE_REPLY-pilot_alpha-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_alpha",
+      "eventTimestamp": "2026-02-15T10:30:00.000Z",
+      "payload": {
+        "channel": "X DM",
+        "workflowSentence": "Interested in the product",
+        "replyTimestamp": "2026-02-15T10:30:00.000Z",
+        "messageId": "msg-001"
+      }
+    },
+    {
+      "eventId": "RECEIVE_REPLY-pilot_bravo-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_bravo",
+      "eventTimestamp": "2026-02-16T14:20:00.000Z",
+      "payload": {
+        "channel": "Discord DM",
+        "workflowSentence": "Asked about pricing",
+        "replyTimestamp": "2026-02-16T14:20:00.000Z",
+        "messageId": "msg-002",
+        "decision": "advance"
+      }
+    },
+    {
+      "eventId": "RECEIVE_REPLY-pilot_charlie-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_charlie",
+      "eventTimestamp": "2026-02-17T09:15:00.000Z",
+      "payload": {
+        "channel": "Email",
+        "workflowSentence": "Requested demo",
+        "replyTimestamp": "2026-02-17T09:15:00.000Z",
+        "messageId": "msg-003",
+        "decision": "nurture",
+        "objection": "timing"
+      }
+    }
+  ],
+  "suppressedEntries": []
+}

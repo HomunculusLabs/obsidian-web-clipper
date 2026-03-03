@@ -1,0 +1,94 @@
+{
+  "status": "pass",
+  "inputs": {
+    "fixturesDocPath": "FIXTURES_DIR/github-regression-contract-parity/pass.md",
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/pass.package.json",
+    "projectRoot": "FIXTURES_DIR/.."
+  },
+  "docAnalysis": {
+    "docPath": "FIXTURES_DIR/github-regression-contract-parity/pass.md",
+    "references": [
+      {
+        "lineNumber": 9,
+        "rawReference": "bun run typecheck",
+        "normalizedReference": "typecheck",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 10,
+        "rawReference": "bun run test",
+        "normalizedReference": "test",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 15,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      }
+    ],
+    "referenceCounts": {
+      "testFiles": 0,
+      "verificationCommands": 3,
+      "packageScripts": 3,
+      "toolPaths": 0
+    },
+    "totalReferences": 3
+  },
+  "commandSurface": {
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/pass.package.json",
+    "packageScripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "bun test",
+      "test:github:reported-failures": "bun test tests/templates/github.test.ts"
+    },
+    "toolPaths": []
+  },
+  "validations": [
+    {
+      "reference": {
+        "lineNumber": 9,
+        "rawReference": "bun run typecheck",
+        "normalizedReference": "typecheck",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    },
+    {
+      "reference": {
+        "lineNumber": 10,
+        "rawReference": "bun run test",
+        "normalizedReference": "test",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    },
+    {
+      "reference": {
+        "lineNumber": 15,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    }
+  ],
+  "summary": {
+    "totalReferences": 3,
+    "validReferences": 3,
+    "invalidReferences": 0,
+    "violationCounts": {},
+    "status": "pass"
+  },
+  "violations": [],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

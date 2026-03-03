@@ -81,7 +81,10 @@ export function canSpawnProcess(): boolean {
  */
 export async function saveViaCli(
   config: ObsidianCliConfig,
-  options: CliSaveOptions
+  options: CliSaveOptions,
+  processAdapter?: {
+    spawn?: typeof import("child_process").spawn;
+  }
 ): Promise<CliSaveResult> {
   const { cliPath, vault, enabled } = config;
   const { filePath, content, overwrite = true, append = false } = options;
@@ -133,8 +136,8 @@ export async function saveViaCli(
 
   try {
     // Dynamic import for Node.js/Bun environment only
-    const { spawn } = await import("child_process");
-    
+    const spawn = processAdapter?.spawn ?? (await import("child_process")).spawn;
+
     const result = await new Promise<CliSaveResult>((resolve) => {
       const proc = spawn(cliPath, args, {
         stdio: ["ignore", "pipe", "pipe"]

@@ -1,0 +1,2 @@
+{"recipientKey":"alice_test","messageId":"msg-alice-001","sourceExportHash":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","responseTimestamp":"2026-02-28T00:00:00Z","channel":"X DM"}
+{"recipientKey":"charlie_test","messageId":"msg-bob-001-wrong-recipient","sourceExportHash":"b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3","responseTimestamp":"2026-02-27T00:00:00Z","channel":"Discord DM"}

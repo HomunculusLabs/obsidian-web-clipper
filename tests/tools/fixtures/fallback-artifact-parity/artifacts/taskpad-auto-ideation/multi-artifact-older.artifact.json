@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "kind": "taskpad-auto-ideation-fallback-patch",
+  "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+  "taskpadSha256": "b9f8f167f44f4964e6c998dee827110c4e8a52d6c5e6c8c8c8e8e8e8e8e8e8e9",
+  "selectedCandidateId": "AIC002",
+  "selectedOutcome": {
+    "action": "would-insert",
+    "canonicalBullet": "- [ ] Plan-seed candidate 2",
+    "insertedLine": 4
+  },
+  "patch": {
+    "format": "unified-diff",
+    "targetPath": "/mock/path/to/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md",
+    "content": "--- a/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md\n+++ b/fallback-artifact-parity/taskpad/multi-artifact.taskpad.md\n@@ -2,6 +2,7 @@\n \n ## Execution Queue\n - [x] planned-2026-02-28 completed task\n+- [ ] Plan-seed candidate 2\n \n ## Work Queue\n - [ ] Plan-seed candidate 2\n"
+  },
+  "applyHint": "Apply patch.content to patch.targetPath in a writable environment."
+}

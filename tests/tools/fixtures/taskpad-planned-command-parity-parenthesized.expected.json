@@ -1,0 +1,137 @@
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "FIXTURES_DIR/taskpad-planned-command-parity-parenthesized.taskpad.md",
+    "planPath": "FIXTURES_DIR/taskpad-planned-command-parity-parenthesized.plan.md",
+    "packagePath": "FIXTURES_DIR/taskpad-planned-command-parity-parenthesized.package.json"
+  },
+  "taskpadAnalysis": {
+    "plannedCount": 2,
+    "plannedItems": [
+      {
+        "lineNumber": 4,
+        "rawText": "- [ ] (planned-2026-03-01) Task with parenthesized marker Verify: taskpad:auto-ideation",
+        "plannedDate": "2026-03-01",
+        "markerShape": "parenthesized",
+        "sourceText": "Task with parenthesized marker",
+        "verifyCommands": [
+          "taskpad:auto-ideation"
+        ]
+      },
+      {
+        "lineNumber": 5,
+        "rawText": "- [ ] planned-2026-03-02 Task with unparenthesized marker Verify: typecheck, test",
+        "plannedDate": "2026-03-02",
+        "markerShape": "unparenthesized",
+        "sourceText": "Task with unparenthesized marker",
+        "verifyCommands": [
+          "typecheck",
+          "test"
+        ]
+      }
+    ]
+  },
+  "planAnalysis": {
+    "activeSlice": {
+      "heading": "## TASKPAD Intake Slice (2026-03-01): Test Slice",
+      "line": 3,
+      "date": "2026-03-01"
+    },
+    "verificationCommands": [
+      {
+        "command": "taskpad:auto-ideation",
+        "lineNumber": 5
+      },
+      {
+        "command": "typecheck",
+        "lineNumber": 6
+      },
+      {
+        "command": "test",
+        "lineNumber": 7
+      }
+    ],
+    "verificationCommandCount": 3
+  },
+  "commandSurface": {
+    "packageScripts": {
+      "taskpad:auto-ideation": "bun tools/taskpad-auto-ideation.ts",
+      "typecheck": "tsc --noEmit",
+      "test": "bun test"
+    },
+    "toolPaths": []
+  },
+  "parityCheck": {
+    "plannedCommands": [
+      {
+        "source": "work-queue",
+        "sourceLine": 4,
+        "sourceItem": "- [ ] (planned-2026-03-01) Task with parenthesized marker Verify: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 5,
+        "sourceItem": "- [ ] planned-2026-03-02 Task with unparenthesized marker Verify: typecheck, test",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 5,
+        "sourceItem": "- [ ] planned-2026-03-02 Task with unparenthesized marker Verify: typecheck, test",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 5,
+        "sourceItem": "Verification: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 6,
+        "sourceItem": "Verification: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 7,
+        "sourceItem": "Verification: test",
+        "command": "test",
+        "rawCommand": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      }
+    ],
+    "summary": {
+      "totalPlannedCommands": 6,
+      "validCommands": 6,
+      "invalidCommands": 0,
+      "invalidCommandCount": 0
+    }
+  },
+  "violations": [],
+  "timestamp": "2026-03-02T02:44:12.000Z"
+}

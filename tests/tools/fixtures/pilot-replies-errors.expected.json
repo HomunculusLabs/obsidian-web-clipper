@@ -1,0 +1,80 @@
+{
+  "status": "failed",
+  "processed": 5,
+  "upserts": {
+    "responseLog": 0,
+    "eventLog": 0
+  },
+  "suppressed": 0,
+  "errors": [
+    {
+      "ruleId": "MALFORMED_ROW",
+      "rowIndex": 6,
+      "message": "Failed to parse row as JSON: JSON Parse error: Unexpected identifier \"this\"",
+      "details": {
+        "line": "this is not valid json"
+      }
+    },
+    {
+      "ruleId": "UNKNOWN_RECIPIENT",
+      "rowIndex": 1,
+      "messageId": "msg-001",
+      "recipientHandle": "@testuser1",
+      "message": "Unknown recipient handle '@testuser1'. Not found in pilot-response-log or pilot-event-log.",
+      "details": {
+        "provided": "@testuser1",
+        "knownRecipients": [
+          "pilot_alpha",
+          "pilot_bravo",
+          "pilot_charlie"
+        ]
+      }
+    },
+    {
+      "ruleId": "INVALID_CHANNEL",
+      "rowIndex": 2,
+      "messageId": "msg-002",
+      "recipientHandle": "@testuser2",
+      "message": "Invalid channel 'Invalid Channel'. Must be one of: X DM, Discord DM, Email",
+      "details": {
+        "provided": "Invalid Channel",
+        "valid": [
+          "X DM",
+          "Discord DM",
+          "Email"
+        ]
+      }
+    },
+    {
+      "ruleId": "INVALID_DECISION_STATE",
+      "rowIndex": 3,
+      "messageId": "msg-003",
+      "recipientHandle": "@testuser3",
+      "message": "Invalid decision state 'invalid-state'. Must be one of: advance, nurture, disqualify, pending",
+      "details": {
+        "provided": "invalid-state",
+        "valid": [
+          "advance",
+          "nurture",
+          "disqualify",
+          "pending"
+        ]
+      }
+    },
+    {
+      "ruleId": "MISSING_MESSAGE_ID",
+      "rowIndex": 4,
+      "recipientHandle": "@testuser4",
+      "message": "Required field 'messageId' is missing or invalid"
+    },
+    {
+      "ruleId": "MISSING_MESSAGE_ID",
+      "rowIndex": 5,
+      "recipientHandle": "@testuser5",
+      "message": "Required field 'messageId' is missing or invalid"
+    }
+  ],
+  "responseLogUpserts": [],
+  "eventLogUpserts": [],
+  "suppressedEntries": []
+}

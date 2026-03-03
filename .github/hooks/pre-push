@@ -51,6 +51,11 @@ while read local_ref local_oid remote_ref remote_oid; do
     echo "Base: $BASE"
     echo ""
     
+    # Fetch base branch to ensure we can compare
+    echo "📥 Fetching $BASE for comparison..."
+    git fetch origin "$(echo "$BASE" | sed 's/origin\///')" --quiet 2>/dev/null || true
+    echo ""
+    
     # Run Codex review
     echo "🤖 Running AI code review..."
     echo "   (This may take 30-60 seconds)"

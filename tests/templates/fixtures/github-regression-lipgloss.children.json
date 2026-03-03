@@ -1,0 +1,106 @@
+{
+  "$schema": "../schemas/github-regression-children.schema.json",
+  "contract_version": "1.0.0",
+  "parent": {
+    "owner": "charmbracelet",
+    "repo": "lipgloss",
+    "url": "https://github.com/charmbracelet/lipgloss",
+    "filename": "lipgloss"
+  },
+  "link_follow": {
+    "enabled": true,
+    "depth_limit": 1,
+    "dedupe_strategy": "url_deduplication",
+    "ordering": "alphabetical_by_url"
+  },
+  "children": [
+    {
+      "url": "https://github.com/charmbracelet/bubbletea",
+      "owner": "charmbracelet",
+      "repo": "bubbletea",
+      "filename": "lipgloss-bubbletea",
+      "discovery_source": "readme_link",
+      "depth": 1,
+      "link_text": "charmbracelet/bubbletea",
+      "context_section": "## Related Projects"
+    },
+    {
+      "url": "https://github.com/charmbracelet/gum",
+      "owner": "charmbracelet",
+      "repo": "gum",
+      "filename": "lipgloss-gum",
+      "discovery_source": "readme_link",
+      "depth": 1,
+      "link_text": "charmbracelet/gum",
+      "context_section": "## Related Projects"
+    },
+    {
+      "url": "https://github.com/charmbracelet/vhs",
+      "owner": "charmbracelet",
+      "repo": "vhs",
+      "filename": "lipgloss-vhs",
+      "discovery_source": "readme_link",
+      "depth": 1,
+      "link_text": "charmbracelet/vhs",
+      "context_section": "## Related Projects"
+    }
+  ],
+  "discovered_links": {
+    "total": 3,
+    "unique": 3,
+    "after_dedupe": 3,
+    "after_exclusions": 3
+  },
+  "excluded_links": [],
+  "exclusion_reasons": {
+    "self_reference": [],
+    "non_github": [],
+    "has_path_beyond_repo": [],
+    "tree_path": []
+  },
+  "child_frontmatter_template": {
+    "source": "{{url}}",
+    "title": "{{owner}}/{{repo}}",
+    "filename": "{{filename}}",
+    "type": "github-repo",
+    "site": "github",
+    "extra": {
+      "github_owner": "{{owner}}",
+      "github_repo": "{{repo}}",
+      "github_package_name": "{{repo}}",
+      "github_discovered_from": "{{parent.url}}",
+      "github_discovery_depth": 1,
+      "github_sibling_of": "{{parent.filename}}"
+    }
+  },
+  "assertions": {
+    "child_count": {
+      "expected": 3,
+      "operator": "==="
+    },
+    "child_urls": {
+      "expected": [
+        "https://github.com/charmbracelet/bubbletea",
+        "https://github.com/charmbracelet/gum",
+        "https://github.com/charmbracelet/vhs"
+      ],
+      "operator": "array_equals"
+    },
+    "child_filenames": {
+      "expected": [
+        "lipgloss-bubbletea",
+        "lipgloss-gum",
+        "lipgloss-vhs"
+      ],
+      "operator": "array_equals"
+    },
+    "depth_limit": {
+      "expected": 1,
+      "operator": "==="
+    },
+    "alphabetical_ordering": {
+      "by_url": true,
+      "operator": "==="
+    }
+  }
+}

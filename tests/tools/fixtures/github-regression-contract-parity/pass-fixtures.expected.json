@@ -1,0 +1,205 @@
+{
+  "status": "pass",
+  "inputs": {
+    "fixturesDocPath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.md",
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.package.json",
+    "projectRoot": "FIXTURES_DIR/.."
+  },
+  "docAnalysis": {
+    "docPath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.md",
+    "references": [
+      {
+        "lineNumber": 22,
+        "rawReference": "bun test tests/templates/github.test.ts",
+        "normalizedReference": "tests/templates/github.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 23,
+        "rawReference": "bun test tests/e2e/headless-clip-harness.test.ts",
+        "normalizedReference": "tests/e2e/headless-clip-harness.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 29,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 44,
+        "rawReference": "bun test tests/templates/github.test.ts",
+        "normalizedReference": "tests/templates/github.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 49,
+        "rawReference": "bun run typecheck",
+        "normalizedReference": "typecheck",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 58,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      {
+        "lineNumber": 59,
+        "rawReference": "bun run typecheck",
+        "normalizedReference": "typecheck",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      }
+    ],
+    "referenceCounts": {
+      "testFiles": 3,
+      "verificationCommands": 4,
+      "packageScripts": 4,
+      "toolPaths": 0
+    },
+    "totalReferences": 7
+  },
+  "commandSurface": {
+    "packagePath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.package.json",
+    "packageScripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "bun test",
+      "test:github:reported-failures": "bun test tests/templates/github.test.ts tests/e2e/headless-clip-harness.test.ts"
+    },
+    "toolPaths": []
+  },
+  "validations": [
+    {
+      "reference": {
+        "lineNumber": 22,
+        "rawReference": "bun test tests/templates/github.test.ts",
+        "normalizedReference": "tests/templates/github.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "message": "Test file does not exist: tests/templates/github.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "reference": {
+        "lineNumber": 23,
+        "rawReference": "bun test tests/e2e/headless-clip-harness.test.ts",
+        "normalizedReference": "tests/e2e/headless-clip-harness.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "message": "Test file does not exist: tests/e2e/headless-clip-harness.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "reference": {
+        "lineNumber": 29,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    },
+    {
+      "reference": {
+        "lineNumber": 44,
+        "rawReference": "bun test tests/templates/github.test.ts",
+        "normalizedReference": "tests/templates/github.test.ts",
+        "referenceType": "test-file",
+        "sourceContext": "code-block"
+      },
+      "valid": false,
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "message": "Test file does not exist: tests/templates/github.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "reference": {
+        "lineNumber": 49,
+        "rawReference": "bun run typecheck",
+        "normalizedReference": "typecheck",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    },
+    {
+      "reference": {
+        "lineNumber": 58,
+        "rawReference": "bun run test:github:reported-failures",
+        "normalizedReference": "test:github:reported-failures",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    },
+    {
+      "reference": {
+        "lineNumber": 59,
+        "rawReference": "bun run typecheck",
+        "normalizedReference": "typecheck",
+        "referenceType": "package-script",
+        "sourceContext": "code-block"
+      },
+      "valid": true,
+      "message": "Package script exists and is defined"
+    }
+  ],
+  "summary": {
+    "totalReferences": 7,
+    "validReferences": 4,
+    "invalidReferences": 3,
+    "violationCounts": {
+      "GH_PARITY001_MISSING_TEST_FILE": 3
+    },
+    "status": "fail"
+  },
+  "violations": [
+    {
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.md",
+      "lineNumber": 22,
+      "rawReference": "bun test tests/templates/github.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file does not exist: tests/templates/github.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.md",
+      "lineNumber": 23,
+      "rawReference": "bun test tests/e2e/headless-clip-harness.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file does not exist: tests/e2e/headless-clip-harness.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    },
+    {
+      "ruleId": "GH_PARITY001_MISSING_TEST_FILE",
+      "severity": "error",
+      "docPath": "FIXTURES_DIR/github-regression-contract-parity/pass-fixtures.md",
+      "lineNumber": 44,
+      "rawReference": "bun test tests/templates/github.test.ts",
+      "referenceType": "test-file",
+      "message": "Test file does not exist: tests/templates/github.test.ts",
+      "remediation": "Create the test file or update the reference to an existing file"
+    }
+  ],
+  "timestamp": "2026-03-02T00:00:00.000Z"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "test-undetected-regression",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "taskpad:auto-ideation": "bun run tools/taskpad-auto-ideation.ts",
+    "taskpad:plan-seed": "bun run tools/taskpad-plan-seed.ts",
+    "pilot:sample-gap-planner": "bun run tools/pilot-sample-gap-planner.ts",
+    "pilot:price-signal": "bun run tools/pilot-price-signal.ts",
+    "taskpad:intake-autoplan": "bun run tools/taskpad-intake-autoplan.ts",
+    "taskpad:queue-health": "bun run tools/taskpad-queue-health.ts",
+    "taskpad:planned-command-parity": "bun run tools/taskpad-planned-command-parity.ts"
+  }
+}

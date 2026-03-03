@@ -118,6 +118,65 @@ export function buildFrontmatterFromClip(options: BuildFrontmatterOptions): Buil
   };
 }
 
+function addTrimmedExtraField(
+  extra: NonNullable<FrontmatterInput["extra"]>,
+  key: string,
+  value: string | null | undefined
+): void {
+  const cleaned = value?.trim();
+  if (!cleaned) {
+    return;
+  }
+
+  extra[key] = cleaned;
+}
+
+function addNumericExtraField(
+  extra: NonNullable<FrontmatterInput["extra"]>,
+  key: string,
+  value: number | null | undefined
+): void {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return;
+  }
+
+  extra[key] = value;
+}
+
+function normalizeStringArray(values: string[] | string | null | undefined): string[] {
+  const valueList = Array.isArray(values)
+    ? values
+    : typeof values === "string"
+      ? [values]
+      : [];
+
+  const unique = new Set<string>();
+  for (const value of valueList) {
+    const cleaned = value.trim();
+    if (!cleaned) {
+      continue;
+    }
+    if (!unique.has(cleaned)) {
+      unique.add(cleaned);
+    }
+  }
+
+  return [...unique];
+}
+
+function addStringArrayExtraField(
+  extra: NonNullable<FrontmatterInput["extra"]>,
+  key: string,
+  values: string[] | string | null | undefined
+): void {
+  const cleanedValues = normalizeStringArray(values);
+  if (cleanedValues.length === 0) {
+    return;
+  }
+
+  extra[key] = cleanedValues;
+}
+
 /**
  * Build the extra fields for frontmatter based on clip result and settings.
  */
@@ -126,7 +185,7 @@ function buildExtraFields(
   settings: Settings,
   _pageType: PageType
 ): FrontmatterInput["extra"] {
-  const extra: FrontmatterInput["extra"] = {
+  const extra: NonNullable<FrontmatterInput["extra"]> = {
     published_date: result.metadata?.publishedDate || undefined,
     description: result.metadata?.description || undefined,
     paywalled: result.metadata?.paywalled,
@@ -212,6 +271,72 @@ function buildExtraFields(
   if (result.metadata?.selectionCount && result.metadata.selectionCount > 1) {
     extra.selection_count = result.metadata.selectionCount;
   }
+
+  // SeedFinder full profile metadata (normalized + raw source values)
+  const seedFinderProfile = result.metadata?.seedFinderProfile;
+
+  if (seedFinderProfile) {
+    addTrimmedExtraField(extra, "seedfinder_lineage", seedFinderProfile.lineage);
+    addStringArrayExtraField(extra, "seedfinder_lineage_parents", seedFinderProfile.lineageParents);
+
+    const thc = seedFinderProfile.potency?.thc;
+    if (thc) {
+      addTrimmedExtraField(extra, "seedfinder_thc_raw", thc.raw);
+      addNumericExtraField(extra, "seedfinder_thc_min_percent", thc.minPercent);
+      addNumericExtraField(extra, "seedfinder_thc_max_percent", thc.maxPercent);
+      addTrimmedExtraField(extra, "seedfinder_thc_comparator", thc.comparator);
+    }
+
+    const cbd = seedFinderProfile.potency?.cbd;
+    if (cbd) {
+      addTrimmedExtraField(extra, "seedfinder_cbd_raw", cbd.raw);
+      addNumericExtraField(extra, "seedfinder_cbd_min_percent", cbd.minPercent);
+      addNumericExtraField(extra, "seedfinder_cbd_max_percent", cbd.maxPercent);
+      addTrimmedExtraField(extra, "seedfinder_cbd_comparator", cbd.comparator);
+    }
+
+    const flowering = seedFinderProfile.flowering;
+    if (flowering) {
+      addTrimmedExtraField(extra, "seedfinder_flowering_raw", flowering.raw);
+      addNumericExtraField(extra, "seedfinder_flowering_min_days", flowering.minDays);
+      addNumericExtraField(extra, "seedfinder_flowering_max_days", flowering.maxDays);
+      addNumericExtraField(extra, "seedfinder_flowering_min_weeks", flowering.minWeeks);
+      addNumericExtraField(extra, "seedfinder_flowering_max_weeks", flowering.maxWeeks);
+      addTrimmedExtraField(
+        extra,
+        "seedfinder_flowering_harvest_window",
+        flowering.harvestWindow
+      );
+    }
+
+    addTrimmedExtraField(extra, "seedfinder_breeder", seedFinderProfile.breeder);
+    addStringArrayExtraField(extra, "seedfinder_aroma", seedFinderProfile.aroma);
+    addStringArrayExtraField(extra, "seedfinder_effects", seedFinderProfile.effects);
+
+    const rawSourceValues = seedFinderProfile.rawSourceValues;
+    if (rawSourceValues) {
+      addTrimmedExtraField(extra, "seedfinder_raw_lineage", rawSourceValues.lineage);
+      addStringArrayExtraField(
+        extra,
+        "seedfinder_raw_lineage_parents",
+        rawSourceValues.lineageParents
+      );
+      addTrimmedExtraField(extra, "seedfinder_raw_thc", rawSourceValues.thc);
+      addTrimmedExtraField(extra, "seedfinder_raw_cbd", rawSourceValues.cbd);
+      addTrimmedExtraField(extra, "seedfinder_raw_flowering", rawSourceValues.flowering);
+      addTrimmedExtraField(extra, "seedfinder_raw_breeder", rawSourceValues.breeder);
+      addStringArrayExtraField(extra, "seedfinder_raw_aroma", rawSourceValues.aroma);
+      addStringArrayExtraField(extra, "seedfinder_raw_effects", rawSourceValues.effects);
+    }
+  }
+
+  // SeedFinder legacy compatibility keys
+  addTrimmedExtraField(extra, "lineage", seedFinderProfile?.lineage ?? result.metadata?.lineage);
+  addStringArrayExtraField(
+    extra,
+    "lineage_parents",
+    seedFinderProfile?.lineageParents ?? result.metadata?.lineageParents
+  );
 
   // Twitter/X specific metadata (Task 51)
   if (result.metadata?.twitterAuthorHandle) {

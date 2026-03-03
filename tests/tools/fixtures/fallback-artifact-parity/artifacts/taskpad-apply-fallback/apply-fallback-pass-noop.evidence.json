@@ -1,0 +1,9 @@
+{
+  "status": "noop",
+  "taskpadPath": "/mock/path/to/fallback-artifact-parity/taskpad/pass-noop.taskpad.md",
+  "artifactPath": "/mock/path/to/fallback-artifact-parity/artifacts/taskpad-auto-ideation/pass-noop.artifact.json",
+  "reasonCode": null,
+  "message": "Fallback artifact already applied; files unchanged.",
+  "remediationHint": null,
+  "appliedAt": "2026-03-02T00:35:00.000Z"
+}

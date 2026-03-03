@@ -1,0 +1,146 @@
+{
+  "manifestVersion": "1.0.0",
+  "description": "Headless clip scenario matrix for Obsidian Web Clipper validation gate",
+  "scenarios": [
+    {
+      "id": "generic-web-clip",
+      "name": "Generic web clip flow",
+      "required": true,
+      "entryPoint": "url",
+      "executor": {
+        "testFile": "tests/e2e/headless-clip-harness.test.ts",
+        "testCase": "scenario #1: generic web clip assertions"
+      },
+      "fixture": {
+        "path": "tests/extractors/fixtures/article.html",
+        "simulatedUrl": "https://example.com/article",
+        "pageType": "web"
+      },
+      "expectations": {
+        "frontmatterKeys": ["source", "title", "date_clipped", "tags", "type"],
+        "requiredTags": ["web-clip", "headless-harness"],
+        "contentSignals": [
+          "Test Article Title",
+          "This is the first paragraph of the test article"
+        ],
+        "customAssertions": {
+          "extractedSuccess": true,
+          "minMarkdownLength": 50,
+          "expectedSourceUrl": "https://example.com/article",
+          "expectedType": "article"
+        }
+      }
+    },
+    {
+      "id": "seedfinder-strain-profile",
+      "name": "SeedFinder strain profile integrity",
+      "required": true,
+      "entryPoint": "url",
+      "executor": {
+        "testFile": "tests/e2e/headless-clip-harness.test.ts",
+        "testCase": "scenario #2: SeedFinder integrity assertions"
+      },
+      "fixture": {
+        "path": "tests/templates/fixtures/seedfinder-strain.html",
+        "simulatedUrl": "https://en.seedfinder.eu/strain-info/Blue_Dream/",
+        "pageType": "article"
+      },
+      "expectations": {
+        "frontmatterKeys": ["source", "title", "date_clipped", "tags", "type"],
+        "requiredTags": ["web-clip", "headless-harness"],
+        "contentSignals": [
+          "## Strain Profile",
+          "Lineage",
+          "Blueberry x Haze",
+          "17-24%",
+          "Breeder",
+          "Humboldt Seed Organization"
+        ],
+        "customAssertions": {
+          "templateUsed": "SeedFinder",
+          "seedFinderProfile": {
+            "lineage": "Blueberry x Haze",
+            "lineageParents": ["Blueberry", "Haze"],
+            "potency": {
+              "thc": {
+                "raw": "17-24%",
+                "minPercent": 17,
+                "maxPercent": 24
+              }
+            },
+            "flowering": {
+              "minDays": 63
+            },
+            "breeder": "Humboldt Seed Organization"
+          },
+          "frontmatterExtra": {
+            "seedfinder_lineage": "Blueberry x Haze",
+            "seedfinder_lineage_parents": ["Blueberry", "Haze"],
+            "seedfinder_thc_raw": "17-24%",
+            "seedfinder_thc_min_percent": 17,
+            "seedfinder_thc_max_percent": 24,
+            "seedfinder_flowering_min_days": 63,
+            "seedfinder_breeder": "Humboldt Seed Organization"
+          }
+        }
+      }
+    },
+    {
+      "id": "cli-save-contract",
+      "name": "CLI save contract validation",
+      "required": true,
+      "entryPoint": "cli-save",
+      "executor": {
+        "testFile": "tests/e2e/headless-clip-harness.test.ts",
+        "testCase": "scenario #3: CLI save contract assertions"
+      },
+      "fixture": {
+        "path": "tests/extractors/fixtures/article.html",
+        "simulatedUrl": "https://example.com/article",
+        "pageType": "web"
+      },
+      "expectations": {
+        "frontmatterKeys": ["source", "title", "date_clipped", "tags", "type"],
+        "requiredTags": ["web-clip", "headless-harness"],
+        "contentSignals": [
+          "# Test Article Title",
+          "This is the first paragraph of the test article"
+        ],
+        "customAssertions": {
+          "saveViaCliInvoked": true,
+          "expectedCommand": "obsidian-cli-mock",
+          "expectedArgs": ["create", "--content", "--vault", "--overwrite"],
+          "expectedExitCode": 0,
+          "expectedFolderPattern": "Harness/CLI-Contract/"
+        }
+      }
+    },
+    {
+      "id": "reddit-thread",
+      "name": "Reddit thread extraction",
+      "required": true,
+      "entryPoint": "url",
+      "executor": {
+        "testFile": "tests/e2e/headless-clip-harness.test.ts",
+        "testCase": "scenario #4: Reddit thread extraction assertions"
+      },
+      "fixture": {
+        "path": "tests/templates/fixtures/reddit-new.html",
+        "simulatedUrl": "https://www.reddit.com/r/programming/comments/abc123/test_post",
+        "pageType": "web"
+      },
+      "expectations": {
+        "frontmatterKeys": ["source", "title", "date_clipped", "tags", "type"],
+        "requiredTags": ["web-clip", "headless-harness"],
+        "contentSignals": [
+          "# Test Post : r/programming",
+          "This is the self-post content",
+          "bold text"
+        ],
+        "customAssertions": {
+          "templateUsed": "Reddit"
+        }
+      }
+    }
+  ]
+}

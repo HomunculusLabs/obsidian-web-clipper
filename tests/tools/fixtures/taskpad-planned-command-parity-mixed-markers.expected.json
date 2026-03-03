@@ -1,0 +1,409 @@
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "FIXTURES_DIR/taskpad-planned-command-parity-mixed-markers.taskpad.md",
+    "planPath": "FIXTURES_DIR/taskpad-planned-command-parity-mixed-markers.plan.md",
+    "packagePath": "FIXTURES_DIR/taskpad-planned-command-parity-mixed-markers.package.json"
+  },
+  "taskpadAnalysis": {
+    "plannedItems": [
+      {
+        "lineNumber": 4,
+        "rawText": "- [ ] (planned-2026-03-01) Parenthesized marker item one Verify: taskpad:auto-ideation",
+        "plannedDate": "2026-03-01",
+        "markerShape": "parenthesized",
+        "sourceText": "Parenthesized marker item one",
+        "verifyCommands": [
+          "taskpad:auto-ideation"
+        ]
+      },
+      {
+        "lineNumber": 5,
+        "rawText": "- [ ] planned-2026-03-02 Unparenthesized marker item one Verify: typecheck",
+        "plannedDate": "2026-03-02",
+        "markerShape": "unparenthesized",
+        "sourceText": "Unparenthesized marker item one",
+        "verifyCommands": [
+          "typecheck"
+        ]
+      },
+      {
+        "lineNumber": 6,
+        "rawText": "- [ ] (planned-2026-03-03) Parenthesized marker item two Verify: test",
+        "plannedDate": "2026-03-03",
+        "markerShape": "parenthesized",
+        "sourceText": "Parenthesized marker item two",
+        "verifyCommands": [
+          "test"
+        ]
+      },
+      {
+        "lineNumber": 7,
+        "rawText": "- [ ] planned-2026-03-04 Unparenthesized marker item two Verify: lint, format",
+        "plannedDate": "2026-03-04",
+        "markerShape": "unparenthesized",
+        "sourceText": "Unparenthesized marker item two",
+        "verifyCommands": [
+          "lint",
+          "format"
+        ]
+      },
+      {
+        "lineNumber": 8,
+        "rawText": "- [ ] (planned-2026-03-05) Parenthesized marker item three Verify: taskpad:plan-seed",
+        "plannedDate": "2026-03-05",
+        "markerShape": "parenthesized",
+        "sourceText": "Parenthesized marker item three",
+        "verifyCommands": [
+          "taskpad:plan-seed"
+        ]
+      },
+      {
+        "lineNumber": 9,
+        "rawText": "- [ ] planned-2026-03-06 Unparenthesized marker item three Verify: pilot:sample-gap-planner",
+        "plannedDate": "2026-03-06",
+        "markerShape": "unparenthesized",
+        "sourceText": "Unparenthesized marker item three",
+        "verifyCommands": [
+          "pilot:sample-gap-planner"
+        ]
+      },
+      {
+        "lineNumber": 10,
+        "rawText": "- [ ] (planned-2026-03-07) Another parenthesized item Verify: pilot:price-signal",
+        "plannedDate": "2026-03-07",
+        "markerShape": "parenthesized",
+        "sourceText": "Another parenthesized item",
+        "verifyCommands": [
+          "pilot:price-signal"
+        ]
+      },
+      {
+        "lineNumber": 11,
+        "rawText": "- [ ] planned-2026-03-08 Another unparenthesized item Verify: taskpad:intake-autoplan",
+        "plannedDate": "2026-03-08",
+        "markerShape": "unparenthesized",
+        "sourceText": "Another unparenthesized item",
+        "verifyCommands": [
+          "taskpad:intake-autoplan"
+        ]
+      },
+      {
+        "lineNumber": 12,
+        "rawText": "- [ ] (planned-2026-03-09) Mixed with special chars & symbols Verify: taskpad:queue-health",
+        "plannedDate": "2026-03-09",
+        "markerShape": "parenthesized",
+        "sourceText": "Mixed with special chars & symbols",
+        "verifyCommands": [
+          "taskpad:queue-health"
+        ]
+      },
+      {
+        "lineNumber": 13,
+        "rawText": "- [ ] planned-2026-03-10 Mixed with emoji 🚀 Verify: taskpad:planned-command-parity",
+        "plannedDate": "2026-03-10",
+        "markerShape": "unparenthesized",
+        "sourceText": "Mixed with emoji 🚀",
+        "verifyCommands": [
+          "taskpad:planned-command-parity"
+        ]
+      }
+    ],
+    "plannedCount": 10,
+    "markerShapeStats": {
+      "unparenthesizedCount": 5,
+      "parenthesizedCount": 5,
+      "totalCount": 10,
+      "parenthesizedPercentage": 50,
+      "unparenthesizedPercentage": 50,
+      "hasMixedStyles": true
+    }
+  },
+  "planAnalysis": {
+    "activeSlice": {
+      "heading": "## TASKPAD Intake Slice (2026-03-01): Mixed Marker Styles Test",
+      "line": 3,
+      "date": "2026-03-01"
+    },
+    "verificationCommands": [
+      {
+        "command": "typecheck",
+        "lineNumber": 20
+      },
+      {
+        "command": "test",
+        "lineNumber": 21
+      },
+      {
+        "command": "lint",
+        "lineNumber": 22
+      },
+      {
+        "command": "format",
+        "lineNumber": 23
+      },
+      {
+        "command": "taskpad:plan-seed",
+        "lineNumber": 24
+      },
+      {
+        "command": "pilot:sample-gap-planner",
+        "lineNumber": 25
+      },
+      {
+        "command": "pilot:price-signal",
+        "lineNumber": 26
+      },
+      {
+        "command": "taskpad:intake-autoplan",
+        "lineNumber": 27
+      },
+      {
+        "command": "taskpad:queue-health",
+        "lineNumber": 28
+      },
+      {
+        "command": "taskpad:planned-command-parity",
+        "lineNumber": 29
+      }
+    ],
+    "verificationCommandCount": 10
+  },
+  "commandSurface": {
+    "packageScripts": {
+      "taskpad:auto-ideation": "bun run tools/taskpad-auto-ideation.ts",
+      "typecheck": "tsc --noEmit",
+      "test": "bun test",
+      "lint": "eslint .",
+      "format": "prettier --check .",
+      "taskpad:plan-seed": "bun run tools/taskpad-plan-seed.ts",
+      "pilot:sample-gap-planner": "bun run tools/pilot-sample-gap-planner.ts",
+      "pilot:price-signal": "bun run tools/pilot-price-signal.ts",
+      "taskpad:intake-autoplan": "bun run tools/taskpad-intake-autoplan.ts",
+      "taskpad:queue-health": "bun run tools/taskpad-queue-health.ts",
+      "taskpad:planned-command-parity": "bun run tools/taskpad-planned-command-parity.ts"
+    },
+    "toolPaths": []
+  },
+  "parityCheck": {
+    "plannedCommands": [
+      {
+        "source": "work-queue",
+        "sourceLine": 4,
+        "sourceItem": "- [ ] (planned-2026-03-01) Parenthesized marker item one Verify: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 5,
+        "sourceItem": "- [ ] planned-2026-03-02 Unparenthesized marker item one Verify: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 6,
+        "sourceItem": "- [ ] (planned-2026-03-03) Parenthesized marker item two Verify: test",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 7,
+        "sourceItem": "- [ ] planned-2026-03-04 Unparenthesized marker item two Verify: lint, format",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 7,
+        "sourceItem": "- [ ] planned-2026-03-04 Unparenthesized marker item two Verify: lint, format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 8,
+        "sourceItem": "- [ ] (planned-2026-03-05) Parenthesized marker item three Verify: taskpad:plan-seed",
+        "command": "taskpad:plan-seed",
+        "rawCommand": "taskpad:plan-seed",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 9,
+        "sourceItem": "- [ ] planned-2026-03-06 Unparenthesized marker item three Verify: pilot:sample-gap-planner",
+        "command": "pilot:sample-gap-planner",
+        "rawCommand": "pilot:sample-gap-planner",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 10,
+        "sourceItem": "- [ ] (planned-2026-03-07) Another parenthesized item Verify: pilot:price-signal",
+        "command": "pilot:price-signal",
+        "rawCommand": "pilot:price-signal",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 11,
+        "sourceItem": "- [ ] planned-2026-03-08 Another unparenthesized item Verify: taskpad:intake-autoplan",
+        "command": "taskpad:intake-autoplan",
+        "rawCommand": "taskpad:intake-autoplan",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 12,
+        "sourceItem": "- [ ] (planned-2026-03-09) Mixed with special chars & symbols Verify: taskpad:queue-health",
+        "command": "taskpad:queue-health",
+        "rawCommand": "taskpad:queue-health",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 13,
+        "sourceItem": "- [ ] planned-2026-03-10 Mixed with emoji 🚀 Verify: taskpad:planned-command-parity",
+        "command": "taskpad:planned-command-parity",
+        "rawCommand": "taskpad:planned-command-parity",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 20,
+        "sourceItem": "Verification: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 21,
+        "sourceItem": "Verification: test",
+        "command": "test",
+        "rawCommand": "test",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 22,
+        "sourceItem": "Verification: lint",
+        "command": "lint",
+        "rawCommand": "lint",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 23,
+        "sourceItem": "Verification: format",
+        "command": "format",
+        "rawCommand": "format",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 24,
+        "sourceItem": "Verification: taskpad:plan-seed",
+        "command": "taskpad:plan-seed",
+        "rawCommand": "taskpad:plan-seed",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 25,
+        "sourceItem": "Verification: pilot:sample-gap-planner",
+        "command": "pilot:sample-gap-planner",
+        "rawCommand": "pilot:sample-gap-planner",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 26,
+        "sourceItem": "Verification: pilot:price-signal",
+        "command": "pilot:price-signal",
+        "rawCommand": "pilot:price-signal",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 27,
+        "sourceItem": "Verification: taskpad:intake-autoplan",
+        "command": "taskpad:intake-autoplan",
+        "rawCommand": "taskpad:intake-autoplan",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 28,
+        "sourceItem": "Verification: taskpad:queue-health",
+        "command": "taskpad:queue-health",
+        "rawCommand": "taskpad:queue-health",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 29,
+        "sourceItem": "Verification: taskpad:planned-command-parity",
+        "command": "taskpad:planned-command-parity",
+        "rawCommand": "taskpad:planned-command-parity",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      }
+    ],
+    "summary": {
+      "totalPlannedCommands": 21,
+      "validCommands": 21,
+      "invalidCommands": 0,
+      "invalidCommandCount": 0
+    }
+  },
+  "violations": []
+}

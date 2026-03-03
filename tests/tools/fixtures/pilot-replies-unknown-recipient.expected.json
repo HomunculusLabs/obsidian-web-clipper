@@ -1,0 +1,88 @@
+{
+  "status": "failed",
+  "processed": 4,
+  "upserts": {
+    "responseLog": 2,
+    "eventLog": 2
+  },
+  "suppressed": 0,
+  "errors": [
+    {
+      "ruleId": "UNKNOWN_RECIPIENT",
+      "rowIndex": 1,
+      "messageId": "msg-unknown-001",
+      "recipientHandle": "@unknown_user",
+      "message": "Unknown recipient handle '@unknown_user'. Not found in pilot-response-log or pilot-event-log.",
+      "details": {
+        "provided": "@unknown_user",
+        "knownRecipients": [
+          "pilot_alpha",
+          "pilot_bravo",
+          "pilot_charlie"
+        ]
+      }
+    },
+    {
+      "ruleId": "UNKNOWN_RECIPIENT",
+      "rowIndex": 3,
+      "messageId": "msg-unknown-002",
+      "recipientHandle": "random_person",
+      "message": "Unknown recipient handle 'random_person'. Not found in pilot-response-log or pilot-event-log.",
+      "details": {
+        "provided": "random_person",
+        "knownRecipients": [
+          "pilot_alpha",
+          "pilot_bravo",
+          "pilot_charlie"
+        ]
+      }
+    }
+  ],
+  "responseLogUpserts": [
+    {
+      "recipientHandle": "pilot_alpha",
+      "fields": {
+        "workflowSentence": "This is from a known recipient",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-20T11:00:00.000Z"
+      }
+    },
+    {
+      "recipientHandle": "pilot_bravo",
+      "fields": {
+        "workflowSentence": "Another known recipient",
+        "responseState": "replied",
+        "responseTimestamp": "2026-02-20T13:00:00.000Z",
+        "decisionState": "advance"
+      }
+    }
+  ],
+  "eventLogUpserts": [
+    {
+      "eventId": "RECEIVE_REPLY-pilot_alpha-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_alpha",
+      "eventTimestamp": "2026-02-20T11:00:00.000Z",
+      "payload": {
+        "channel": "X DM",
+        "workflowSentence": "This is from a known recipient",
+        "replyTimestamp": "2026-02-20T11:00:00.000Z",
+        "messageId": "msg-valid-001"
+      }
+    },
+    {
+      "eventId": "RECEIVE_REPLY-pilot_bravo-0002",
+      "eventType": "RECEIVE_REPLY",
+      "recipientHandle": "pilot_bravo",
+      "eventTimestamp": "2026-02-20T13:00:00.000Z",
+      "payload": {
+        "channel": "Discord DM",
+        "workflowSentence": "Another known recipient",
+        "replyTimestamp": "2026-02-20T13:00:00.000Z",
+        "messageId": "msg-valid-002",
+        "decision": "advance"
+      }
+    }
+  ],
+  "suppressedEntries": []
+}

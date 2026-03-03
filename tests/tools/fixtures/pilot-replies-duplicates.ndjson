@@ -1,0 +1,5 @@
+{"messageId":"msg-001","recipientHandle":"pilot_alpha","timestamp":"2026-02-15T10:30:00Z","channel":"X DM","workflowSentence":"First reply from alpha"}
+{"messageId":"msg-002","recipientHandle":"pilot_bravo","timestamp":"2026-02-15T11:00:00Z","channel":"Discord DM","workflowSentence":"First reply from bravo"}
+{"messageId":"msg-001","recipientHandle":"pilot_alpha","timestamp":"2026-02-15T12:00:00Z","channel":"X DM","workflowSentence":"Duplicate of msg-001 in batch"}
+{"messageId":"msg-003","recipientHandle":"pilot_charlie","timestamp":"2026-02-15T13:00:00Z","channel":"Email","workflowSentence":"Reply from charlie"}
+{"messageId":"msg-002","recipientHandle":"pilot_bravo","timestamp":"2026-02-15T14:00:00Z","channel":"Discord DM","workflowSentence":"Duplicate of msg-002 in batch"}

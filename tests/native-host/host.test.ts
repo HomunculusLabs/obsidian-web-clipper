@@ -387,6 +387,55 @@ describe("native host attachment decode and shell-injection guard", () => {
     }
   });
 
+  test("sanitizePath strips traversal segments but preserves double-dots inside names", async () => {
+    const env = await createTestEnv();
+    const host = await startHost({ MOCK_CLI_LOG: env.cliLogPath });
+
+    try {
+      // "../../etc/passwd" should collapse to "etc/passwd" (traversal stripped)
+      const traversalResponse = await host.request({
+        action: "saveToCli",
+        payload: {
+          cliPath: env.cliPath,
+          vault: "MyVault",
+          filePath: "../../etc/passwd",
+          content: "# traversal",
+        },
+      });
+      expect(traversalResponse.success).toBe(true);
+      expect(traversalResponse.data?.filePath).toBe("etc/passwd");
+
+      // "foo..bar/baz" should be preserved (not traversal)
+      const dotsInNameResponse = await host.request({
+        action: "saveToCli",
+        payload: {
+          cliPath: env.cliPath,
+          vault: "MyVault",
+          filePath: "foo..bar/baz",
+          content: "# dots in name",
+        },
+      });
+      expect(dotsInNameResponse.success).toBe(true);
+      expect(dotsInNameResponse.data?.filePath).toBe("foo..bar/baz");
+
+      // "a/./b/../c" should become "a/b/c"
+      const mixedResponse = await host.request({
+        action: "saveToCli",
+        payload: {
+          cliPath: env.cliPath,
+          vault: "MyVault",
+          filePath: "a/./b/../c",
+          content: "# mixed",
+        },
+      });
+      expect(mixedResponse.success).toBe(true);
+      expect(mixedResponse.data?.filePath).toBe("a/b/c");
+    } finally {
+      await host.close();
+      await rm(env.tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("does not execute shell metacharacters embedded in filePath", async () => {
     const env = await createTestEnv();
     const host = await startHost({ MOCK_CLI_LOG: env.cliLogPath });

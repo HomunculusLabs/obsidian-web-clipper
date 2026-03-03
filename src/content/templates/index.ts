@@ -24,6 +24,7 @@ import "./arxiv";
 import "./docs";
 import "./amazon";
 import "./recipe";
+import "./seedfinder";
 import "./twitter"; // Twitter/X - uses dedicated extractor
 
 import {
@@ -406,6 +407,8 @@ export {
   type Recipe,
   type RecipeNutrition
 } from "./recipe";
+
+export { seedFinderTemplate } from "./seedfinder";
 
 export {
   twitterTemplate,

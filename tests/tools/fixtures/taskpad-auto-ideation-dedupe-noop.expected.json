@@ -1,0 +1,61 @@
+{
+  "scenario": "dedupe-noop",
+  "description": "Semantic-dedupe: Work Queue already has semantically equivalent unchecked item, ideation returns deduped",
+  "expectedOrder": ["AIC001", "AIC002", "AIC003"],
+  "expectedTop3": [
+    {
+      "id": "AIC001",
+      "scoreBreakdown": {
+        "intakeGate": 10,
+        "recentSliceTheme": 0,
+        "qualityRisk": 8,
+        "total": 18
+      },
+      "stableSortKey": "AIC001:add deterministic ranking fixtures for taskpad auto ideation",
+      "tieBreak": {
+        "canonicalCandidateId": "AIC001",
+        "canonicalTitle": "Auto-ideation deterministic ranking harness",
+        "canonicalBullet": "- [ ] planned-YYYY-MM-DD add deterministic ranking fixtures for taskpad auto-ideation (exactly three candidates with stable tie-break ordering) Verify: <command>"
+      }
+    },
+    {
+      "id": "AIC002",
+      "scoreBreakdown": {
+        "intakeGate": 10,
+        "recentSliceTheme": 5,
+        "qualityRisk": 8,
+        "total": 23
+      },
+      "stableSortKey": "AIC002:work queue targeted auto ideation seeding empty queue intake loops",
+      "tieBreak": {
+        "canonicalCandidateId": "AIC002",
+        "canonicalTitle": "Recent-slice theme carry-forward guard",
+        "canonicalBullet": "- [ ] planned-YYYY-MM-DD add active-slice recency guard so auto-ideation weights the newest completed themes (starting with Work Queue-targeted auto-ideation seeding for empty-queue intake loops) before archived slices Verify: <command>"
+      }
+    },
+    {
+      "id": "AIC003",
+      "scoreBreakdown": {
+        "intakeGate": 10,
+        "recentSliceTheme": 0,
+        "qualityRisk": 9,
+        "total": 19
+      },
+      "stableSortKey": "AIC003:work queue insertion verify command scaffold parity compatibility",
+      "tieBreak": {
+        "canonicalCandidateId": "AIC003",
+        "canonicalTitle": "Quality-risk signal extraction hardening",
+        "canonicalBullet": "- [ ] planned-YYYY-MM-DD harden unresolved quality-risk extraction so queue seeding surfaces remediation for: Work Queue insertion must preserve verify-command scaffold for planned-command-parity compatibility Verify: <command>"
+      }
+    }
+  ],
+  "expectedStatus": "deduped",
+  "expectedTriggered": true,
+  "expectedTargetQueue": "work",
+  "expectedInsertionSection": "## Work Queue",
+  "expectedQueueParityStatus": {
+    "hasExecutableItems": true,
+    "targetQueueUncheckedCount": 1,
+    "parityStatus": "parity-pass"
+  }
+}

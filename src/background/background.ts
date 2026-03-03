@@ -5,6 +5,60 @@ import { handleClipSelection } from "./handlers/clipSelection";
 import { loadSettings } from "../shared/settingsService";
 import { refreshBadgeCounter } from "../shared/badgeCounter";
 
+const SIDE_PANEL_PATH = "popup/popup.html?view=sidepanel";
+
+async function openClipperInSidePanel(): Promise<boolean> {
+  if (!chrome.sidePanel?.open) {
+    return false;
+  }
+
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+    if (!activeTab?.windowId) {
+      return false;
+    }
+
+    if (activeTab.id !== undefined) {
+      await chrome.sidePanel.setOptions({
+        tabId: activeTab.id,
+        path: SIDE_PANEL_PATH,
+        enabled: true
+      });
+    }
+
+    await chrome.sidePanel.open({ windowId: activeTab.windowId });
+    return true;
+  } catch (err) {
+    console.warn("Unable to open side panel:", err);
+    return false;
+  }
+}
+
+async function openClipperSurface(): Promise<void> {
+  const openedInSidePanel = await openClipperInSidePanel();
+  if (openedInSidePanel) return;
+
+  try {
+    const maybePromise = chrome.action.openPopup();
+    await Promise.resolve(maybePromise);
+  } catch (err) {
+    console.error("Failed to open clipper surface:", err);
+  }
+}
+
+async function configureSidePanelBehavior(): Promise<void> {
+  if (!chrome.sidePanel?.setPanelBehavior) {
+    return;
+  }
+
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  } catch (err) {
+    console.warn("Failed to enable side panel action behavior:", err);
+  }
+}
+
 async function syncBadgeCounter(): Promise<void> {
   try {
     const settings = await loadSettings();
@@ -15,6 +69,7 @@ async function syncBadgeCounter(): Promise<void> {
 }
 
 void syncBadgeCounter();
+void configureSidePanelBehavior();
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
@@ -30,12 +85,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 // Keyboard shortcut handler
 chrome.commands.onCommand.addListener((command: string) => {
   if (command === "clip-page") {
-    try {
-      const maybePromise = chrome.action.openPopup();
-      void Promise.resolve(maybePromise);
-    } catch (err) {
-      console.error("Failed to open popup:", err);
-    }
+    void openClipperSurface();
   } else if (command === "clip-selection") {
     void (async () => {
       try {
@@ -50,10 +100,15 @@ chrome.commands.onCommand.addListener((command: string) => {
   }
 });
 
+chrome.action.onClicked.addListener(() => {
+  void openClipperSurface();
+});
+
 // Extension install handler
 chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
   void (async () => {
     await ensureDefaultsOnInstall(details);
+    await configureSidePanelBehavior();
     await createContextMenu();
     await syncBadgeCounter();
   })().catch((err: unknown) => {

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "taskpad-plan-seed-fallback-patch",
+  "taskpadPath": "/mock/path/to/TASKPAD.md",
+  "planPath": "/mock/path/to/IMPLEMENTATION_PLAN.md",
+  "taskpadSha256": "e5733aa9d5b68035453fd60468e489619e9a870d005fbb8da09ded95e4423400",
+  "planSha256": "e2665ea5b588810d37620d70837e9840ae082fa273fe8dfb4faaeadb959ec444",
+  "mutationId": "plan-seed-2026-02-28-tighten-intake-handoff",
+  "mutationOutcome": {
+    "action": "would-insert-plan",
+    "taskpadUpdatedLine": "- [x] planned-2026-02-28 tighten intake handoff",
+    "planInsertHeading": "## TASKPAD Intake Slice (2026-02-28): tighten intake handoff (`taskpad:plan-seed`)",
+    "selectedBacklogLine": 12
+  },
+  "patch": {
+    "format": "unified-diff",
+    "taskpadTargetPath": "/mock/path/to/TASKPAD.md",
+    "planTargetPath": "/mock/path/to/IMPLEMENTATION_PLAN.md",
+    "taskpadPatchContent": "--- a/TASKPAD.md\n+++ b/TASKPAD.md\n@@ -10,7 +10,7 @@\n \n ## Self-Improvement Backlog\n - [x] planned-2026-02-27 already completed\n-- [ ] tighten intake handoff\n+- [x] planned-2026-02-28 tighten intake handoff\n - [ ] add fallback artifact fixtures\n - [ ] improve test coverage\n",
+    "planPatchContent": "--- a/IMPLEMENTATION_PLAN.md\n+++ b/IMPLEMENTATION_PLAN.md\n@@ -1,5 +1,26 @@\n # Obsidian Web Clipper - Implementation Plan\n \n+## TASKPAD Intake Slice (2026-02-28): tighten intake handoff (`taskpad:plan-seed`)\n+\n+### Distilled Scope\n+- Tighten intake handoff process.\n+\n+### RepoPrompt Builder Context\n+- Intake handoff context.\n+\n+### Task Graph\n+- [ ] **TP001**: First task for intake handoff\n+\n+### Acceptance Criteria\n+- Intake handoff is tightened.\n+\n+### Verification Commands\n+```bash\n+bun run typecheck\n+```\n+\n+---\n+\n ## TASKPAD Intake Slice (2026-02-27): Previous slice (already completed)\n \n ### Distilled Scope\n"
+  },
+  "applyHint": "Run: bun run taskpad:apply-fallback -- --taskpad \\\"/mock/path/to/TASKPAD.md\\\" --plan \\\"/mock/path/to/IMPLEMENTATION_PLAN.md\\\" --artifact <artifact-path>\n\nThis will apply both TASKPAD and IMPLEMENTATION_PLAN mutations atomically."
+}

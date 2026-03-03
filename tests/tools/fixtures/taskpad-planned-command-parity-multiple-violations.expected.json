@@ -1,0 +1,236 @@
+{
+  "status": "fail",
+  "inputs": {
+    "taskpadPath": "FIXTURES_DIR/taskpad-planned-command-parity-multiple-violations.taskpad.md",
+    "planPath": "FIXTURES_DIR/taskpad-planned-command-parity-multiple-violations.plan.md",
+    "packagePath": "FIXTURES_DIR/taskpad-planned-command-parity-multiple-violations.package.json"
+  },
+  "taskpadAnalysis": {
+    "plannedItems": [
+      {
+        "lineNumber": 4,
+        "rawText": "- [ ] planned-2026-03-01 Valid task with existing script Verify: taskpad:auto-ideation",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Valid task with existing script",
+        "verifyCommands": [
+          "taskpad:auto-ideation"
+        ]
+      },
+      {
+        "lineNumber": 5,
+        "rawText": "- [ ] planned-2026-03-01 Task with missing script Verify: taskpad:nonexistent-script",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Task with missing script",
+        "verifyCommands": [
+          "taskpad:nonexistent-script"
+        ]
+      },
+      {
+        "lineNumber": 6,
+        "rawText": "- [ ] planned-2026-03-01 Task with missing tool path Verify: tools/nonexistent-tool.ts",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Task with missing tool path",
+        "verifyCommands": [
+          "tools/nonexistent-tool.ts"
+        ]
+      },
+      {
+        "lineNumber": 7,
+        "rawText": "- [ ] planned-2026-03-01 Task without command reference",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Task without command reference",
+        "verifyCommands": []
+      },
+      {
+        "lineNumber": 8,
+        "rawText": "- [ ] planned-2026-03-01 Another valid task Verify: typecheck",
+        "plannedDate": "2026-03-01",
+        "sourceText": "Another valid task",
+        "verifyCommands": [
+          "typecheck"
+        ]
+      }
+    ],
+    "plannedCount": 5
+  },
+  "planAnalysis": {
+    "activeSlice": {
+      "heading": "## TASKPAD Intake Slice (2026-03-01): Test Slice Multiple Violations",
+      "line": 3,
+      "date": "2026-03-01"
+    },
+    "verificationCommands": [
+      {
+        "command": "typecheck",
+        "lineNumber": 13
+      },
+      {
+        "command": "taskpad:missing-script",
+        "lineNumber": 14
+      },
+      {
+        "command": "tools/missing-test.test.ts",
+        "lineNumber": 15
+      }
+    ],
+    "verificationCommandCount": 3
+  },
+  "commandSurface": {
+    "packageScripts": {
+      "taskpad:auto-ideation": "bun run tools/taskpad-auto-ideation.ts",
+      "typecheck": "tsc --noEmit",
+      "test": "bun test"
+    },
+    "toolPaths": []
+  },
+  "parityCheck": {
+    "plannedCommands": [
+      {
+        "source": "work-queue",
+        "sourceLine": 4,
+        "sourceItem": "- [ ] planned-2026-03-01 Valid task with existing script Verify: taskpad:auto-ideation",
+        "command": "taskpad:auto-ideation",
+        "rawCommand": "taskpad:auto-ideation",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 5,
+        "sourceItem": "- [ ] planned-2026-03-01 Task with missing script Verify: taskpad:nonexistent-script",
+        "command": "taskpad:nonexistent-script",
+        "rawCommand": "taskpad:nonexistent-script",
+        "mappedTo": "package-script",
+        "executable": false,
+        "validationStatus": "MISSING_SCRIPT"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 6,
+        "sourceItem": "- [ ] planned-2026-03-01 Task with missing tool path Verify: tools/nonexistent-tool.ts",
+        "command": "tools/nonexistent-tool.ts",
+        "rawCommand": "tools/nonexistent-tool.ts",
+        "mappedTo": "tool-path",
+        "executable": false,
+        "validationStatus": "NON_EXECUTABLE_PATH"
+      },
+      {
+        "source": "work-queue",
+        "sourceLine": 8,
+        "sourceItem": "- [ ] planned-2026-03-01 Another valid task Verify: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 13,
+        "sourceItem": "Verification: typecheck",
+        "command": "typecheck",
+        "rawCommand": "typecheck",
+        "mappedTo": "package-script",
+        "executable": true,
+        "validationStatus": "VALID"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 14,
+        "sourceItem": "Verification: taskpad:missing-script",
+        "command": "taskpad:missing-script",
+        "rawCommand": "taskpad:missing-script",
+        "mappedTo": "package-script",
+        "executable": false,
+        "validationStatus": "MISSING_SCRIPT"
+      },
+      {
+        "source": "verification-block",
+        "sourceLine": 15,
+        "sourceItem": "Verification: tools/missing-test.test.ts",
+        "command": "tools/missing-test.test.ts",
+        "rawCommand": "tools/missing-test.test.ts",
+        "mappedTo": "tool-path",
+        "executable": false,
+        "validationStatus": "NON_EXECUTABLE_PATH"
+      }
+    ],
+    "summary": {
+      "totalPlannedCommands": 7,
+      "validCommands": 3,
+      "invalidCommands": 4,
+      "invalidCommandCount": 4
+    }
+  },
+  "violations": [
+    {
+      "ruleId": "PARITY001_MISSING_SCRIPT",
+      "severity": "error",
+      "source": "work-queue",
+      "sourceLine": 5,
+      "sourceItem": "- [ ] planned-2026-03-01 Task with missing script Verify: taskpad:nonexistent-script",
+      "command": "taskpad:nonexistent-script",
+      "details": {
+        "scriptKey": "taskpad:nonexistent-script",
+        "scriptExists": false,
+        "toolPath": null,
+        "toolExists": false
+      },
+      "remediation": "Add the missing script 'taskpad:nonexistent-script' to package.json or update the taskpad item to reference an existing command."
+    },
+    {
+      "ruleId": "PARITY001_MISSING_SCRIPT",
+      "severity": "error",
+      "source": "verification-block",
+      "sourceLine": 14,
+      "sourceItem": "Verification: taskpad:missing-script",
+      "command": "taskpad:missing-script",
+      "details": {
+        "scriptKey": "taskpad:missing-script",
+        "scriptExists": false,
+        "toolPath": null,
+        "toolExists": false
+      },
+      "remediation": "Add the missing script 'taskpad:missing-script' to package.json."
+    },
+    {
+      "ruleId": "PARITY002_MISSING_TOOL_PATH",
+      "severity": "error",
+      "source": "work-queue",
+      "sourceLine": 6,
+      "sourceItem": "- [ ] planned-2026-03-01 Task with missing tool path Verify: tools/nonexistent-tool.ts",
+      "command": "tools/nonexistent-tool.ts",
+      "details": {
+        "scriptExists": false,
+        "toolPath": "tools/nonexistent-tool.ts",
+        "toolExists": false
+      },
+      "remediation": "Create the tool file 'tools/nonexistent-tool.ts' or update the taskpad item to reference an existing tool path."
+    },
+    {
+      "ruleId": "PARITY002_MISSING_TOOL_PATH",
+      "severity": "error",
+      "source": "verification-block",
+      "sourceLine": 15,
+      "sourceItem": "Verification: tools/missing-test.test.ts",
+      "command": "tools/missing-test.test.ts",
+      "details": {
+        "scriptExists": false,
+        "toolPath": "tools/missing-test.test.ts",
+        "toolExists": false
+      },
+      "remediation": "Create the tool file 'tools/missing-test.test.ts' or reference an existing tool path."
+    },
+    {
+      "ruleId": "PARITY005_NO_COMMAND_REFERENCE",
+      "severity": "warning",
+      "source": "work-queue",
+      "sourceLine": 7,
+      "sourceItem": "- [ ] planned-2026-03-01 Task without command reference",
+      "command": "",
+      "details": {},
+      "remediation": "Add a Verify: clause to the planned item with a valid command reference, or ensure the active slice's Verification Commands block covers this item."
+    }
+  ]
+}

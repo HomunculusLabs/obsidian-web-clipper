@@ -1,0 +1,81 @@
+{
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "eventCount": 4,
+  "recipientCount": 2,
+  "batchId": "test-row-timestamp-drift",
+  "check": {
+    "passed": false,
+    "runSheet": {
+      "passed": false,
+      "mismatches": [
+        {
+          "ruleId": "ROW_TIMESTAMP_DRIFT",
+          "severity": "error",
+          "recipientHandle": "drift_user",
+          "field": "sentTimestamp",
+          "expected": "2026-02-27T10:00:00Z",
+          "actual": "2026-02-27T09:00:00Z",
+          "message": "Sent timestamp drift for \"drift_user\": expected \"2026-02-27T10:00:00Z\" from events, got \"2026-02-27T09:00:00Z\" in provided run-sheet",
+          "details": {
+            "field": "sentTimestamp",
+            "expected": "2026-02-27T10:00:00Z",
+            "actual": "2026-02-27T09:00:00Z"
+          }
+        },
+        {
+          "ruleId": "ROW_TIMESTAMP_DRIFT",
+          "severity": "error",
+          "recipientHandle": "drift_user",
+          "field": "followUpTimestamp",
+          "expected": "2026-02-28T10:00:00Z",
+          "actual": "none",
+          "message": "Follow-up timestamp drift for \"drift_user\": expected \"2026-02-28T10:00:00Z\" from events, got \"none\" in provided run-sheet",
+          "details": {
+            "field": "followUpTimestamp",
+            "expected": "2026-02-28T10:00:00Z"
+          }
+        },
+        {
+          "ruleId": "ROW_TIMESTAMP_DRIFT",
+          "severity": "error",
+          "recipientHandle": "drift_user2",
+          "field": "sentTimestamp",
+          "expected": "2026-02-27T11:00:00Z",
+          "actual": "2026-02-27T12:00:00Z",
+          "message": "Sent timestamp drift for \"drift_user2\": expected \"2026-02-27T11:00:00Z\" from events, got \"2026-02-27T12:00:00Z\" in provided run-sheet",
+          "details": {
+            "field": "sentTimestamp",
+            "expected": "2026-02-27T11:00:00Z",
+            "actual": "2026-02-27T12:00:00Z"
+          }
+        }
+      ],
+      "providedRowCount": 2,
+      "reconstructedRowCount": 2,
+      "matchingRowCount": 0
+    },
+    "responseLog": {
+      "passed": false,
+      "mismatches": [
+        {
+          "ruleId": "ROW_TIMESTAMP_DRIFT",
+          "severity": "error",
+          "recipientHandle": "drift_user2",
+          "field": "replyTimestamp",
+          "expected": "2026-02-28T14:30:00Z",
+          "actual": "none",
+          "message": "Reply timestamp drift for \"drift_user2\": expected \"2026-02-28T14:30:00Z\" from events, got \"none\" in provided response-log",
+          "details": {
+            "field": "replyTimestamp",
+            "expected": "2026-02-28T14:30:00Z"
+          }
+        }
+      ],
+      "providedRowCount": 2,
+      "reconstructedRowCount": 2,
+      "matchingRowCount": 1
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "obsidian-web-clipper",
+  "scripts": {
+    "test:github:reported-failures": "bun test tests/templates/github.test.ts tests/e2e/headless-clip-harness.test.ts"
+  }
+}

@@ -140,7 +140,7 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
 
   const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName).trim() || "Main Vault";
 
-  // Use the save pipeline (URI → clipboard fallback)
+  // Use the configured save pipeline via background handler.
   try {
     const response = await runtimeSendMessage<RuntimeRequest, SaveContentResponse>({
       action: "saveContent",
@@ -151,12 +151,14 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
     });
 
     if (response?.success) {
-      if (response.usedMethod === "clipboard") {
-        const modeMsg = clipMode === "selection" ? "Selection" : "Content";
-        showToast(`${modeMsg} copied to clipboard (too large for URI). Paste into Obsidian.`);
+      const modeMsg = clipMode === "selection" ? "Selection" : "Response";
+
+      if (response.usedMethod === "cli") {
+        showToast(`${modeMsg} saved to Obsidian via CLI ✓`);
+      } else if (response.usedMethod === "uri") {
+        showToast(`${modeMsg} sent to Obsidian via URI ✓`);
       } else {
-        const modeMsg = clipMode === "selection" ? "Selection" : "Response";
-        showToast(`${modeMsg} clipped to Obsidian ✓`);
+        showToast(`${modeMsg} copied to clipboard. Paste into Obsidian.`);
       }
     } else {
       // Save failed, show error

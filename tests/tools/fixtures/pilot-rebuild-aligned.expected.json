@@ -1,0 +1,25 @@
+{
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "eventCount": 4,
+  "recipientCount": 3,
+  "batchId": "test-aligned",
+  "check": {
+    "passed": true,
+    "runSheet": {
+      "passed": true,
+      "mismatches": [],
+      "providedRowCount": 3,
+      "reconstructedRowCount": 3,
+      "matchingRowCount": 3
+    },
+    "responseLog": {
+      "passed": true,
+      "mismatches": [],
+      "providedRowCount": 3,
+      "reconstructedRowCount": 3,
+      "matchingRowCount": 3
+    }
+  }
+}

@@ -1,0 +1,269 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GitHub Regression Fixture Contract Schema",
+  "description": "Schema for GitHub regression fixture contract defining expected clipping behavior",
+  "type": "object",
+  "required": [
+    "$schema",
+    "contract_version",
+    "repo",
+    "package_name",
+    "expected_filename",
+    "readme_extraction",
+    "expected_frontmatter",
+    "expected_markdown_structure",
+    "metadata_extraction",
+    "discovery_config"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Contract version in semver format"
+    },
+    "repo": {
+      "type": "object",
+      "required": ["owner", "repo", "url"],
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "GitHub repository owner"
+        },
+        "repo": {
+          "type": "string",
+          "description": "GitHub repository name"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/",
+          "description": "Full GitHub repository URL"
+        }
+      }
+    },
+    "package_name": {
+      "type": "object",
+      "required": ["value", "source", "fallback_used"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "Package name value from package.json"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["package.json", "repo_name", "unknown"],
+          "description": "Source of the package name"
+        },
+        "fallback_used": {
+          "type": "boolean",
+          "description": "Whether fallback to repo name was used"
+        }
+      }
+    },
+    "expected_filename": {
+      "type": "string",
+      "description": "Expected note filename derived from package name or repo name"
+    },
+    "readme_extraction": {
+      "type": "object",
+      "required": ["mode", "url_variants", "content_selector", "remove_selectors"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["root_readme", "tree_path_readme", "subdirectory_readme"],
+          "description": "README extraction mode"
+        },
+        "url_variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "type", "expected_success"],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["root_repo", "tree_path", "subdirectory"]
+              },
+              "expected_success": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "content_selector": {
+          "type": "string",
+          "description": "CSS selector for README content"
+        },
+        "remove_selectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "CSS selectors to remove from extracted content"
+        }
+      }
+    },
+    "expected_frontmatter": {
+      "type": "object",
+      "required": ["source", "title", "filename", "type", "site", "extra"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string",
+          "description": "Note title"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Note filename"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["github-repo", "github-issue", "github-pr", "github-code"]
+        },
+        "site": {
+          "type": "string",
+          "const": "github"
+        },
+        "extra": {
+          "type": "object",
+          "required": ["github_owner", "github_repo", "github_package_name"],
+          "properties": {
+            "github_owner": {
+              "type": "string"
+            },
+            "github_repo": {
+              "type": "string"
+            },
+            "github_package_name": {
+              "type": "string"
+            },
+            "github_stars": {
+              "type": "object",
+              "properties": {
+                "extract": { "type": "boolean" },
+                "assert": { "type": "string" }
+              }
+            },
+            "github_forks": {
+              "type": "object",
+              "properties": {
+                "extract": { "type": "boolean" },
+                "assert": { "type": "string" }
+              }
+            },
+            "github_language": {
+              "type": "object",
+              "properties": {
+                "extract": { "type": "boolean" },
+                "expected": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "expected_markdown_structure": {
+      "type": "object",
+      "required": ["title_pattern", "repo_context_pattern", "required_sections"],
+      "properties": {
+        "title_pattern": {
+          "type": "string",
+          "description": "Regex pattern to match markdown title"
+        },
+        "repo_context_pattern": {
+          "type": "string",
+          "description": "Regex pattern to match repo context line"
+        },
+        "required_sections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Required markdown section headers"
+        },
+        "code_blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "language": { "type": "string" },
+              "content_pattern": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "metadata_extraction": {
+      "type": "object",
+      "required": ["stars", "forks", "language", "topics"],
+      "properties": {
+        "stars": {
+          "type": "object",
+          "properties": {
+            "selector": { "type": "string" },
+            "expected_min": { "type": "number" }
+          }
+        },
+        "forks": {
+          "type": "object",
+          "properties": {
+            "selector": { "type": "string" },
+            "expected_min": { "type": "number" }
+          }
+        },
+        "language": {
+          "type": "object",
+          "properties": {
+            "selector": { "type": "string" },
+            "expected": { "type": "string" }
+          }
+        },
+        "topics": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "discovery_config": {
+      "type": "object",
+      "required": ["depth_limit", "dedupe_strategy", "ordering", "include_patterns", "exclude_patterns"],
+      "properties": {
+        "depth_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum depth for link-follow discovery"
+        },
+        "dedupe_strategy": {
+          "type": "string",
+          "enum": ["url_deduplication", "repo_deduplication"],
+          "description": "Strategy for deduplicating discovered links"
+        },
+        "ordering": {
+          "type": "string",
+          "enum": ["alphabetical_by_url", "alphabetical_by_filename", "discovery_order"],
+          "description": "Ordering strategy for children"
+        },
+        "include_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex patterns for URLs to include"
+        },
+        "exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex patterns for URLs to exclude"
+        }
+      }
+    }
+  }
+}

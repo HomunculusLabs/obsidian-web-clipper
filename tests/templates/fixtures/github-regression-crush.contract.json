@@ -1,0 +1,120 @@
+{
+  "$schema": "../schemas/github-regression-contract.schema.json",
+  "contract_version": "1.0.0",
+  "repo": {
+    "owner": "charmbracelet",
+    "repo": "crush",
+    "url": "https://github.com/charmbracelet/crush"
+  },
+  "package_name": {
+    "value": "crush",
+    "source": "package.json",
+    "fallback_used": false
+  },
+  "expected_filename": "crush",
+  "readme_extraction": {
+    "mode": "root_readme",
+    "url_variants": [
+      {
+        "url": "https://github.com/charmbracelet/crush",
+        "type": "root_repo",
+        "expected_success": true
+      },
+      {
+        "url": "https://github.com/charmbracelet/crush/tree/main",
+        "type": "tree_path",
+        "expected_success": true
+      }
+    ],
+    "content_selector": "article.markdown-body",
+    "remove_selectors": [
+      ".markdown-body .octicon-pencil",
+      ".markdown-body a[aria-label*='Edit']",
+      "button[data-clipboard-target]",
+      ".zeroclipboard-button",
+      ".markdown-body a.anchor",
+      ".Layout-sidebar nav[aria-label='Page navigation']",
+      ".file-navigation",
+      ".js-socket-channel"
+    ]
+  },
+  "expected_frontmatter": {
+    "source": "https://github.com/charmbracelet/crush",
+    "title": "charmbracelet/crush",
+    "filename": "crush",
+    "type": "github-repo",
+    "site": "github",
+    "extra": {
+      "github_owner": "charmbracelet",
+      "github_repo": "crush",
+      "github_package_name": "crush",
+      "github_stars": {
+        "extract": true,
+        "assert": "> 0"
+      },
+      "github_forks": {
+        "extract": true,
+        "assert": "> 0"
+      },
+      "github_language": {
+        "extract": true,
+        "expected": "Go"
+      }
+    }
+  },
+  "expected_markdown_structure": {
+    "title_pattern": "# Crush",
+    "repo_context_pattern": "> Repository: \\[charmbracelet/crush\\]\\(https://github.com/charmbracelet/crush\\).*",
+    "required_sections": [
+      "## Installation",
+      "## Features",
+      "## Usage",
+      "## Examples",
+      "## Related Projects",
+      "## Contributing",
+      "## License"
+    ],
+    "code_blocks": [
+      {
+        "language": "sh",
+        "content_pattern": "go install github.com/charmbracelet/crush@latest"
+      },
+      {
+        "language": "go",
+        "content_pattern": "github.com/charmbracelet/crush"
+      }
+    ]
+  },
+  "metadata_extraction": {
+    "stars": {
+      "selector": "[data-ga-click*='star button']",
+      "expected_min": 1800
+    },
+    "forks": {
+      "selector": "[data-ga-click*='fork button']",
+      "expected_min": 40
+    },
+    "language": {
+      "selector": "[itemprop='programmingLanguage']",
+      "expected": "Go"
+    },
+    "topics": [
+      "terminal",
+      "animations",
+      "graphics"
+    ]
+  },
+  "discovery_config": {
+    "depth_limit": 1,
+    "dedupe_strategy": "url_deduplication",
+    "ordering": "alphabetical_by_url",
+    "include_patterns": [
+      "https://github.com/[^/]+/[^/]+$"
+    ],
+    "exclude_patterns": [
+      "^https://github\\.com/charmbracelet/crush$",
+      "^https://github\\.com/[^/]+/[^/]+/(issues|pull|tree|blob|wiki|actions|releases)/",
+      "^https://github\\.com/[^/]+/[^/]+/tree/[^/]+/"
+    ]
+  }
+}

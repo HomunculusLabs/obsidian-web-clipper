@@ -1,0 +1,16 @@
+{
+  "scenario": "mixed-markers",
+  "description": "Mixed-marker TASKPAD states: Autonomous Kickoff Queue and Self-Improvement Backlog contain mixed marker formats (canonical, parenthesized, underscore-wrapped)",
+  "expectedOrder": [],
+  "expectedTop3": [],
+  "expectedStatus": "noop",
+  "expectedTriggered": false,
+  "expectedTargetQueue": "work",
+  "expectedInsertionSection": "## Work Queue",
+  "expectedQueueParityStatus": {
+    "hasExecutableItems": true,
+    "targetQueueUncheckedCount": 2,
+    "parityStatus": "parity-pass"
+  },
+  "note": "Mixed marker states should not affect ideation behavior - only unchecked items count. Autonomous Kickoff Queue has 2 unchecked items."
+}
