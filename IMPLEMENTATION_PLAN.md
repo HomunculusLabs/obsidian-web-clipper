@@ -51,7 +51,7 @@
 ### Task Graph
 - [x] **TP001**: Define `taskpad:execution-queue-prune` + `taskpad:execution-queue-archive-parity` contracts (inputs, archive policy, fingerprint schema, deterministic rule IDs, output ordering).
 - [x] **TP002**: Implement `tools/taskpad-execution-queue-prune.ts` to archive checked/planned Execution Queue bullets while preserving unchecked entries and deterministic summaries.
-- [ ] **TP003**: Implement `tools/taskpad-execution-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable drift diagnostics.
+- [x] **TP003**: Implement `tools/taskpad-execution-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable drift diagnostics.
 - [ ] **TP004**: Add fixtures/tests (`tests/tools/taskpad-execution-queue-prune.test.ts`, `tests/tools/taskpad-execution-queue-archive-parity.test.ts`) covering pass/noop/missing-section and parity drift outcomes.
 - [ ] **TP005**: Wire scripts/docs (`package.json`, `README.md`, `docs/quality/taskpad-queue-health.md`) and integrate execution-queue prune/parity commands into intake-auto verification guidance.
 
