@@ -441,7 +441,6 @@ describe("verify:taskpad:intake:auto fixture documentation", () => {
       expect(artifact.taskpadSha256.length).toBeGreaterThan(0);
     }
   });
-});
 
   describe("non-empty no-op branch", () => {
     test("non-empty queue causes auto-ideation to be a no-op (does not modify TASKPAD)", () => {
@@ -829,7 +828,519 @@ describe("verify:taskpad:intake:auto fixture documentation", () => {
     });
   });
 
-  describe("enforced routing determinism", () => {
+describe("TP004: downstream parity integrity for --target-queue work", () => {
+  describe("auto-ideation queueParityStatus correctness", () => {
+    test("seeded Work Queue insertion reports correct queueParityStatus (parity-pass)", () => {
+      const dir = makeTempDir("tp004-parity-integrity-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const emptyTaskpad = `# TASKPAD
+
+## Work Queue
+(empty)
+
+## Autonomous Kickoff Queue
+- [x] completed item
+
+## Self-Improvement Backlog
+- [x] completed item
+`;
+
+      writeFileSync(taskpadPath, emptyTaskpad, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Verify queueParityStatus structure exists and is correct
+        expect(result.queueParityStatus).toBeDefined();
+        expect(typeof result.queueParityStatus).toBe("object");
+
+        // Verify hasExecutableItems reflects seeded state
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+
+        // Verify targetQueueUncheckedCount accounts for the inserted item
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(1);
+
+        // Verify parityStatus reflects seeded Work Queue
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+
+        // Verify targetQueueRouting matches Work Queue
+        expect(result.targetQueueRouting).toBeDefined();
+        expect(result.targetQueueRouting.targetQueue).toBe("work");
+        expect(result.targetQueueRouting.insertionSection).toBe("## Work Queue");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+
+    test("deduped Work Queue scenario maintains correct queueParityStatus count", () => {
+      const dir = makeTempDir("tp004-dedupe-parity-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const existingTaskpad = `# TASKPAD
+
+## Work Queue
+- [ ] planned-2026-02-15 add deterministic ranking fixtures for taskpad auto-ideation (exactly three candidates with stable tie-break ordering)
+
+## Autonomous Kickoff Queue
+- [x] completed
+
+## Self-Improvement Backlog
+- [x] completed
+`;
+
+      writeFileSync(taskpadPath, existingTaskpad, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Verify status is deduped
+        expect(result.status).toBe("deduped");
+
+        // Verify queueParityStatus reflects the existing item (no increment)
+        expect(result.queueParityStatus).toBeDefined();
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(1);
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+
+    test("no-op scenario with existing Work Queue items reports correct parity", () => {
+      const dir = makeTempDir("tp004-noop-parity-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const nonEmptyTaskpad = `# TASKPAD
+
+## Work Queue
+- [ ] planned-2026-02-27 existing work item 1
+- [ ] planned-2026-02-28 existing work item 2
+
+## Autonomous Kickoff Queue
+- [x] done
+
+## Self-Improvement Backlog
+- [x] done
+`;
+
+      writeFileSync(taskpadPath, nonEmptyTaskpad, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Verify status is noop (not triggered)
+        expect(result.status).toBe("noop");
+        expect(result.triggered).toBe(false);
+
+        // Verify queueParityStatus reports correct existing count
+        expect(result.queueParityStatus).toBeDefined();
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(2);
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+
+    test("empty Work Queue before seeding reports parity-fail-empty", () => {
+      const dir = makeTempDir("tp004-empty-parity-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const emptyWorkQueue = `# TASKPAD
+
+## Work Queue
+- [x] completed item
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+
+## Self-Improvement Backlog
+- [ ] self-improvement item
+`;
+
+      writeFileSync(taskpadPath, emptyWorkQueue, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Verify queueParityStatus structure
+        expect(result.queueParityStatus).toBeDefined();
+        expect(typeof result.queueParityStatus).toBe("object");
+
+        // Verify targetQueueUncheckedCount uses workQueueUncheckedCount (not intake counts)
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(1); // After seeding
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+
+        // Verify queueHealth reports intake queue counts separately
+        expect(result.queueHealth).toBeDefined();
+        expect(result.queueHealth.autonomousUncheckedCount).toBe(2);
+        expect(result.queueHealth.selfImprovementUncheckedCount).toBe(1);
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+  });
+
+  describe("workQueueUncheckedCount vs autonomousUncheckedCount segregation", () => {
+    test("targetQueueUncheckedCount uses workQueueUncheckedCount, not autonomousUncheckedCount", () => {
+      const dir = makeTempDir("tp004-count-segregation-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const mixedQueues = `# TASKPAD
+
+## Work Queue
+- [ ] planned-2026-02-27 work item 1
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+- [ ] autonomous item 3
+
+## Self-Improvement Backlog
+- [ ] self-improvement item 1
+- [ ] self-improvement item 2
+`;
+
+      writeFileSync(taskpadPath, mixedQueues, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Verify queueHealth reports both intake queues
+        expect(result.queueHealth.autonomousUncheckedCount).toBe(3);
+        expect(result.queueHealth.selfImprovementUncheckedCount).toBe(2);
+        expect(result.queueHealth.totalUnchecked).toBe(6);
+
+        // Verify targetQueueUncheckedCount uses ONLY Work Queue count (TP002 fix)
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(1);
+        expect(result.queueParityStatus.targetQueueUncheckedCount).not.toBe(6); // Not totalUnchecked
+
+        // Verify parity status reflects only Work Queue state
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+
+    test("empty Work Queue with intake items reports correct failure state", () => {
+      const dir = makeTempDir("tp004-intake-only-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const intakeOnly = `# TASKPAD
+
+## Work Queue
+- [x] completed work item
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+
+## Self-Improvement Backlog
+- [ ] self-improvement item
+`;
+
+      writeFileSync(taskpadPath, intakeOnly, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // After seeding, count should be 1
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(1);
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+
+        // Verify intake queue counts are reported but not used for Work Queue parity
+        expect(result.queueHealth.autonomousUncheckedCount).toBe(2);
+        expect(result.queueHealth.selfImprovementUncheckedCount).toBe(1);
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+  });
+
+  describe("multiple unchecked items in Work Queue", () => {
+    test("correctly counts multiple unchecked Work Queue items", () => {
+      const dir = makeTempDir("tp004-multi-work-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const multiWorkQueue = `# TASKPAD
+
+## Work Queue
+- [ ] planned-2026-02-27 work item 1
+- [ ] planned-2026-02-28 work item 2
+- [ ] planned-2026-03-01 work item 3
+
+## Autonomous Kickoff Queue
+- [x] done
+
+## Self-Improvement Backlog
+- [x] done
+`;
+
+      writeFileSync(taskpadPath, multiWorkQueue, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Verify status is noop (queue not empty)
+        expect(result.status).toBe("noop");
+        expect(result.triggered).toBe(false);
+
+        // Verify all three Work Queue items are counted
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(3);
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+
+    test("mixed checked and unchecked Work Queue items count correctly", () => {
+      const dir = makeTempDir("tp004-mixed-checked-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const mixedChecked = `# TASKPAD
+
+## Work Queue
+- [x] planned-2026-02-25 completed item
+- [ ] planned-2026-02-26 unchecked item 1
+- [x] planned-2026-02-26 completed item 2
+- [ ] planned-2026-02-27 unchecked item 2
+- [ ] planned-2026-02-28 unchecked item 3
+
+## Autonomous Kickoff Queue
+- [x] done
+
+## Self-Improvement Backlog
+- [x] done
+`;
+
+      writeFileSync(taskpadPath, mixedChecked, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // Only unchecked items should count (3)
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(3);
+        expect(result.queueParityStatus.hasExecutableItems).toBe(true);
+        expect(result.queueParityStatus.parityStatus).toBe("parity-pass");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+  });
+
+  describe("parity integrity regression detection", () => {
+    test("detects if targetQueueUncheckedCount incorrectly uses autonomousUncheckedCount", () => {
+      const dir = makeTempDir("tp004-regression-");
+      const taskpadPath = join(dir, "TASKPAD.md");
+      const planPath = join(PROJECT_ROOT, "IMPLEMENTATION_PLAN.md");
+
+      const regressionCase = `# TASKPAD
+
+## Work Queue
+- [ ] single work item
+
+## Autonomous Kickoff Queue
+- [ ] autonomous item 1
+- [ ] autonomous item 2
+- [ ] autonomous item 3
+- [ ] autonomous item 4
+
+## Self-Improvement Backlog
+- [ ] self-improvement item
+`;
+
+      writeFileSync(taskpadPath, regressionCase, "utf8");
+
+      const originalCwd = process.cwd();
+      process.chdir(dir);
+
+      try {
+        const run = Bun.spawnSync(
+          [process.execPath, "run", "tools/taskpad-auto-ideation.ts", "--taskpad", taskpadPath, "--plan", planPath, "--target-queue", "work"],
+          {
+            cwd: PROJECT_ROOT,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+
+        const stdout = new TextDecoder().decode(run.stdout);
+        expect(run.exitCode).toBe(0);
+
+        const jsonStart = stdout.indexOf("AUTO_IDEATION_JSON_START");
+        const jsonEnd = stdout.indexOf("AUTO_IDEATION_JSON_END");
+        const result = JSON.parse(stdout.slice(jsonStart + 22, jsonEnd).trim());
+
+        // This test verifies TP002 fix: targetQueueUncheckedCount should use workQueueUncheckedCount (1)
+        // NOT autonomousUncheckedCount (4)
+        expect(result.queueParityStatus.targetQueueUncheckedCount).toBe(1);
+
+        // If this fails with 4, it means targetQueueUncheckedCount is incorrectly using autonomousUncheckedCount
+        expect(result.queueParityStatus.targetQueueUncheckedCount).not.toBe(4);
+        expect(result.queueParityStatus.targetQueueUncheckedCount).not.toBe(5); // Not totalUnchecked either
+
+        // Verify intake counts are reported separately
+        expect(result.queueHealth.autonomousUncheckedCount).toBe(4);
+        expect(result.queueHealth.selfImprovementUncheckedCount).toBe(1);
+        expect(result.queueHealth.totalUnchecked).toBe(6);
+      } finally {
+        process.chdir(originalCwd);
+      }
+    });
+  });
+});
+
+describe("enforced routing determinism", () => {
     test("empty queue auto-ideation with --target-queue work produces deterministic routing metadata", () => {
       const dir = makeTempDir("verify-intake-auto-");
       const taskpadPath = join(dir, "TASKPAD.md");
