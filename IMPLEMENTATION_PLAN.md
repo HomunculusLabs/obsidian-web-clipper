@@ -9,6 +9,77 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Deterministic Knowledge Triage state-sync to suppress resurfaced resolved work
+
+### Distilled Scope
+**Problem**
+- The project now plans deterministic cross-note inboxes (`execution-backlog`, `open-questions`, `clip-recovery`, `knowledge-triage`, `knowledge-delta-digest`), but there is no status writeback/sync contract that keeps resolved items from reappearing as “active” on subsequent refreshes.
+- In AI coding/writing workflows, resurfaced already-done items create trust drift and force manual re-triage.
+- With intake queues empty, the highest-impact next slice is to define and enforce deterministic triage status reconciliation.
+
+**In scope**
+- Define a deterministic `knowledge-triage-state-sync.md` contract that reconciles triage status edits (`ready`, `blocked`, `in-progress`, `done`) to source inbox references.
+- Implement state-sync parser + merger rules with stable provenance fields (`triage_item_id`, `status_source`, `status_changed_at`, `status_sync_version`, `status_sync_truncated`).
+- Integrate state-sync refresh into save-flow orchestration without blocking primary note-save behavior on sync failures.
+- Add focused contract + e2e coverage proving resolved items do not resurface after deterministic sync.
+
+**Out of scope**
+- New UI/editor features for triage interaction.
+- LLM-generated status inference or prioritization.
+- Broad redesign of existing inbox ranking algorithms outside status reconciliation.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic `knowledge-triage-state-sync.md` status reconciliation across triage + source inbox artifacts so resolved work does not resurface. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:inbox-refresh-dependency-parity` gate to fail when planned inbox artifacts drift from save-flow refresh handler wiring.
+3. **[OBSERVABILITY]** Add `knowledge-inbox-sync-history.ndjson` telemetry for status transitions and resurfacing-drift diagnostics.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "key-takeaways-inbox|open-questions-inbox|execution-backlog-inbox|knowledge-triage" src tests tools`
+  - `search "InboxContract|InboxExporter|refresh.*Inbox|save.*refresh" src/popup src/background src/shared tests/content/shared tests/e2e`
+  - `select set IMPLEMENTATION_PLAN.md src/popup/save.ts src/background/handlers/refreshOpenQuestionsInbox.ts src/background/handlers/refreshKeyTakeawaysInbox.ts src/shared/openQuestionsInboxContract.ts src/shared/openQuestionsInboxExporter.ts src/shared/keyTakeawaysInboxContract.ts src/shared/keyTakeawaysInboxExporter.ts src/shared/messages.ts tests/content/shared/open-questions-inbox.test.ts tests/content/shared/key-takeaways-inbox.test.ts tests/e2e/headless-clip-harness.test.ts`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `IMPLEMENTATION_PLAN.md`
+  - `src/popup/save.ts`
+  - `src/background/handlers/refreshOpenQuestionsInbox.ts`
+  - `src/background/handlers/refreshKeyTakeawaysInbox.ts`
+  - `src/shared/openQuestionsInboxContract.ts`
+  - `src/shared/openQuestionsInboxExporter.ts`
+  - `src/shared/keyTakeawaysInboxContract.ts`
+  - `src/shared/keyTakeawaysInboxExporter.ts`
+  - `src/shared/messages.ts`
+  - `tests/content/shared/open-questions-inbox.test.ts`
+  - `tests/content/shared/key-takeaways-inbox.test.ts`
+  - `tests/e2e/headless-clip-harness.test.ts`
+
+### Task Graph
+- [x] **TP001**: Specify triage-state-sync contract (status enum, source-ref mapping precedence, stable fingerprinting, deterministic timestamp/writeback policy, truncation semantics).
+- [ ] **TP002**: Implement shared state-sync parser/merger utilities that ingest triage edits and reconcile them against source inbox entries with stable provenance ordering.
+- [ ] **TP003**: Implement deterministic `knowledge-triage-state-sync.md` renderer/export path with bounded empty-state + conflict diagnostics behavior.
+- [ ] **TP004**: Integrate sync refresh into save-flow/background orchestration (`src/popup/save.ts` + handler/message wiring) as fire-and-forget with explicit non-fatal error diagnostics.
+- [ ] **TP005**: Add `tests/content/shared/knowledge-triage-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify resolved triage items remain suppressed across repeated clip/save refresh cycles.
+
+### Acceptance Criteria
+- `knowledge-triage-state-sync.md` is generated deterministically from triage edits + source inbox references with stable IDs/provenance fields.
+- Marking a triage item `done` or `blocked` no longer causes it to resurface as active on unchanged reruns.
+- Save flow remains resilient: sync errors are observable but do not block core clip note save.
+- Contract + e2e tests prove deterministic parity across repeat runs and conflict scenarios.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/knowledge-triage-state-sync.test.ts
+bun test tests/content/shared/knowledge-triage-inbox.test.ts
+bun test tests/content/shared/execution-backlog-inbox.test.ts
+bun test tests/content/shared/open-questions-inbox.test.ts
+bun test tests/content/shared/clip-recovery-inbox.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Deterministic Key Takeaways Inbox export for reusable knowledge synthesis
 
 ### Distilled Scope
