@@ -9,6 +9,67 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Revalidation refresh wiring parity gate for deterministic save-flow coverage
+
+### Distilled Scope
+**Problem**
+- New revalidation artifacts (`knowledge-revalidation-inbox.md`, `knowledge-revalidation-state-sync.md`) are now planned to suppress stale assumptions, but there is no dedicated parity gate proving these artifacts are fully wired through save-flow runtime surfaces.
+- Without deterministic wiring checks, revalidation surfaces can silently drift (message/router/handler/save-trigger gaps) while intake automation still appears green.
+- Intake ideation had no unchecked queue items, so the highest-impact reliability slice is a focused gate that blocks revalidation refresh drift before release.
+
+**In scope**
+- Add deterministic `taskpad:knowledge-revalidation-refresh-contract-parity` analysis for planned/generated revalidation artifacts.
+- Validate required wiring in `src/popup/save.ts`, `src/shared/messages.ts`, `src/background/router.ts`, and matching `src/background/handlers/refreshKnowledgeRevalidation*.ts` handlers.
+- Emit stable rule IDs + machine-readable remediation payloads (including one scaffold command) for missing/partial wiring.
+- Add focused fixtures/tests + script/docs wiring so the gate runs in canonical `verify:taskpad:intake:auto` flow.
+
+**Out of scope**
+- Implementing revalidation product artifact generation itself.
+- Refactoring save-flow runtime behavior beyond parity validation.
+- Broad intake-orchestration redesign outside this new gate integration.
+
+### Ideation Candidates Considered
+1. **[RELIABILITY]** Add deterministic `taskpad:knowledge-revalidation-refresh-contract-parity` gate to fail when revalidation inbox/state-sync wiring drifts across popup/messages/router/handlers. **(selected)**
+2. **[PRODUCT]** Add deterministic `revalidation-priority-brief.md` export that summarizes highest-risk stale assumptions from confidence + revalidation artifacts for session kickoff.
+3. **[OBSERVABILITY]** Add `knowledge-revalidation-history.ndjson` telemetry (`revalidation_item_id`, `status_from`, `status_to`, `reason_delta`, `generated_at`) for drift-traceability across reruns.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "revalidation|knowledgeRevalidation|refreshKnowledgeRevalidation|revalidation-inbox|revalidation-state-sync" src tests tools README.md package.json`
+  - `search "save-refresh-contract-parity|knowledge-confidence-refresh-contract-parity|evidence-gap-refresh-contract-parity|planned-artifact-implementation-parity" tools tests package.json README.md`
+  - `select set IMPLEMENTATION_PLAN.md tools/taskpad-evidence-gap-refresh-contract-parity.ts tools/taskpad-intake-autoplan.ts tests/tools/taskpad-intake-autoplan.test.ts tests/tools/taskpad-evidence-gap-refresh-contract-parity.test.ts package.json README.md`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `tools/taskpad-evidence-gap-refresh-contract-parity.ts`
+  - `tools/taskpad-intake-autoplan.ts`
+  - `tests/tools/taskpad-evidence-gap-refresh-contract-parity.test.ts`
+  - `tests/tools/taskpad-intake-autoplan.test.ts`
+  - `package.json`
+  - `README.md`
+
+### Task Graph
+- [x] **TP001**: Specify `taskpad:knowledge-revalidation-refresh-contract-parity` contract (artifact targets, required wiring surfaces, deterministic rule IDs, remediation payload schema, canonical violation ordering).
+- [ ] **TP002**: Implement `tools/taskpad-knowledge-revalidation-refresh-contract-parity.ts` by adapting existing refresh-parity patterns for revalidation artifact detection + wiring validation across message/router/handler/save-trigger surfaces.
+- [ ] **TP003**: Add deterministic fixtures/tests in `tests/tools/taskpad-knowledge-revalidation-refresh-contract-parity.test.ts` for pass/no-artifact/missing-message/missing-router/missing-handler/missing-save-trigger drift states.
+- [ ] **TP004**: Wire script/docs surface (`package.json`, `README.md`, `docs/quality/*` as needed) so gate usage and output contract are canonical and machine-auditable.
+- [ ] **TP005**: Integrate gate into `tools/taskpad-intake-autoplan.ts` execution flow and expand `tests/tools/taskpad-intake-autoplan.test.ts` so parity failures deterministically block progression with actionable next actions.
+
+### Acceptance Criteria
+- Gate deterministically fails whenever planned revalidation artifacts are missing any required save-flow wiring surface.
+- Failure output includes stable rule IDs and remediation hints with at least one scaffold command.
+- Tests lock pass/fail/no-artifact behavior with deterministic JSON + human output ordering.
+- `verify:taskpad:intake:auto` path includes the new gate and treats contract failures as blocking.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-knowledge-revalidation-refresh-contract-parity.test.ts
+bun run taskpad:knowledge-revalidation-refresh-contract-parity -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --project-root . --format json
+bun test tests/tools/taskpad-intake-autoplan.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Knowledge-confidence state sync for durable triage overrides
 
 ### Distilled Scope
