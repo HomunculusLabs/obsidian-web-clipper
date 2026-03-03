@@ -14,9 +14,21 @@ import {
   type ScanVaultOptions,
   type ParsedClipBrief
 } from "../../../src/shared/openQuestionsInboxBuilder";
-import type { OpenQuestionInput, OpenQuestionsInbox } from "../../../src/shared/openQuestionsInboxContract";
-import { QuestionStatus } from "../../../src/shared/openQuestionsInboxContract";
-import { buildOpenQuestionsInbox, renderOpenQuestionsInbox } from "../../../src/shared/openQuestionsInboxContract";
+import type { OpenQuestionInput, OpenQuestionsInbox, InboxEntry, SourceClipRef } from "../../../src/shared/openQuestionsInboxContract";
+import {
+  QuestionStatus,
+  buildOpenQuestionsInbox,
+  renderOpenQuestionsInbox,
+  computeQuestionFingerprint,
+  questionsAreEquivalent,
+  computeEntryScore,
+  sortEntriesDeterministically,
+  buildSourceClipRefs,
+  buildInboxEntry,
+  MAX_INBOX_QUESTIONS,
+  MAX_SOURCE_CLIP_REFS,
+  OPEN_QUESTIONS_INBOX_VERSION
+} from "../../../src/shared/openQuestionsInboxContract";
 import {
   resolveInboxPath,
   isInboxEmpty,
@@ -905,6 +917,902 @@ describe("renderOpenQuestionsInbox", () => {
     expect(markdown).toContain("**Resolved:** 1");
     expect(markdown).toContain("unresolved_questions: 1");
     expect(markdown).toContain("resolved_questions: 1");
+  });
+});
+
+// ============================================================================
+// CONTRACT TESTS - Dedupe, Rank Ordering, Linkback Rendering, Truncation
+// ============================================================================
+
+describe("computeQuestionFingerprint", () => {
+  it("should produce deterministic fingerprint for same question", () => {
+    const fp1 = computeQuestionFingerprint("What is the best approach?");
+    const fp2 = computeQuestionFingerprint("What is the best approach?");
+
+    expect(fp1.hash).toBe(fp2.hash);
+    expect(fp1.normalizedQuestion).toBe(fp2.normalizedQuestion);
+  });
+
+  it("should normalize case for fingerprinting", () => {
+    const fp1 = computeQuestionFingerprint("What is the BEST approach?");
+    const fp2 = computeQuestionFingerprint("what is the best approach?");
+
+    expect(fp1.hash).toBe(fp2.hash);
+    expect(fp1.normalizedQuestion).toBe("what is the best approach");
+    expect(fp2.normalizedQuestion).toBe("what is the best approach");
+  });
+
+  it("should trim whitespace for fingerprinting", () => {
+    const fp1 = computeQuestionFingerprint("  What is the best approach?  ");
+    const fp2 = computeQuestionFingerprint("What is the best approach?");
+
+    expect(fp1.hash).toBe(fp2.hash);
+  });
+
+  it("should collapse multiple whitespace for fingerprinting", () => {
+    const fp1 = computeQuestionFingerprint("What   is   the   best   approach?");
+    const fp2 = computeQuestionFingerprint("What is the best approach?");
+
+    expect(fp1.hash).toBe(fp2.hash);
+  });
+
+  it("should remove trailing punctuation for fingerprinting", () => {
+    const fp1 = computeQuestionFingerprint("What is the best approach?!");
+    const fp2 = computeQuestionFingerprint("What is the best approach.");
+
+    expect(fp1.hash).toBe(fp2.hash);
+    expect(fp1.normalizedQuestion).toBe("what is the best approach");
+  });
+
+  it("should produce different fingerprints for different questions", () => {
+    const fp1 = computeQuestionFingerprint("What is the best approach?");
+    const fp2 = computeQuestionFingerprint("How should I implement this?");
+
+    expect(fp1.hash).not.toBe(fp2.hash);
+  });
+
+  it("should produce 64-character hex hash", () => {
+    const fp = computeQuestionFingerprint("Test question?");
+
+    expect(fp.hash).toHaveLength(64);
+    expect(/^[0-9a-f]+$/.test(fp.hash)).toBe(true);
+  });
+});
+
+describe("questionsAreEquivalent", () => {
+  it("should return true for identical questions", () => {
+    expect(questionsAreEquivalent("What is X?", "What is X?")).toBe(true);
+  });
+
+  it("should return true for case-different questions", () => {
+    expect(questionsAreEquivalent("WHAT IS X?", "what is x?")).toBe(true);
+  });
+
+  it("should return true for whitespace-different questions", () => {
+    expect(questionsAreEquivalent("  What is X?  ", "What is X?")).toBe(true);
+  });
+
+  it("should return false for semantically different questions", () => {
+    expect(questionsAreEquivalent("What is X?", "What is Y?")).toBe(false);
+  });
+
+  it("should accept fingerprint objects", () => {
+    const fp1 = computeQuestionFingerprint("What is X?");
+    const fp2 = computeQuestionFingerprint("what is x?");
+
+    expect(questionsAreEquivalent(fp1, fp2)).toBe(true);
+  });
+
+  it("should accept mixed fingerprint and string", () => {
+    const fp = computeQuestionFingerprint("What is X?");
+
+    expect(questionsAreEquivalent(fp, "WHAT IS X?")).toBe(true);
+    expect(questionsAreEquivalent("what is x?", fp)).toBe(true);
+  });
+});
+
+describe("computeEntryScore", () => {
+  const createEntry = (overrides: Partial<InboxEntry> = {}): InboxEntry => ({
+    question_id: "test-id",
+    question: "Test question?",
+    source_clip_refs: [],
+    source_clip_count: 1,
+    source_clip_refs_truncated: false,
+    question_status: QuestionStatus.UNRESOLVED,
+    score: 0,
+    timestamp: new Date().toISOString(),
+    ...overrides
+  });
+
+  it("should give higher score to more recent clips", () => {
+    const recentEntry = createEntry({
+      timestamp: new Date().toISOString()
+    });
+
+    const oldEntry = createEntry({
+      timestamp: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days ago
+    });
+
+    const recentScore = computeEntryScore(recentEntry);
+    const oldScore = computeEntryScore(oldEntry);
+
+    expect(recentScore).toBeGreaterThan(oldScore);
+  });
+
+  it("should give higher score to questions appearing in more clips", () => {
+    const frequentEntry = createEntry({
+      source_clip_count: 10
+    });
+
+    const rareEntry = createEntry({
+      source_clip_count: 1
+    });
+
+    const frequentScore = computeEntryScore(frequentEntry);
+    const rareScore = computeEntryScore(rareEntry);
+
+    expect(frequentScore).toBeGreaterThan(rareScore);
+  });
+
+  it("should give higher score to longer, more specific questions", () => {
+    const specificEntry = createEntry({
+      question: "What is the best approach for implementing a complex feature with multiple dependencies?"
+    });
+
+    const vagueEntry = createEntry({
+      question: "What is X?"
+    });
+
+    const specificScore = computeEntryScore(specificEntry);
+    const vagueScore = computeEntryScore(vagueEntry);
+
+    expect(specificScore).toBeGreaterThan(vagueScore);
+  });
+
+  it("should produce score between 0 and 100", () => {
+    const entry = createEntry();
+    const score = computeEntryScore(entry);
+
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(100);
+  });
+
+  it("should produce deterministic scores for same inputs", () => {
+    const entry = createEntry({
+      timestamp: "2026-03-03T10:00:00.000Z",
+      source_clip_count: 5,
+      question: "Test question for determinism?"
+    });
+
+    const score1 = computeEntryScore(entry);
+    const score2 = computeEntryScore(entry);
+
+    expect(score1).toBe(score2);
+  });
+
+  it("should round scores to 2 decimal places", () => {
+    const entry = createEntry();
+    const score = computeEntryScore(entry);
+
+    // Check that score has at most 2 decimal places
+    const decimalPart = score.toString().split(".")[1];
+    expect(decimalPart?.length || 0).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("sortEntriesDeterministically", () => {
+  const createEntry = (overrides: Partial<InboxEntry> = {}): InboxEntry => ({
+    question_id: `id-${Math.random().toString(36).slice(2)}`,
+    question: "Test question?",
+    source_clip_refs: [],
+    source_clip_count: 1,
+    source_clip_refs_truncated: false,
+    question_status: QuestionStatus.UNRESOLVED,
+    score: 50,
+    timestamp: "2026-03-03T10:00:00.000Z",
+    ...overrides
+  });
+
+  it("should sort by score descending (primary sort)", () => {
+    const entries = [
+      createEntry({ question_id: "low", score: 30 }),
+      createEntry({ question_id: "high", score: 90 }),
+      createEntry({ question_id: "mid", score: 60 })
+    ];
+
+    const sorted = sortEntriesDeterministically(entries);
+
+    expect(sorted[0]?.question_id).toBe("high");
+    expect(sorted[1]?.question_id).toBe("mid");
+    expect(sorted[2]?.question_id).toBe("low");
+  });
+
+  it("should use timestamp as secondary sort (more recent first)", () => {
+    const entries = [
+      createEntry({ question_id: "old", score: 50, timestamp: "2026-01-01T10:00:00.000Z" }),
+      createEntry({ question_id: "new", score: 50, timestamp: "2026-03-03T10:00:00.000Z" }),
+      createEntry({ question_id: "mid", score: 50, timestamp: "2026-02-15T10:00:00.000Z" })
+    ];
+
+    const sorted = sortEntriesDeterministically(entries);
+
+    expect(sorted[0]?.question_id).toBe("new");
+    expect(sorted[1]?.question_id).toBe("mid");
+    expect(sorted[2]?.question_id).toBe("old");
+  });
+
+  it("should use question_id as tertiary sort (ascending for determinism)", () => {
+    const entries = [
+      createEntry({ question_id: "zzz", score: 50, timestamp: "2026-03-03T10:00:00.000Z" }),
+      createEntry({ question_id: "aaa", score: 50, timestamp: "2026-03-03T10:00:00.000Z" }),
+      createEntry({ question_id: "mmm", score: 50, timestamp: "2026-03-03T10:00:00.000Z" })
+    ];
+
+    const sorted = sortEntriesDeterministically(entries);
+
+    expect(sorted[0]?.question_id).toBe("aaa");
+    expect(sorted[1]?.question_id).toBe("mmm");
+    expect(sorted[2]?.question_id).toBe("zzz");
+  });
+
+  it("should use source_clip_count as quaternary sort (descending)", () => {
+    const entries = [
+      createEntry({
+        question_id: "same",
+        score: 50,
+        timestamp: "2026-03-03T10:00:00.000Z",
+        source_clip_count: 1
+      }),
+      createEntry({
+        question_id: "same",
+        score: 50,
+        timestamp: "2026-03-03T10:00:00.000Z",
+        source_clip_count: 10
+      }),
+      createEntry({
+        question_id: "same",
+        score: 50,
+        timestamp: "2026-03-03T10:00:00.000Z",
+        source_clip_count: 5
+      })
+    ];
+
+    const sorted = sortEntriesDeterministically(entries);
+
+    expect(sorted[0]?.source_clip_count).toBe(10);
+    expect(sorted[1]?.source_clip_count).toBe(5);
+    expect(sorted[2]?.source_clip_count).toBe(1);
+  });
+
+  it("should not mutate input array", () => {
+    const entries = [
+      createEntry({ question_id: "a", score: 10 }),
+      createEntry({ question_id: "b", score: 90 })
+    ];
+
+    const originalOrder = entries.map(e => e.question_id);
+    sortEntriesDeterministically(entries);
+    const afterOrder = entries.map(e => e.question_id);
+
+    expect(originalOrder).toEqual(afterOrder);
+  });
+
+  it("should produce identical output for identical input order", () => {
+    const entries = [
+      createEntry({ question_id: "a", score: 50, timestamp: "2026-03-03T10:00:00.000Z" }),
+      createEntry({ question_id: "b", score: 50, timestamp: "2026-03-03T10:00:00.000Z" })
+    ];
+
+    const sorted1 = sortEntriesDeterministically([...entries]);
+    const sorted2 = sortEntriesDeterministically([...entries]);
+
+    expect(sorted1.map(e => e.question_id)).toEqual(sorted2.map(e => e.question_id));
+  });
+
+  it("should handle empty array", () => {
+    const sorted = sortEntriesDeterministically([]);
+    expect(sorted).toHaveLength(0);
+  });
+
+  it("should handle single entry", () => {
+    const entries = [createEntry({ question_id: "only" })];
+    const sorted = sortEntriesDeterministically(entries);
+
+    expect(sorted).toHaveLength(1);
+    expect(sorted[0]?.question_id).toBe("only");
+  });
+});
+
+describe("buildSourceClipRefs", () => {
+  const createRef = (overrides: Partial<SourceClipRef> = {}): SourceClipRef => ({
+    path: "/path/to/clip.md",
+    title: "Test Clip",
+    url: "https://example.com",
+    timestamp: "2026-03-03T10:00:00.000Z",
+    id: "clip-id",
+    ...overrides
+  });
+
+  it("should sort refs by timestamp descending (most recent first)", () => {
+    const refs = [
+      createRef({ id: "old", timestamp: "2026-01-01T10:00:00.000Z" }),
+      createRef({ id: "new", timestamp: "2026-03-03T10:00:00.000Z" }),
+      createRef({ id: "mid", timestamp: "2026-02-15T10:00:00.000Z" })
+    ];
+
+    const result = buildSourceClipRefs(refs);
+
+    expect(result.refs[0]?.id).toBe("new");
+    expect(result.refs[1]?.id).toBe("mid");
+    expect(result.refs[2]?.id).toBe("old");
+  });
+
+  it("should truncate to MAX_SOURCE_CLIP_REFS", () => {
+    const refs = Array.from({ length: 15 }, (_, i) =>
+      createRef({ id: `ref-${i}`, timestamp: `2026-03-0${(i % 9) + 1}T10:00:00.000Z` })
+    );
+
+    const result = buildSourceClipRefs(refs);
+
+    expect(result.refs.length).toBe(MAX_SOURCE_CLIP_REFS);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("should not truncate when under limit", () => {
+    const refs = [
+      createRef({ id: "a" }),
+      createRef({ id: "b" }),
+      createRef({ id: "c" })
+    ];
+
+    const result = buildSourceClipRefs(refs);
+
+    expect(result.refs.length).toBe(3);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("should handle empty refs array", () => {
+    const result = buildSourceClipRefs([]);
+
+    expect(result.refs).toHaveLength(0);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("should not mutate input array", () => {
+    const refs = [
+      createRef({ id: "old", timestamp: "2026-01-01T10:00:00.000Z" }),
+      createRef({ id: "new", timestamp: "2026-03-03T10:00:00.000Z" })
+    ];
+
+    const originalOrder = refs.map(r => r.id);
+    buildSourceClipRefs(refs);
+    const afterOrder = refs.map(r => r.id);
+
+    expect(originalOrder).toEqual(afterOrder);
+  });
+});
+
+describe("buildInboxEntry", () => {
+  const createInput = (overrides: Partial<OpenQuestionInput> = {}): OpenQuestionInput => ({
+    question: "Test question?",
+    clipPath: "/path/to/clip.md",
+    clipTitle: "Test Clip",
+    clipUrl: "https://example.com",
+    clipTimestamp: "2026-03-03T10:00:00.000Z",
+    clipId: "clip-id",
+    status: QuestionStatus.UNRESOLVED,
+    ...overrides
+  });
+
+  it("should build entry with correct question_id", () => {
+    const inputs = [createInput({ question: "Unique question?" })];
+    const entry = buildInboxEntry(inputs, "Unique question?");
+
+    const expectedFp = computeQuestionFingerprint("Unique question?");
+    expect(entry.question_id).toBe(expectedFp.hash);
+  });
+
+  it("should use most recent clip's timestamp", () => {
+    const inputs = [
+      createInput({ clipId: "old", clipTimestamp: "2026-01-01T10:00:00.000Z" }),
+      createInput({ clipId: "new", clipTimestamp: "2026-03-03T10:00:00.000Z" }),
+      createInput({ clipId: "mid", clipTimestamp: "2026-02-15T10:00:00.000Z" })
+    ];
+
+    const entry = buildInboxEntry(inputs, "Test question?");
+
+    expect(entry.timestamp).toBe("2026-03-03T10:00:00.000Z");
+  });
+
+  it("should merge all source clip refs", () => {
+    const inputs = [
+      createInput({ clipId: "clip1", clipTitle: "Clip 1" }),
+      createInput({ clipId: "clip2", clipTitle: "Clip 2" }),
+      createInput({ clipId: "clip3", clipTitle: "Clip 3" })
+    ];
+
+    const entry = buildInboxEntry(inputs, "Test question?");
+
+    expect(entry.source_clip_count).toBe(3);
+    expect(entry.source_clip_refs.length).toBe(3);
+    expect(entry.source_clip_refs.map(r => r.title)).toContain("Clip 1");
+    expect(entry.source_clip_refs.map(r => r.title)).toContain("Clip 2");
+    expect(entry.source_clip_refs.map(r => r.title)).toContain("Clip 3");
+  });
+
+  it("should compute score based on entry properties", () => {
+    const inputs = [createInput()];
+    const entry = buildInboxEntry(inputs, "Test question?");
+
+    expect(entry.score).toBeGreaterThanOrEqual(0);
+    expect(entry.score).toBeLessThanOrEqual(100);
+  });
+
+  it("should use most recent clip's status", () => {
+    const inputs = [
+      createInput({ status: QuestionStatus.RESOLVED, clipTimestamp: "2026-01-01T10:00:00.000Z" }),
+      createInput({ status: QuestionStatus.UNRESOLVED, clipTimestamp: "2026-03-03T10:00:00.000Z" })
+    ];
+
+    const entry = buildInboxEntry(inputs, "Test question?");
+
+    expect(entry.question_status).toBe(QuestionStatus.UNRESOLVED);
+  });
+
+  it("should mark source_clip_refs_truncated when over limit", () => {
+    const inputs = Array.from({ length: 15 }, (_, i) =>
+      createInput({ clipId: `clip-${i}` })
+    );
+
+    const entry = buildInboxEntry(inputs, "Test question?");
+
+    expect(entry.source_clip_count).toBe(15);
+    expect(entry.source_clip_refs.length).toBe(MAX_SOURCE_CLIP_REFS);
+    expect(entry.source_clip_refs_truncated).toBe(true);
+  });
+});
+
+describe("Contract Constants", () => {
+  it("should have MAX_INBOX_QUESTIONS = 100", () => {
+    expect(MAX_INBOX_QUESTIONS).toBe(100);
+  });
+
+  it("should have MAX_SOURCE_CLIP_REFS = 10", () => {
+    expect(MAX_SOURCE_CLIP_REFS).toBe(10);
+  });
+
+  it("should have OPEN_QUESTIONS_INBOX_VERSION as semantic version", () => {
+    expect(OPEN_QUESTIONS_INBOX_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
+describe("Linkback Rendering Contract", () => {
+  it("should render Obsidian wikilink format for source clips", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Test question?",
+        clipPath: "Clips/MyClip.md",
+        clipTitle: "My Clip",
+        clipUrl: "https://example.com/article",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    // Should render as [[Title|Path]] format
+    expect(markdown).toContain("[[My Clip|Clips/MyClip.md]]");
+  });
+
+  it("should include source URL in linkback", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Test question?",
+        clipPath: "Clips/MyClip.md",
+        clipTitle: "My Clip",
+        clipUrl: "https://example.com/article",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("https://example.com/article");
+  });
+
+  it("should include date from timestamp in linkback", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Test question?",
+        clipPath: "Clips/MyClip.md",
+        clipTitle: "My Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("(2026-03-03)");
+  });
+
+  it("should render multiple source clips in linkback section", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Same question?",
+        clipPath: "Clips/Clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "Same question?",
+        clipPath: "Clips/Clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("[[Clip 1|Clips/Clip1.md]]");
+    expect(markdown).toContain("[[Clip 2|Clips/Clip2.md]]");
+    expect(markdown).toContain("https://example.com/1");
+    expect(markdown).toContain("https://example.com/2");
+  });
+
+  it("should show truncation indicator when source clips exceed limit", () => {
+    const inputs: OpenQuestionInput[] = Array.from({ length: 15 }, (_, i) => ({
+      question: "Same question?",
+      clipPath: `Clips/Clip${i}.md`,
+      clipTitle: `Clip ${i}`,
+      clipUrl: `https://example.com/${i}`,
+      clipTimestamp: `2026-03-0${(i % 9) + 1}T10:00:00.000Z`,
+      clipId: `clip${i}`,
+      status: QuestionStatus.UNRESOLVED
+    }));
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    // Should show "... and X more clips"
+    expect(markdown).toMatch(/\.\.\. and \d+ more clips/);
+  });
+});
+
+describe("Truncation Contract", () => {
+  it("should truncate inbox to MAX_INBOX_QUESTIONS entries", () => {
+    const inputs: OpenQuestionInput[] = Array.from({ length: 150 }, (_, i) => ({
+      question: `Question ${i}?`,
+      clipPath: `Clips/Clip${i}.md`,
+      clipTitle: `Clip ${i}`,
+      clipUrl: `https://example.com/${i}`,
+      clipTimestamp: `2026-03-${String((i % 28) + 1).padStart(2, "0")}T10:00:00.000Z`,
+      clipId: `clip${i}`,
+      status: QuestionStatus.UNRESOLVED
+    }));
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.entries.length).toBe(MAX_INBOX_QUESTIONS);
+    expect(inbox.truncated).toBe(true);
+    expect(inbox.unresolvedQuestions).toBe(150);
+  });
+
+  it("should not truncate when under MAX_INBOX_QUESTIONS", () => {
+    const inputs: OpenQuestionInput[] = Array.from({ length: 50 }, (_, i) => ({
+      question: `Question ${i}?`,
+      clipPath: `Clips/Clip${i}.md`,
+      clipTitle: `Clip ${i}`,
+      clipUrl: `https://example.com/${i}`,
+      clipTimestamp: `2026-03-03T10:00:00.000Z`,
+      clipId: `clip${i}`,
+      status: QuestionStatus.UNRESOLVED
+    }));
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.entries.length).toBe(50);
+    expect(inbox.truncated).toBe(false);
+  });
+
+  it("should set inbox_truncated in frontmatter when truncated", () => {
+    const inputs: OpenQuestionInput[] = Array.from({ length: 150 }, (_, i) => ({
+      question: `Question ${i}?`,
+      clipPath: `Clips/Clip${i}.md`,
+      clipTitle: `Clip ${i}`,
+      clipUrl: `https://example.com/${i}`,
+      clipTimestamp: `2026-03-03T10:00:00.000Z`,
+      clipId: `clip${i}`,
+      status: QuestionStatus.UNRESOLVED
+    }));
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("inbox_truncated: true");
+  });
+
+  it("should include truncation warning in body when truncated", () => {
+    const inputs: OpenQuestionInput[] = Array.from({ length: 150 }, (_, i) => ({
+      question: `Question ${i}?`,
+      clipPath: `Clips/Clip${i}.md`,
+      clipTitle: `Clip ${i}`,
+      clipUrl: `https://example.com/${i}`,
+      clipTimestamp: `2026-03-03T10:00:00.000Z`,
+      clipId: `clip${i}`,
+      status: QuestionStatus.UNRESOLVED
+    }));
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("Inbox truncated to 100 questions");
+  });
+});
+
+describe("Empty-State Determinism", () => {
+  it("should produce identical output for empty inputs across multiple runs", () => {
+    const inbox1 = buildOpenQuestionsInbox([]);
+    const inbox2 = buildOpenQuestionsInbox([]);
+
+    // Check all deterministic fields match (except generated_at which uses current time)
+    expect(inbox1.entries).toEqual(inbox2.entries);
+    expect(inbox1.totalQuestions).toBe(inbox2.totalQuestions);
+    expect(inbox1.unresolvedQuestions).toBe(inbox2.unresolvedQuestions);
+    expect(inbox1.resolvedQuestions).toBe(inbox2.resolvedQuestions);
+    expect(inbox1.totalClips).toBe(inbox2.totalClips);
+    expect(inbox1.totalQuestionInstances).toBe(inbox2.totalQuestionInstances);
+    expect(inbox1.truncated).toBe(inbox2.truncated);
+    expect(inbox1.inbox_version).toBe(inbox2.inbox_version);
+  });
+
+  it("should always include all required frontmatter fields in empty inbox", () => {
+    const inbox = buildOpenQuestionsInbox([]);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("inbox_version:");
+    expect(markdown).toContain("questions_count: 0");
+    expect(markdown).toContain("source_clips_processed: 0");
+    expect(markdown).toContain("unresolved_questions: 0");
+    expect(markdown).toContain("resolved_questions: 0");
+    expect(markdown).toContain("inbox_truncated: false");
+    expect(markdown).toContain("generated_at:");
+  });
+
+  it("should show empty state message when no unresolved questions", () => {
+    const inbox = buildOpenQuestionsInbox([]);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("No unresolved questions found");
+  });
+
+  it("should show empty state when all questions are resolved", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Resolved question?",
+        clipPath: "/path/to/clip.md",
+        clipTitle: "Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip",
+        status: QuestionStatus.RESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(inbox.entries).toHaveLength(0);
+    expect(inbox.resolvedQuestions).toBe(1);
+    expect(markdown).toContain("No unresolved questions found");
+  });
+
+  it("should have consistent structure for empty inbox", () => {
+    const inbox = buildOpenQuestionsInbox([]);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    // Check structure is present even when empty
+    expect(markdown).toContain("# Open Questions Inbox");
+    expect(markdown).toContain("## Summary");
+    expect(markdown).toContain("## Questions");
+    expect(markdown).toContain("---"); // Frontmatter delimiters
+  });
+});
+
+describe("Dedupe Contract", () => {
+  it("should dedupe questions with different case", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "What is the BEST approach?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "what is the best approach?",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.entries).toHaveLength(1);
+    expect(inbox.entries[0]?.source_clip_count).toBe(2);
+  });
+
+  it("should dedupe questions with different trailing punctuation", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "What is the approach?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "What is the approach!",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.entries).toHaveLength(1);
+    expect(inbox.entries[0]?.source_clip_count).toBe(2);
+  });
+
+  it("should dedupe questions with different whitespace", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "What   is   the   approach?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "  What is the approach?  ",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.entries).toHaveLength(1);
+    expect(inbox.entries[0]?.source_clip_count).toBe(2);
+  });
+
+  it("should not dedupe semantically different questions", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "What is approach A?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "What is approach B?",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.entries).toHaveLength(2);
+  });
+
+  it("should merge source clips from deduped questions", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Same question?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "SAME QUESTION?",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(inbox.entries).toHaveLength(1);
+    expect(inbox.entries[0]?.source_clip_refs).toHaveLength(2);
+    expect(markdown).toContain("Clip 1");
+    expect(markdown).toContain("Clip 2");
+  });
+
+  it("should count total instances before dedupe", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Same question?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-01T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "SAME QUESTION?",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "Different question?",
+        clipPath: "/path/to/clip3.md",
+        clipTitle: "Clip 3",
+        clipUrl: "https://example.com/3",
+        clipTimestamp: "2026-03-02T10:00:00.000Z",
+        clipId: "clip3",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(inbox.totalQuestionInstances).toBe(3); // Before dedupe
+    expect(inbox.totalQuestions).toBe(2); // After dedupe
   });
 });
 

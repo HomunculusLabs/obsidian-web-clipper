@@ -53,7 +53,7 @@
 - [x] **TP002**: Implement shared inbox builder utilities that normalize Clip Brief `Open Questions`, merge duplicate prompts across clips, and emit stable entry/linkback ordering.
 - [x] **TP003**: Implement deterministic `open-questions-inbox.md` renderer/export path with bounded section layout and explicit empty-state behavior.
 - [x] **TP004**: Integrate inbox refresh into save pipeline (`src/popup/save.ts`) so clip saves update inbox incrementally with deterministic fallback on read/parse failures.
-- [ ] **TP005**: Add `tests/content/shared/open-questions-inbox.test.ts` contract coverage for dedupe, rank ordering, linkback rendering, truncation, and empty-state determinism.
+- [x] **TP005**: Add `tests/content/shared/open-questions-inbox.test.ts` contract coverage for dedupe, rank ordering, linkback rendering, truncation, and empty-state determinism.
 - [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end inbox artifact refresh and stable output parity across repeated runs.
 
 ### Acceptance Criteria
