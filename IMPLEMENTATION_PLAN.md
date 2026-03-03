@@ -9,6 +9,65 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Cross-clip Related Clips graph linking for retrieval-ready knowledge notes
+
+### Distilled Scope
+**Problem**
+- Current clip outputs preserve provenance and entity extraction, but each note remains mostly isolated after save.
+- For AI coding/writing workflows, retrieval quality drops when related prior clips are not surfaced directly in-note.
+- TASKPAD intake has no unchecked queue items, and recent planned work is heavily tooling/reliability weighted; the highest-impact next slice is a product-facing knowledge retrieval improvement.
+
+**In scope**
+- Add deterministic cross-clip matching that resolves newly clipped entities/source URLs against existing vault notes and emits a bounded `## Related Clips` section.
+- Define stable scoring + truncation rules so related-link ordering is deterministic across reruns.
+- Emit frontmatter diagnostics (`related_clips_count`, `related_clips_top_score`, `related_graph_version`, `related_clips_truncated`).
+- Add focused shared-contract + end-to-end harness coverage for graph linking behavior.
+
+**Out of scope**
+- New clip-source providers.
+- Embedding/vector-database integration.
+- Broad note template redesign outside the new related-clips contract.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic cross-clip `## Related Clips` graph linking using entities + source URL fingerprints with stable diagnostics. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:related-clips-contract` gate that validates diagnostics + section ordering parity for generated related links.
+3. **[OBSERVABILITY]** Add `taskpad:related-clips-history` telemetry to track match-density/truncation drift across releases.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `search "markitdown|Work Queue|AUTO_IDEATION|Current pain points|Constraints" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `select set "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/docs/archive/TASKPAD_ARCHIVE_2026-03.md"`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/docs/archive/TASKPAD_ARCHIVE_2026-03.md`
+
+### Task Graph
+- [x] **TP001**: Specify related-clips contract (matching inputs, score formula, deterministic tie-breaks, truncation policy, and diagnostics schema).
+- [ ] **TP002**: Implement shared matcher/index utility to resolve candidate related notes using existing entity/provenance metadata surfaces.
+- [ ] **TP003**: Integrate matcher into clip save pipeline and render deterministic `## Related Clips` output in note templates.
+- [ ] **TP004**: Emit/update frontmatter diagnostics (`related_clips_count`, `related_clips_top_score`, `related_graph_version`, `related_clips_truncated`) with stable defaults for no-match flows.
+- [ ] **TP005**: Add `tests/content/shared/related-clips-graph.test.ts` coverage for pass/no-match/truncation/tie-break determinism cases.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` scenario(s) to verify end-to-end related-clips section + diagnostics parity in disposable vault runs.
+
+### Acceptance Criteria
+- Newly clipped notes can include deterministic `## Related Clips` backlinks when matching prior notes exist.
+- Related-link ordering, score ties, and truncation behavior remain stable across reruns on unchanged fixtures.
+- Frontmatter diagnostics are always present with explicit no-match values when no related clips are found.
+- Shared-contract + headless tests fail on linking drift and pass with stable outputs.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/related-clips-graph.test.ts
+bun test tests/content/shared/knowledge-entities.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Execution Queue archive-prune + parity gate for executable queue hygiene
 
 ### Distilled Scope
