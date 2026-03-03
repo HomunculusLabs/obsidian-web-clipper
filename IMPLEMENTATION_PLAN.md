@@ -56,7 +56,7 @@
 - [x] **TP003**: Implement deterministic `key-takeaways-inbox.md` renderer/export path with bounded section layout and explicit empty-state behavior.
 - [x] **TP004**: Integrate inbox refresh into save pipeline (`src/popup/save.ts`) with deterministic fallback behavior when vault reads/parsing fail.
 - [x] **TP005**: Add `tests/content/shared/key-takeaways-inbox.test.ts` coverage for dedupe, ranking, linkbacks, truncation, and empty-state determinism.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end key-takeaways inbox artifact refresh and stable rerun parity.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end key-takeaways inbox artifact refresh and stable rerun parity.
 
 ### Acceptance Criteria
 - Clip saves can produce/update `key-takeaways-inbox.md` deterministically from existing `## Clip Brief` takeaway bullets.

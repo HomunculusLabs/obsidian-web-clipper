@@ -5388,3 +5388,718 @@ ${questions.join("\n")}`,
     });
   });
 });
+
+// ============================================================================
+// TP006: Key Takeaways Inbox E2E Scenarios - Artifact Refresh & Rerun Parity
+// ============================================================================
+
+describe("TP006: Key Takeaways Inbox end-to-end artifact refresh & stable rerun parity", () => {
+  /**
+   * Helper to seed a clip note with Key Takeaways in the vault
+   */
+  async function seedClipWithTakeaways(
+    sandbox: TestVaultSandbox,
+    filename: string,
+    frontmatter: {
+      source: string;
+      title: string;
+      date_clipped?: string;
+    },
+    takeaways: string[],
+    options?: {
+      includeStrikethrough?: boolean;
+      strikethroughIndices?: number[];
+    },
+  ): Promise<string> {
+    const clipsPath = join(sandbox.vaultRoot, "Clips");
+    await fs.mkdir(clipsPath, { recursive: true });
+
+    const strikeThroughSet = new Set(options?.strikethroughIndices ?? []);
+
+    const takeawayLines = takeaways.map((t, i) => {
+      if (strikeThroughSet.has(i)) {
+        return `- ~~${t}~~`;
+      }
+      return `- ${t}`;
+    });
+
+    const content = `---
+source: "${frontmatter.source}"
+title: "${frontmatter.title}"
+date_clipped: ${frontmatter.date_clipped || "2026-03-03T10:00:00.000Z"}
+---
+
+## Clip Brief
+
+### Key Takeaways
+
+${takeawayLines.join("\n")}
+`;
+
+    const filePath = join(clipsPath, `${filename}.md`);
+    await fs.writeFile(filePath, content, "utf-8");
+    return filePath;
+  }
+
+  describe("TP006: Key Takeaways Inbox artifact refresh", () => {
+    test("inbox-refresh: single clip produces correct inbox", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways",
+      });
+      sandboxes.push(sandbox);
+
+      await seedClipWithTakeaways(
+        sandbox,
+        "Single Clip",
+        {
+          source: "https://example.com/single",
+          title: "Single Clip",
+          date_clipped: "2026-03-03T10:00:00.000Z",
+        },
+        [
+          "React Server Components use RSC payload for hydration",
+          "Streaming SSR requires Suspense boundaries",
+          "Server Components reduce client bundle size",
+        ],
+      );
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      const scanResult = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildKeyTakeawaysInbox(scanResult.insights);
+      const markdown = renderKeyTakeawaysInbox(inbox);
+
+      // Pass gate: All insights extracted
+      expect(inbox.entries).toHaveLength(3);
+      expect(inbox.totalClips).toBe(1);
+      expect(inbox.totalInsightInstances).toBe(3);
+
+      // Pass gate: Insights appear in markdown
+      expect(markdown).toContain("React Server Components use RSC payload for hydration");
+      expect(markdown).toContain("Streaming SSR requires Suspense boundaries");
+      expect(markdown).toContain("Server Components reduce client bundle size");
+
+      // Pass gate: Source clip linkback is present
+      expect(markdown).toContain("Single Clip");
+      expect(markdown).toContain("https://example.com/single");
+
+      // Pass gate: Required metadata is present
+      expect(markdown).toContain("inbox_version:");
+      expect(markdown).toContain("insights_count: 3");
+      expect(markdown).toContain("source_clips_processed: 1");
+    });
+
+    test("inbox-refresh: multiple clips with shared insights are deduplicated", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways",
+      });
+      sandboxes.push(sandbox);
+
+      // Clip 1 with shared insight
+      await seedClipWithTakeaways(
+        sandbox,
+        "React Basics",
+        {
+          source: "https://example.com/react-basics",
+          title: "React Basics",
+          date_clipped: "2026-03-01T10:00:00.000Z",
+        },
+        [
+          "React Server Components use RSC payload for hydration",
+          "Components are the building blocks of React",
+        ],
+      );
+
+      // Clip 2 with same insight (different wording)
+      await seedClipWithTakeaways(
+        sandbox,
+        "RSC Deep Dive",
+        {
+          source: "https://example.com/rsc-deep-dive",
+          title: "RSC Deep Dive",
+          date_clipped: "2026-03-02T10:00:00.000Z",
+        },
+        [
+          "React server components use RSC payload for hydration!", // Same after normalization
+          "Server Components can fetch data directly",
+        ],
+      );
+
+      // Clip 3 with same insight (more variation)
+      await seedClipWithTakeaways(
+        sandbox,
+        "Advanced RSC",
+        {
+          source: "https://example.com/advanced-rsc",
+          title: "Advanced RSC",
+          date_clipped: "2026-03-03T10:00:00.000Z",
+        },
+        [
+          "- React Server Components use RSC payload for hydration", // With bullet prefix
+          "Hydration is handled by the client",
+        ],
+      );
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      const scanResult = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildKeyTakeawaysInbox(scanResult.insights);
+      const markdown = renderKeyTakeawaysInbox(inbox);
+
+      // Pass gate: Deduplication works (same insight appears once)
+      // Total unique insights: 5 distinct after dedupe
+      // (1 deduplicated + 2 + 2 unique = 5 unique)
+      expect(inbox.entries.length).toBeLessThan(6);
+      expect(inbox.totalClips).toBe(3);
+
+      // Pass gate: Deduplicated insight has multiple source clips
+      const deduplicatedInsight = inbox.entries.find(
+        e => e.insight.includes("React Server Components use RSC payload"),
+      );
+      expect(deduplicatedInsight).toBeDefined();
+      expect(deduplicatedInsight!.source_clip_count).toBe(3);
+
+      // Pass gate: Linkback shows all source clips
+      expect(markdown).toContain("React Basics");
+      expect(markdown).toContain("RSC Deep Dive");
+      expect(markdown).toContain("Advanced RSC");
+
+      // Pass gate: "Appears in" count is correct
+      expect(markdown).toContain("**Appears in:** 3 clip(s)");
+    });
+
+    test("inbox-refresh: ranking orders insights by score", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways",
+      });
+      sandboxes.push(sandbox);
+
+      // Old, brief insight (low score)
+      await seedClipWithTakeaways(
+        sandbox,
+        "Old Brief",
+        {
+          source: "https://example.com/old-brief",
+          title: "Old Brief",
+          date_clipped: "2026-01-01T10:00:00.000Z",
+        },
+        ["Short"],
+      );
+
+      // Recent, detailed insight (high score)
+      await seedClipWithTakeaways(
+        sandbox,
+        "Recent Detailed",
+        {
+          source: "https://example.com/recent-detailed",
+          title: "Recent Detailed",
+          date_clipped: "2026-03-03T10:00:00.000Z",
+        },
+        [
+          "This is a very detailed and comprehensive insight that provides extensive information about the topic being discussed and covers multiple aspects of the subject matter",
+        ],
+      );
+
+      // Mid priority insight
+      await seedClipWithTakeaways(
+        sandbox,
+        "Mid Priority",
+        {
+          source: "https://example.com/mid-priority",
+          title: "Mid Priority",
+          date_clipped: "2026-02-15T10:00:00.000Z",
+        },
+        ["This is a medium length insight"],
+      );
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      const scanResult = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildKeyTakeawaysInbox(scanResult.insights);
+
+      // Pass gate: Insights are ordered by score (descending)
+      expect(inbox.entries[0]!.score).toBeGreaterThanOrEqual(inbox.entries[1]!.score);
+      expect(inbox.entries[1]!.score).toBeGreaterThanOrEqual(inbox.entries[2]!.score);
+
+      // Pass gate: Most recent/detailed insight has highest score
+      expect(inbox.entries[0]!.insight).toContain("very detailed");
+    });
+
+    test("inbox-refresh: export produces valid file", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways",
+      });
+      sandboxes.push(sandbox);
+
+      await seedClipWithTakeaways(
+        sandbox,
+        "Export Test",
+        {
+          source: "https://example.com/export-test",
+          title: "Export Test",
+        },
+        ["Test insight for export"],
+      );
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+      const { exportKeyTakeawaysInbox, inboxFileExists, readInboxFile } = await import("../../src/shared/keyTakeawaysInboxExporter");
+
+      const scanResult = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildKeyTakeawaysInbox(scanResult.insights);
+
+      const exportResult = await exportKeyTakeawaysInbox(inbox, {
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      // Pass gate: File was created
+      expect(exportResult.created).toBe(true);
+      expect(exportResult.isEmpty).toBe(false);
+
+      // Pass gate: File exists
+      const exists = await inboxFileExists({ vaultPath: sandbox.vaultRoot });
+      expect(exists).toBe(true);
+
+      // Pass gate: File content is valid markdown
+      const content = await readInboxFile({ vaultPath: sandbox.vaultRoot });
+      expect(content).not.toBeNull();
+      expect(content).toContain("---");
+      expect(content).toContain("# Key Takeaways Inbox");
+      expect(content).toContain("Test insight for export");
+    });
+  });
+
+  describe("TP006: Key Takeaways Inbox stable rerun parity", () => {
+    test("inbox-parity: identical outputs across multiple runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-parity",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed multiple clips with insights
+      for (let i = 1; i <= 5; i++) {
+        await seedClipWithTakeaways(
+          sandbox,
+          `Clip ${i}`,
+          {
+            source: `https://example.com/clip-${i}`,
+            title: `Clip ${i}`,
+            date_clipped: `2026-03-0${i}T10:00:00.000Z`,
+          },
+          [
+            `Insight A from clip ${i}`,
+            `Insight B from clip ${i}`,
+            `Insight C from clip ${i}`,
+          ],
+        );
+      }
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildKeyTakeawaysInbox(scanResult1.insights);
+      const markdown1 = renderKeyTakeawaysInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildKeyTakeawaysInbox(scanResult2.insights);
+      const markdown2 = renderKeyTakeawaysInbox(inbox2);
+
+      // Run 3
+      const scanResult3 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox3 = buildKeyTakeawaysInbox(scanResult3.insights);
+      const markdown3 = renderKeyTakeawaysInbox(inbox3);
+
+      // Pass gate: All runs produce identical entry counts
+      expect(inbox1.entries.length).toBe(inbox2.entries.length);
+      expect(inbox2.entries.length).toBe(inbox3.entries.length);
+
+      // Pass gate: All runs produce identical scores
+      const scores1 = inbox1.entries.map(e => e.score);
+      const scores2 = inbox2.entries.map(e => e.score);
+      const scores3 = inbox3.entries.map(e => e.score);
+      expect(scores1).toEqual(scores2);
+      expect(scores2).toEqual(scores3);
+
+      // Pass gate: All runs produce identical insight IDs
+      const ids1 = inbox1.entries.map(e => e.insight_id);
+      const ids2 = inbox2.entries.map(e => e.insight_id);
+      const ids3 = inbox3.entries.map(e => e.insight_id);
+      expect(ids1).toEqual(ids2);
+      expect(ids2).toEqual(ids3);
+
+      // Pass gate: Markdown is identical (excluding timestamp)
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      const normalized3 = normalizeTimestamp(markdown3);
+      expect(normalized1).toBe(normalized2);
+      expect(normalized2).toBe(normalized3);
+    });
+
+    test("inbox-parity: empty vault produces stable empty inbox", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-empty",
+      });
+      sandboxes.push(sandbox);
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildKeyTakeawaysInbox(scanResult1.insights);
+      const markdown1 = renderKeyTakeawaysInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildKeyTakeawaysInbox(scanResult2.insights);
+      const markdown2 = renderKeyTakeawaysInbox(inbox2);
+
+      // Pass gate: Both runs produce empty inbox
+      expect(inbox1.entries).toHaveLength(0);
+      expect(inbox2.entries).toHaveLength(0);
+      expect(inbox1.totalInsights).toBe(0);
+      expect(inbox2.totalInsights).toBe(0);
+
+      // Pass gate: Empty inbox has explicit empty-state behavior
+      expect(markdown1).toContain("insights_count: 0");
+      expect(markdown1).toContain("active_insights: 0");
+      expect(markdown1).toContain("No active insights found");
+      expect(markdown2).toContain("insights_count: 0");
+      expect(markdown2).toContain("active_insights: 0");
+      expect(markdown2).toContain("No active insights found");
+
+      // Pass gate: Empty inboxes are identical (excluding timestamp)
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      expect(normalized1).toBe(normalized2);
+    });
+
+    test("inbox-parity: strikethrough insights are excluded deterministically", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-strikethrough",
+      });
+      sandboxes.push(sandbox);
+
+      await seedClipWithTakeaways(
+        sandbox,
+        "Mixed Insights",
+        {
+          source: "https://example.com/mixed",
+          title: "Mixed Insights",
+        },
+        [
+          "Active insight 1",
+          "Archived insight 1",
+          "Active insight 2",
+          "Archived insight 2",
+        ],
+        {
+          strikethroughIndices: [1, 3], // Mark insights 2 and 4 as archived
+        },
+      );
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox, InsightStatus } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildKeyTakeawaysInbox(scanResult1.insights);
+      const markdown1 = renderKeyTakeawaysInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildKeyTakeawaysInbox(scanResult2.insights);
+      const markdown2 = renderKeyTakeawaysInbox(inbox2);
+
+      // Pass gate: Both runs have same counts
+      expect(inbox1.entries.length).toBe(inbox2.entries.length);
+      expect(inbox1.activeInsights).toBe(inbox2.activeInsights);
+      expect(inbox1.archivedInsights).toBe(inbox2.archivedInsights);
+
+      // Pass gate: Archived insights are counted but not shown
+      expect(markdown1).toContain("archived_insights: 2");
+      expect(markdown1).toContain("Active insight 1");
+      expect(markdown1).toContain("Active insight 2");
+      expect(markdown1).not.toContain("Archived insight 1");
+      expect(markdown1).not.toContain("Archived insight 2");
+
+      // Pass gate: Both runs produce identical markdown
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+      expect(normalizeTimestamp(markdown1)).toBe(normalizeTimestamp(markdown2));
+    });
+
+    test("inbox-parity: truncation is deterministic", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-truncate",
+      });
+      sandboxes.push(sandbox);
+
+      const { MAX_INBOX_INSIGHTS } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      // Create more than MAX_INBOX_INSIGHTS (100) unique insights
+      for (let i = 1; i <= 15; i++) {
+        const insights = [];
+        for (let j = 1; j <= 10; j++) {
+          insights.push(`Insight ${i}-${j}: This is a detailed insight with enough length to have meaningful scoring`);
+        }
+
+        await seedClipWithTakeaways(
+          sandbox,
+          `Clip ${i}`,
+          {
+            source: `https://example.com/clip-${i}`,
+            title: `Clip ${i}`,
+            date_clipped: `2026-03-${String(i).padStart(2, "0")}T10:00:00.000Z`,
+          },
+          insights,
+        );
+      }
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildKeyTakeawaysInbox(scanResult1.insights);
+      const markdown1 = renderKeyTakeawaysInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildKeyTakeawaysInbox(scanResult2.insights);
+      const markdown2 = renderKeyTakeawaysInbox(inbox2);
+
+      // Pass gate: Both runs truncate to MAX_INBOX_INSIGHTS
+      expect(inbox1.entries.length).toBe(MAX_INBOX_INSIGHTS);
+      expect(inbox2.entries.length).toBe(MAX_INBOX_INSIGHTS);
+      expect(inbox1.truncated).toBe(true);
+      expect(inbox2.truncated).toBe(true);
+
+      // Pass gate: Truncation is indicated in markdown
+      expect(markdown1).toContain("inbox_truncated: true");
+      expect(markdown2).toContain("inbox_truncated: true");
+      expect(markdown1).toContain("Inbox truncated to 100 insights");
+      expect(markdown2).toContain("Inbox truncated to 100 insights");
+
+      // Pass gate: Truncated output is identical across runs
+      const normalizeTimestamp = (md: string): string => {
+        return md.replace(/generated_at: [^\n]+/g, "generated_at: FIXED");
+      };
+
+      const normalized1 = normalizeTimestamp(markdown1);
+      const normalized2 = normalizeTimestamp(markdown2);
+      expect(normalized1).toBe(normalized2);
+
+      // Pass gate: Same insights are retained in both runs
+      const insightIds1 = inbox1.entries.map(e => e.insight_id).sort();
+      const insightIds2 = inbox2.entries.map(e => e.insight_id).sort();
+      expect(insightIds1).toEqual(insightIds2);
+    });
+
+    test("inbox-parity: source clip ref truncation is deterministic", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-ref-truncate",
+      });
+      sandboxes.push(sandbox);
+
+      // Create 15 clips all with the same insight (to test source_clip_refs truncation)
+      for (let i = 1; i <= 15; i++) {
+        await seedClipWithTakeaways(
+          sandbox,
+          `Duplicate Clip ${i}`,
+          {
+            source: `https://example.com/duplicate-${i}`,
+            title: `Duplicate Clip ${i}`,
+            date_clipped: `2026-03-${String(i).padStart(2, "0")}T10:00:00.000Z`,
+          },
+          ["Same insight appearing in many clips for ref truncation test"],
+        );
+      }
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox, MAX_SOURCE_CLIP_REFS } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      // Run 1
+      const scanResult1 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox1 = buildKeyTakeawaysInbox(scanResult1.insights);
+      const markdown1 = renderKeyTakeawaysInbox(inbox1);
+
+      // Run 2
+      const scanResult2 = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+      const inbox2 = buildKeyTakeawaysInbox(scanResult2.insights);
+      const markdown2 = renderKeyTakeawaysInbox(inbox2);
+
+      // Pass gate: Both runs have single deduplicated entry
+      expect(inbox1.entries).toHaveLength(1);
+      expect(inbox2.entries).toHaveLength(1);
+
+      // Pass gate: Source clip refs are truncated to MAX_SOURCE_CLIP_REFS
+      expect(inbox1.entries[0]!.source_clip_refs.length).toBe(MAX_SOURCE_CLIP_REFS);
+      expect(inbox2.entries[0]!.source_clip_refs.length).toBe(MAX_SOURCE_CLIP_REFS);
+
+      // Pass gate: Total source clip count is preserved
+      expect(inbox1.entries[0]!.source_clip_count).toBe(15);
+      expect(inbox2.entries[0]!.source_clip_count).toBe(15);
+
+      // Pass gate: Truncation flag is set
+      expect(inbox1.entries[0]!.source_clip_refs_truncated).toBe(true);
+      expect(inbox2.entries[0]!.source_clip_refs_truncated).toBe(true);
+
+      // Pass gate: Markdown shows truncation indicator
+      expect(markdown1).toContain("... and 5 more clips");
+      expect(markdown2).toContain("... and 5 more clips");
+
+      // Pass gate: Same source clips are shown in both runs
+      const refs1 = inbox1.entries[0]!.source_clip_refs.map(r => r.id).sort();
+      const refs2 = inbox2.entries[0]!.source_clip_refs.map(r => r.id).sort();
+      expect(refs1).toEqual(refs2);
+    });
+  });
+
+  describe("TP006: Key Takeaways Inbox metadata diagnostics", () => {
+    test("metadata is always present and valid", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-meta",
+      });
+      sandboxes.push(sandbox);
+
+      await seedClipWithTakeaways(
+        sandbox,
+        "Metadata Test",
+        {
+          source: "https://example.com/metadata-test",
+          title: "Metadata Test",
+        },
+        ["Test insight"],
+      );
+
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox, extractInboxMetadata, KEY_TAKEAWAYS_INBOX_VERSION } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      const scanResult = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildKeyTakeawaysInbox(scanResult.insights);
+      const metadata = extractInboxMetadata(inbox);
+      const markdown = renderKeyTakeawaysInbox(inbox);
+
+      // Pass gate: All required metadata fields are present
+      expect(metadata.inbox_version).toBe(KEY_TAKEAWAYS_INBOX_VERSION);
+      expect(metadata.insights_count).toBe(1);
+      expect(metadata.source_clips_processed).toBe(1);
+      expect(metadata.active_insights).toBe(1);
+      expect(metadata.archived_insights).toBe(0);
+      expect(metadata.inbox_truncated).toBe(false);
+      expect(metadata.generated_at).toBeDefined();
+
+      // Pass gate: Version is semantic version format
+      expect(metadata.inbox_version).toMatch(/^\d+\.\d+\.\d+$/);
+
+      // Pass gate: Generated_at is valid ISO timestamp
+      expect(new Date(metadata.generated_at).toISOString()).toBe(metadata.generated_at);
+
+      // Pass gate: Metadata is in markdown frontmatter
+      expect(markdown).toContain(`inbox_version: ${KEY_TAKEAWAYS_INBOX_VERSION}`);
+      expect(markdown).toContain("insights_count: 1");
+      expect(markdown).toContain("source_clips_processed: 1");
+      expect(markdown).toContain("active_insights: 1");
+      expect(markdown).toContain("archived_insights: 0");
+      expect(markdown).toContain("inbox_truncated: false");
+    });
+
+    test("no-match diagnostics have zero values and correct version", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-03T12:00:00.000Z",
+        titlePrefix: "key-takeaways-no-match",
+      });
+      sandboxes.push(sandbox);
+
+      // Empty vault - no clips with takeaways
+      const { scanVaultForKeyTakeaways } = await import("../../src/shared/keyTakeawaysInboxBuilder");
+      const { buildKeyTakeawaysInbox, renderKeyTakeawaysInbox, extractInboxMetadata, KEY_TAKEAWAYS_INBOX_VERSION } = await import("../../src/shared/keyTakeawaysInboxContract");
+
+      const scanResult = await scanVaultForKeyTakeaways({
+        vaultPath: sandbox.vaultRoot,
+      });
+
+      const inbox = buildKeyTakeawaysInbox(scanResult.insights);
+      const metadata = extractInboxMetadata(inbox);
+      const markdown = renderKeyTakeawaysInbox(inbox);
+
+      // Pass gate: All counts are 0 for empty
+      expect(metadata.insights_count).toBe(0);
+      expect(metadata.source_clips_processed).toBe(0);
+      expect(metadata.active_insights).toBe(0);
+      expect(metadata.archived_insights).toBe(0);
+
+      // Pass gate: Version is still present and correct
+      expect(metadata.inbox_version).toBe(KEY_TAKEAWAYS_INBOX_VERSION);
+
+      // Pass gate: Truncated is false for empty
+      expect(metadata.inbox_truncated).toBe(false);
+
+      // Pass gate: Empty state message is shown
+      expect(markdown).toContain("No active insights found");
+    });
+  });
+});
