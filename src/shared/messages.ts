@@ -46,6 +46,19 @@ export type RuntimeRequest =
       /** Maximum files to scan (optional) */
       maxFiles?: number;
     }
+  | {
+      action: "refreshKeyTakeawaysInbox";
+      /** Vault path on filesystem */
+      vaultPath: string;
+      /** CLI path for saving the inbox */
+      cliPath: string;
+      /** Vault name */
+      vault: string;
+      /** Folder to save the inbox (optional, defaults to vault root) */
+      inboxFolder?: string;
+      /** Maximum files to scan (optional) */
+      maxFiles?: number;
+    }
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
@@ -96,6 +109,17 @@ export type RefreshOpenQuestionsInboxResponse =
       sourceClipsProcessed: number;
       unresolvedQuestions: number;
       resolvedQuestions: number;
+      truncated: boolean;
+    }
+  | { success: false; error: string };
+
+export type RefreshKeyTakeawaysInboxResponse =
+  | {
+      success: true;
+      insightsCount: number;
+      sourceClipsProcessed: number;
+      activeInsights: number;
+      archivedInsights: number;
       truncated: boolean;
     }
   | { success: false; error: string };

@@ -15,6 +15,7 @@ import { handleCreateVaultFolder } from "./handlers/createVaultFolder";
 import { handleSaveContent } from "./handlers/saveContent";
 import { handleTestNativeHost } from "./handlers/testNativeHost";
 import { handleRefreshOpenQuestionsInbox } from "./handlers/refreshOpenQuestionsInbox";
+import { handleRefreshKeyTakeawaysInbox } from "./handlers/refreshKeyTakeawaysInbox";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -42,6 +43,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleSaveContent(request);
     case "refreshOpenQuestionsInbox":
       return handleRefreshOpenQuestionsInbox(request);
+    case "refreshKeyTakeawaysInbox":
+      return handleRefreshKeyTakeawaysInbox(request);
     case "testNativeHost":
       return handleTestNativeHost(request);
     default: {

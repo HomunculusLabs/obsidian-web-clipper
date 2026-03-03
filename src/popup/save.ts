@@ -2,7 +2,8 @@ import type { ClipResult, PageType } from "../shared/types";
 import type {
   RuntimeRequest,
   SaveAttachmentToCliResponse,
-  SaveToCliResponse
+  SaveToCliResponse,
+  RefreshKeyTakeawaysInboxResponse
 } from "../shared/messages";
 import type { Settings } from "../shared/settings";
 import { DEFAULT_SETTINGS } from "../shared/settings";
@@ -608,6 +609,78 @@ async function refreshOpenQuestionsInbox(
 }
 
 /**
+ * Refresh the Key Takeaways Inbox after a successful save.
+ *
+ * This is a fire-and-forget operation that:
+ * 1. Scans the vault for Key Takeaways from Clip Brief sections
+ * 2. Builds the inbox deterministically
+ * 3. Saves it via CLI
+ *
+ * On any error, logs and continues (does not block or corrupt).
+ */
+async function refreshKeyTakeawaysInbox(
+  settings: Settings,
+  vault: string
+): Promise<void> {
+  // Skip if inbox is disabled
+  if (!settings.enableKeyTakeawaysInbox) {
+    return;
+  }
+
+  // Skip if CLI is not configured (inbox requires CLI for file write)
+  if (!settings.obsidianCli?.enabled || !settings.obsidianCli.cliPath) {
+    if (settings.debug) {
+      console.warn("[KeyTakeawaysInbox] CLI not configured, skipping inbox refresh");
+    }
+    return;
+  }
+
+  // Get vault path (required for scanning)
+  const vaultPath = getVaultPathFromSettings(settings);
+  if (!vaultPath) {
+    if (settings.debug) {
+      console.warn("[KeyTakeawaysInbox] Vault path not available, skipping inbox refresh");
+    }
+    return;
+  }
+
+  try {
+    const response = await runtimeSendMessage<
+      RuntimeRequest,
+      RefreshKeyTakeawaysInboxResponse
+    >({
+      action: "refreshKeyTakeawaysInbox",
+      vaultPath,
+      cliPath: settings.obsidianCli.cliPath,
+      vault,
+      inboxFolder: settings.keyTakeawaysInboxFolder || undefined,
+      maxFiles: settings.keyTakeawaysInboxMaxFiles || 100,
+    });
+
+    if (response?.success) {
+      if (settings.debug) {
+        console.log(
+          "[KeyTakeawaysInbox] Refreshed inbox:",
+          `${response.insightsCount} insights from ${response.sourceClipsProcessed} clips`
+        );
+      }
+    } else {
+      if (settings.debug) {
+        console.warn(
+          "[KeyTakeawaysInbox] Refresh failed:",
+          response?.error || "Unknown error"
+        );
+      }
+    }
+  } catch (err) {
+    // Deterministic fallback: log error and continue
+    if (settings.debug) {
+      console.warn("[KeyTakeawaysInbox] Refresh error:", err);
+    }
+  }
+}
+
+/**
  * Main save function with method routing and fallback chain.
  *
  * Fallback chain: CLI → URI → clipboard
@@ -690,6 +763,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
 
         // Refresh Open Questions Inbox (fire-and-forget, non-blocking)
         void refreshOpenQuestionsInbox(settings, prepared.vault);
+
+        // Refresh Key Takeaways Inbox (fire-and-forget, non-blocking)
+        void refreshKeyTakeawaysInbox(settings, prepared.vault);
 
         return { usedClipboardFallback, usedMethod: method };
       }

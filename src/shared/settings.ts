@@ -101,6 +101,11 @@ export interface Settings {
   openQuestionsInboxMaxFiles: number;
   openQuestionsInboxFolder: string;
 
+  // --- Key Takeaways Inbox settings ---
+  enableKeyTakeawaysInbox: boolean;
+  keyTakeawaysInboxMaxFiles: number;
+  keyTakeawaysInboxFolder: string;
+
   // --- Debug settings ---
   debug: boolean; // Enable debug logging to console
 
@@ -222,6 +227,11 @@ export const DEFAULT_SETTINGS: Settings = {
   openQuestionsInboxMaxFiles: 100,
   openQuestionsInboxFolder: "",
 
+  // --- Key Takeaways Inbox settings ---
+  enableKeyTakeawaysInbox: false,
+  keyTakeawaysInboxMaxFiles: 100,
+  keyTakeawaysInboxFolder: "",
+
   // --- Debug settings ---
   debug: false, // Disabled by default
 
@@ -290,6 +300,9 @@ export const SETTINGS_KEYS = [
   "enableOpenQuestionsInbox",
   "openQuestionsInboxMaxFiles",
   "openQuestionsInboxFolder",
+  "enableKeyTakeawaysInbox",
+  "keyTakeawaysInboxMaxFiles",
+  "keyTakeawaysInboxFolder",
   // Debug
   "debug",
   // Schema version
