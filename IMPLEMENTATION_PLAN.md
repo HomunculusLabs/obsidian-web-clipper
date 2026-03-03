@@ -9,6 +9,65 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Deterministic vault-index cache for low-latency related/query synthesis
+
+### Distilled Scope
+**Problem**
+- Related Clips matching currently re-indexes the vault on each clip, and Retrieval Query Pack generation depends on the same note corpus context, so clip-save latency will scale poorly as the knowledge base grows.
+- The project goal is a primary knowledge-capture tool for AI coding/writing workflows; slow saves on large vaults directly reduce usage and capture quality.
+- Intake queues were empty, so this is the highest-impact next slice: keep deterministic outputs while reducing repeated vault scan cost.
+
+**In scope**
+- Add deterministic vault-index snapshot caching for note-candidate metadata used by Related Clips + Retrieval Query Pack surfaces.
+- Add bounded cache invalidation/rebuild rules (mtime/fingerprint-based) with explicit diagnostics (`vault_index_cache_version`, `cache_hit`, `cache_age_ms`, `cache_rebuilt`).
+- Integrate cache usage into the related/query synthesis pipeline with strict fallback to full index rebuild on cache corruption/contract drift.
+- Add focused tests for hit/miss/invalidation/corruption behavior and preserve existing end-to-end deterministic output guarantees.
+
+**Out of scope**
+- New clip content sections beyond cache diagnostics.
+- Remote/distributed cache backends.
+- Major redesign of matching/query scoring logic.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic vault-index snapshot cache + invalidation for Related Clips + Retrieval Query Pack to keep clip-save latency stable on large vaults. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:vault-index-contract-gate` to fail when parsed frontmatter candidate schema drifts from matcher/query expectations.
+3. **[OBSERVABILITY]** Add cache telemetry history (`hit_rate`, `rebuild_reason`, `scan_duration_ms`, `candidate_count`) to diagnose vault-scale performance regressions.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "markitdown|Work Queue|AUTO_IDEATION|Constraints|Scratchpad" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `select set "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/docs/archive/TASKPAD_ARCHIVE_2026-03.md"`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/docs/archive/TASKPAD_ARCHIVE_2026-03.md`
+
+### Task Graph
+- [x] **TP001**: Specify vault-index cache contract (snapshot schema, versioning, deterministic key/fingerprint strategy, invalidation triggers, corruption fallback behavior, diagnostics fields).
+- [ ] **TP002**: Implement shared cache read/write module for vault index snapshots with atomic file updates and deterministic serialization ordering.
+- [ ] **TP003**: Integrate cache resolution into `src/shared/vaultIndex.ts` + related matcher path so unchanged vaults use cache and changed/corrupt states trigger bounded rebuild.
+- [ ] **TP004**: Integrate cached candidate reuse into Retrieval Query Pack synthesis path so related/query generation shares one indexed corpus per save flow.
+- [ ] **TP005**: Add `tests/shared/vault-index-cache.test.ts` contract coverage for hit/miss/invalidation/corruption/no-cache scenarios with deterministic diagnostics assertions.
+- [ ] **TP006**: Extend `tests/content/shared/related-clips-graph.test.ts`, `tests/content/shared/retrieval-query-pack.test.ts`, and `tests/e2e/headless-clip-harness.test.ts` to prove cached and rebuilt paths produce identical deterministic note outputs.
+
+### Acceptance Criteria
+- Clip-save flow reuses cached vault-index snapshots when source note corpus is unchanged.
+- Cache invalidation/rebuild behavior is deterministic and emits explicit diagnostics fields for observability.
+- Corrupt/stale cache data never causes silent wrong results; system falls back to full rebuild with deterministic outputs.
+- Existing related/query deterministic contracts remain stable across cache hit and cache rebuild runs.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/shared/vault-index-cache.test.ts
+bun test tests/content/shared/related-clips-graph.test.ts
+bun test tests/content/shared/retrieval-query-pack.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Deterministic Retrieval Query Pack synthesis for vault-search pivots
 
 ### Distilled Scope
