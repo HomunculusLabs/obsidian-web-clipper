@@ -56,7 +56,7 @@
 
 ### Task Graph
 - [x] **TP001**: Specify triage-state-sync contract (status enum, source-ref mapping precedence, stable fingerprinting, deterministic timestamp/writeback policy, truncation semantics).
-- [ ] **TP002**: Implement shared state-sync parser/merger utilities that ingest triage edits and reconcile them against source inbox entries with stable provenance ordering.
+- [x] **TP002**: Implement shared state-sync parser/merger utilities that ingest triage edits and reconcile them against source inbox entries with stable provenance ordering.
 - [ ] **TP003**: Implement deterministic `knowledge-triage-state-sync.md` renderer/export path with bounded empty-state + conflict diagnostics behavior.
 - [ ] **TP004**: Integrate sync refresh into save-flow/background orchestration (`src/popup/save.ts` + handler/message wiring) as fire-and-forget with explicit non-fatal error diagnostics.
 - [ ] **TP005**: Add `tests/content/shared/knowledge-triage-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
