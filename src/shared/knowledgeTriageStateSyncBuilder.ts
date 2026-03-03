@@ -1092,7 +1092,9 @@ export async function scanVaultForTriageItems(
             stats.itemsExtracted += inputs.length;
 
             for (const input of inputs) {
-              stats.statusCounts[input.status]++;
+              // Map kebab-case enum values to camelCase property names
+              const statusKey = input.status === "in-progress" ? "inProgress" : input.status as keyof typeof stats.statusCounts;
+              stats.statusCounts[statusKey]++;
             }
 
             // Add items to result
