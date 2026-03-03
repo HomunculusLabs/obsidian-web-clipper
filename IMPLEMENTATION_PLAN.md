@@ -60,7 +60,7 @@
 - [x] **TP003**: Implement deterministic `knowledge-triage-state-sync.md` renderer/export path with bounded empty-state + conflict diagnostics behavior.
 - [x] **TP004**: Integrate sync refresh into save-flow/background orchestration (`src/popup/save.ts` + handler/message wiring) as fire-and-forget with explicit non-fatal error diagnostics.
 - [x] **TP005**: Add `tests/content/shared/knowledge-triage-state-sync.test.ts` contract coverage for status transitions, precedence conflicts, truncation, and rerun determinism.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify resolved triage items remain suppressed across repeated clip/save refresh cycles.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify resolved triage items remain suppressed across repeated clip/save refresh cycles.
 
 ### Acceptance Criteria
 - `knowledge-triage-state-sync.md` is generated deterministically from triage edits + source inbox references with stable IDs/provenance fields.

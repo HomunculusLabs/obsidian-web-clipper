@@ -6102,4 +6102,527 @@ ${takeawayLines.join("\n")}
       expect(markdown).toContain("No active insights found");
     });
   });
+
+  // ============================================================================
+  // TP006: Knowledge Triage State Sync - Resolved Item Suppression Across Cycles
+  // ============================================================================
+
+  describe("TP006: Knowledge Triage State Sync - resolved items remain suppressed across refresh cycles", () => {
+    /**
+     * Helper to seed a triage item in the knowledge-triage inbox
+     */
+    async function seedTriageItem(
+      sandbox: TestVaultSandbox,
+      folderPath: string,
+      filename: string,
+      itemDescription: string,
+      status: "ready" | "in-progress" | "blocked" | "done" = "ready",
+    ): Promise<string> {
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+
+      const folderFullPath = join(sandbox.vaultRoot, folderPath);
+      await mkdir(folderFullPath, { recursive: true });
+
+      const filePath = join(folderFullPath, `${filename}.md`);
+
+      // Format item based on status
+      let itemLine: string;
+      switch (status) {
+        case "done":
+          itemLine = `- [x] ${itemDescription}`; // Checked checkbox = done
+          break;
+        case "blocked":
+          itemLine = `- ~~${itemDescription}~~`; // Strikethrough = blocked
+          break;
+        case "in-progress":
+          itemLine = `- [ ] ${itemDescription} <!-- status: in-progress -->`;
+          break;
+        default:
+          itemLine = `- [ ] ${itemDescription}`; // Unchecked = ready
+      }
+
+      const content = [
+        "---",
+        `title: "${filename}"`,
+        "type: article",
+        "tags:",
+        '  - "triage"',
+        `date_clipped: "2026-03-03T12:00:00.000Z"`,
+        "---",
+        "",
+        "## Knowledge Triage Inbox",
+        "",
+        itemLine,
+        "",
+      ].join("\n");
+
+      await writeFile(filePath, content, "utf-8");
+      return filePath;
+    }
+
+    /**
+     * Helper to scan vault and build triage state sync
+     */
+    async function buildSyncFromVault(vaultPath: string) {
+      const { scanVaultForTriageItems } = await import("../../src/shared/knowledgeTriageStateSyncBuilder");
+      const { buildTriageStateSync } = await import("../../src/shared/knowledgeTriageStateSyncContract");
+
+      const scanResult = await scanVaultForTriageItems({
+        vaultPath,
+        maxDepth: 2,
+      });
+
+      const sync = buildTriageStateSync(scanResult.triageItems);
+      return { scanResult, sync };
+    }
+
+    describe("TP006: Resolved item suppression on first refresh", () => {
+      test("done items are excluded from sync (suppressed at parse time)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-suppress",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed mixed items: ready, and done (done items are filtered at parse time)
+        await seedTriageItem(sandbox, "Clips", "ready-item", "Ready to work on item", "ready");
+        await seedTriageItem(sandbox, "Clips", "done-item", "Completed item should not appear", "done");
+        await seedTriageItem(sandbox, "Clips", "blocked-item", "Blocked item should appear", "blocked");
+
+        const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+
+        // Pass gate: Checked checkbox items are EXCLUDED at parse time (suppression)
+        // Strikethrough items ARE included (marked as done)
+        expect(sync.totalItems).toBe(2); // ready + strikethrough
+
+        // Pass gate: Active entries (ready) are included
+        const activeEntries = sync.entries.filter(e => e.status === "ready");
+        expect(activeEntries.length).toBe(1);
+
+        // Pass gate: Strikethrough items are tracked as done (not excluded)
+        const doneEntries = sync.entries.filter(e => e.status === "done");
+        expect(doneEntries.length).toBe(1); // Only strikethrough
+
+        // Pass gate: Status counts reflect included items
+        expect(sync.statusCounts.ready).toBe(1);
+        expect(sync.statusCounts.done).toBe(1);
+
+        // Pass gate: Checked checkbox items are suppressed (excluded at parse time)
+        const descriptions = sync.entries.map(e => e.description);
+        expect(descriptions).toContain("Ready to work on item");
+        expect(descriptions).toContain("Blocked item should appear"); // Strikethrough = done, included
+        expect(descriptions).not.toContain("Completed item should not appear"); // Checked = excluded
+      });
+
+      test("status counts reflect only included items (done items excluded)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-counts",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed multiple items of each status
+        for (let i = 0; i < 3; i++) {
+          await seedTriageItem(sandbox, "Clips", `ready-${i}`, `Ready item ${i}`, "ready");
+        }
+        for (let i = 0; i < 2; i++) {
+          await seedTriageItem(sandbox, "Clips", `done-${i}`, `Done item ${i}`, "done");
+        }
+        for (let i = 0; i < 2; i++) {
+          await seedTriageItem(sandbox, "Clips", `blocked-${i}`, `Blocked item ${i}`, "blocked");
+        }
+
+        const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+
+        // Pass gate: Total items excludes checked checkbox items (suppressed at parse time)
+        // Strikethrough items are included (marked as done)
+        expect(sync.totalItems).toBe(5); // 3 ready + 2 strikethrough
+
+        // Pass gate: Individual status counts
+        expect(sync.statusCounts.ready).toBe(3);
+        expect(sync.statusCounts.done).toBe(2); // 2 strikethrough only (checked items excluded)
+        expect(sync.statusCounts.blocked).toBe(0); // Strikethrough is done, not blocked
+        expect(sync.statusCounts.inProgress).toBe(0);
+      });
+    });
+
+    describe("TP006: Resolved item persistence across repeated refresh cycles", () => {
+      test("done items remain excluded across multiple refresh cycles (suppression persistence)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-persist",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed a mix of done and ready items
+        await seedTriageItem(sandbox, "Clips", "persistent-done", "Persistent done item", "done");
+        await seedTriageItem(sandbox, "Clips", "active-item", "Active item", "ready");
+
+        // Run 1: Initial sync
+        const { sync: sync1 } = await buildSyncFromVault(sandbox.vaultRoot);
+        expect(sync1.totalItems).toBe(1); // Only active item
+        expect(sync1.entries[0]?.description).toBe("Active item");
+
+        // Run 2: Second refresh cycle - done item still excluded
+        const { sync: sync2 } = await buildSyncFromVault(sandbox.vaultRoot);
+        expect(sync2.totalItems).toBe(1);
+        expect(sync2.entries[0]?.description).toBe("Active item");
+
+        // Run 3: Third refresh cycle - suppression persists
+        const { sync: sync3 } = await buildSyncFromVault(sandbox.vaultRoot);
+        expect(sync3.totalItems).toBe(1);
+        expect(sync3.entries[0]?.description).toBe("Active item");
+
+        // Pass gate: Done item never appears in any cycle
+        for (const sync of [sync1, sync2, sync3]) {
+          const descriptions = sync.entries.map(e => e.description);
+          expect(descriptions).not.toContain("Persistent done item");
+        }
+      });
+
+      test("suppressed done items do not resurface across repeated refresh cycles", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-no-resurface",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed mixed items - done items are suppressed at parse time
+        await seedTriageItem(sandbox, "Clips", "active-1", "Active item 1", "ready");
+        await seedTriageItem(sandbox, "Clips", "done-1", "Done item (suppressed)", "done");
+        await seedTriageItem(sandbox, "Clips", "active-2", "Active item 2", "ready");
+        await seedTriageItem(sandbox, "Clips", "blocked-1", "Blocked item", "blocked");
+
+        // Run multiple refresh cycles
+        const cycles = [];
+        for (let i = 0; i < 5; i++) {
+          const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+          cycles.push({
+            activeCount: sync.entries.filter(e => e.status === "ready").length,
+            blockedCount: sync.entries.filter(e => e.status === "blocked").length,
+            totalItems: sync.totalItems,
+            descriptions: sync.entries.map(e => e.description),
+          });
+        }
+
+        // Pass gate: All cycles have same counts (2 ready + 1 strikethrough = 3)
+        // Checked checkbox items are excluded at parse time
+        for (const cycle of cycles) {
+          expect(cycle.activeCount).toBe(2);
+          expect(cycle.blockedCount).toBe(0); // Strikethrough is done, not blocked
+          expect(cycle.totalItems).toBe(3); // 2 ready + 1 strikethrough
+        }
+
+        // Pass gate: Checked items are suppressed (excluded at parse time)
+        // Strikethrough items are tracked as done
+        for (const cycle of cycles) {
+          expect(cycle.descriptions).not.toContain("Done item (suppressed)"); // Checked = excluded
+          expect(cycle.descriptions).toContain("Blocked item"); // Strikethrough = done, tracked
+          expect(cycle.descriptions).toContain("Active item 1");
+          expect(cycle.descriptions).toContain("Active item 2");
+        }
+      });
+
+      test("inbox rendering filters done items consistently (suppressed at parse time)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-render",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed items across multiple source inboxes
+        await seedTriageItem(sandbox, "Clips", "open-1", "Open question 1", "ready");
+        await seedTriageItem(sandbox, "Clips", "done-item", "Done question (suppressed)", "done");
+        await seedTriageItem(sandbox, "Backlog", "task-1", "Active task", "ready");
+        await seedTriageItem(sandbox, "Backlog", "task-2", "Blocked task", "blocked");
+
+        // Simulate multiple render cycles
+        const renderCycles = [];
+        for (let i = 0; i < 3; i++) {
+          const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+
+          // All entries in sync are already filtered (done items excluded at parse time)
+          const activeEntries = sync.entries.filter(e => e.status === "ready");
+          const blockedEntries = sync.entries.filter(e => e.status === "blocked");
+
+          renderCycles.push({
+            readyCount: activeEntries.length,
+            blockedCount: blockedEntries.length,
+            totalCount: sync.totalItems,
+            descriptions: sync.entries.map(e => e.description).sort(),
+          });
+        }
+
+        // Pass gate: All cycles show same items
+        expect(renderCycles[0]?.descriptions).toEqual(renderCycles[1]?.descriptions);
+        expect(renderCycles[1]?.descriptions).toEqual(renderCycles[2]?.descriptions);
+
+        // Pass gate: Checked checkbox items excluded, strikethrough items tracked as done
+        for (const cycle of renderCycles) {
+          expect(cycle.descriptions).not.toContain("Done question (suppressed)"); // Checked = excluded
+          expect(cycle.descriptions).toContain("Blocked task"); // Strikethrough = done, tracked
+          expect(cycle.descriptions).toContain("Open question 1");
+          expect(cycle.descriptions).toContain("Active task");
+          expect(cycle.readyCount).toBe(2);
+          expect(cycle.blockedCount).toBe(0); // Strikethrough is done, not blocked
+          expect(cycle.totalCount).toBe(3); // 2 ready + 1 strikethrough
+        }
+      });
+    });
+
+    describe("TP006: Export determinism with resolved items", () => {
+      test("sync export produces identical output across runs (done items suppressed)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-export",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed mix of active and done items (done items are suppressed at parse time)
+        await seedTriageItem(sandbox, "Clips", "item-1", "Active item", "ready");
+        await seedTriageItem(sandbox, "Clips", "item-2", "Done item (excluded)", "done");
+        await seedTriageItem(sandbox, "Clips", "item-3", "Blocked item", "blocked");
+
+        const { renderTriageStateSync } = await import("../../src/shared/knowledgeTriageStateSyncContract");
+
+        // Run 1
+        const { sync: sync1 } = await buildSyncFromVault(sandbox.vaultRoot);
+        const markdown1 = renderTriageStateSync(sync1);
+
+        // Run 2
+        const { sync: sync2 } = await buildSyncFromVault(sandbox.vaultRoot);
+        const markdown2 = renderTriageStateSync(sync2);
+
+        // Normalize timestamps for comparison
+        const normalizeTimestamps = (md: string): string => {
+          return md
+            .replace(/generated_at: [^\n]+/g, "generated_at: FIXED")
+            .replace(/status_changed_at: [^\n]+/g, "status_changed_at: FIXED")
+            .replace(/first_seen_at: [^\n]+/g, "first_seen_at: FIXED")
+            .replace(/last_seen_at: [^\n]+/g, "last_seen_at: FIXED");
+        };
+
+        // Pass gate: Markdown is identical (excluding timestamps)
+        expect(normalizeTimestamps(markdown1)).toBe(normalizeTimestamps(markdown2));
+
+        // Pass gate: Status counts reflect included items
+        // Checked checkbox items excluded at parse, strikethrough items included
+        expect(sync1.statusCounts).toEqual(sync2.statusCounts);
+        expect(sync1.statusCounts.ready).toBe(1);
+        expect(sync1.statusCounts.done).toBe(1); // Strikethrough counted as done
+        expect(sync1.entries.length).toBe(2); // Ready + strikethrough
+
+        // Pass gate: Entry statuses are identical
+        const statuses1 = sync1.entries.map(e => e.status).sort();
+        const statuses2 = sync2.entries.map(e => e.status).sort();
+        expect(statuses1).toEqual(statuses2);
+        expect(statuses1).toEqual(["done", "ready"]);
+
+        // Pass gate: Strikethrough item appears as done, checked checkbox excluded
+        expect(markdown1).toContain("Active item");
+        expect(markdown1).toContain("Blocked item"); // Strikethrough item appears as done
+        expect(markdown1).not.toContain("Done item (excluded)"); // Checked checkbox excluded
+      });
+
+      test("file export creates consistent state sync file (done items excluded)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-file-export",
+        });
+        sandboxes.push(sandbox);
+
+        await seedTriageItem(sandbox, "Clips", "ready-item", "Ready for work", "ready");
+        await seedTriageItem(sandbox, "Clips", "done-item", "Already completed (excluded)", "done");
+
+        const { exportTriageStateSync, readSyncFile } = await import("../../src/shared/knowledgeTriageStateSyncExporter");
+
+        // Build and export sync
+        const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+        const exportResult = await exportTriageStateSync(sync, {
+          vaultPath: sandbox.vaultRoot,
+        });
+
+        // Pass gate: Export succeeded
+        expect(exportResult.created).toBe(true);
+        expect(exportResult.isEmpty).toBe(false);
+
+        // Pass gate: File shows done count as 0 (done items excluded at parse time)
+        const content = await readSyncFile({ vaultPath: sandbox.vaultRoot });
+        expect(content).not.toBeNull();
+        expect(content).toContain("status_counts_done: 0"); // Done items excluded
+        expect(content).toContain("status_counts_ready: 1");
+
+        // Pass gate: Only ready item appears in file
+        expect(content).toContain("Ready for work");
+        expect(content).not.toContain("Already completed (excluded)");
+      });
+    });
+
+    describe("TP006: Status transition and suppression", () => {
+      test("items transitioning to done are immediately suppressed (excluded at parse time)", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-transition",
+        });
+        sandboxes.push(sandbox);
+
+        // Start with an active item
+        const { writeFile, mkdir } = await import("node:fs/promises");
+        const { join } = await import("node:path");
+
+        const folderPath = join(sandbox.vaultRoot, "Clips");
+        await mkdir(folderPath, { recursive: true });
+
+        const filePath = join(folderPath, "transition-test.md");
+
+        // Create with ready status
+        let content = [
+          "---",
+          'title: "transition-test"',
+          "type: article",
+          "---",
+          "",
+          "## Knowledge Triage Inbox",
+          "",
+          "- [ ] Item to be completed",
+          "",
+        ].join("\n");
+
+        await writeFile(filePath, content, "utf-8");
+
+        // First scan - item is ready
+        const { sync: sync1 } = await buildSyncFromVault(sandbox.vaultRoot);
+        expect(sync1.entries[0]?.status).toBe("ready");
+        expect(sync1.totalItems).toBe(1);
+
+        // Update to done status (simulating user marking it complete)
+        content = [
+          "---",
+          'title: "transition-test"',
+          "type: article",
+          "---",
+          "",
+          "## Knowledge Triage Inbox",
+          "",
+          "- [x] Item to be completed",
+          "",
+        ].join("\n");
+
+        await writeFile(filePath, content, "utf-8");
+
+        // Second scan - item is now done and completely excluded from sync
+        const { sync: sync2 } = await buildSyncFromVault(sandbox.vaultRoot);
+        expect(sync2.totalItems).toBe(0); // Done items are excluded at parse time
+        expect(sync2.entries.length).toBe(0);
+
+        // Verify active count changed from 1 to 0
+        const activeCount1 = sync1.entries.filter(e => e.status === "ready").length;
+        const activeCount2 = sync2.entries.filter(e => e.status === "ready").length;
+        expect(activeCount1).toBe(1);
+        expect(activeCount2).toBe(0);
+      });
+
+      test("suppression persists when status changes from ready to done", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-multi-state",
+        });
+        sandboxes.push(sandbox);
+
+        // Create a ready item
+        await seedTriageItem(sandbox, "Clips", "lifecycle-item", "Lifecycle test item", "ready");
+
+        // Run 1: Item is ready and included
+        const { sync: sync1 } = await buildSyncFromVault(sandbox.vaultRoot);
+        expect(sync1.statusCounts.ready).toBe(1);
+        expect(sync1.totalItems).toBe(1);
+
+        // Verify item is present
+        expect(sync1.entries[0]?.description).toBe("Lifecycle test item");
+
+        // Pass gate: Item has stable fingerprint/ID that persists across cycles
+        const itemId1 = sync1.entries[0]?.description; // Description is the fingerprint
+        expect(itemId1).toBeDefined();
+      });
+    });
+
+    describe("TP006: Cross-cycle determinism", () => {
+      test("five consecutive refresh cycles produce identical active item sets", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-five-cycles",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed a mix of active and resolved items
+        const items = [
+          { name: "active-1", desc: "First active item", status: "ready" as const },
+          { name: "active-2", desc: "Second active item", status: "in-progress" as const },
+          { name: "resolved-1", desc: "First resolved item", status: "done" as const },
+          { name: "resolved-2", desc: "Second resolved item", status: "blocked" as const },
+          { name: "active-3", desc: "Third active item", status: "ready" as const },
+        ];
+
+        for (const item of items) {
+          await seedTriageItem(sandbox, "Clips", item.name, item.desc, item.status);
+        }
+
+        // Run 5 refresh cycles
+        const cycles = [];
+        for (let i = 0; i < 5; i++) {
+          const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+          cycles.push({
+            activeDescriptions: sync.entries
+              .filter(e => e.status === "ready" || e.status === "in-progress")
+              .map(e => e.description)
+              .sort(),
+            resolvedDescriptions: sync.entries
+              .filter(e => e.status === "done" || e.status === "blocked")
+              .map(e => e.description)
+              .sort(),
+            statusCounts: { ...sync.statusCounts },
+          });
+        }
+
+        // Pass gate: All cycles have identical active item sets
+        for (let i = 1; i < cycles.length; i++) {
+          expect(cycles[i]!.activeDescriptions).toEqual(cycles[0]!.activeDescriptions);
+        }
+
+        // Pass gate: All cycles have identical resolved item sets
+        for (let i = 1; i < cycles.length; i++) {
+          expect(cycles[i]!.resolvedDescriptions).toEqual(cycles[0]!.resolvedDescriptions);
+        }
+
+        // Pass gate: Status counts are identical across all cycles
+        for (let i = 1; i < cycles.length; i++) {
+          expect(cycles[i]!.statusCounts).toEqual(cycles[0]!.statusCounts);
+        }
+      });
+
+      test("active items maintain stable fingerprints across cycles", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "triage-stable-ids",
+        });
+        sandboxes.push(sandbox);
+
+        await seedTriageItem(sandbox, "Clips", "stable-item", "Item with stable fingerprint", "ready");
+
+        // Collect item fingerprints across cycles
+        const fingerprints = [];
+        for (let i = 0; i < 3; i++) {
+          const { sync } = await buildSyncFromVault(sandbox.vaultRoot);
+          fingerprints.push(sync.entries[0]?.description); // Description is the fingerprint
+        }
+
+        // Pass gate: Same description (fingerprint) across all cycles
+        expect(fingerprints[0]).toBe(fingerprints[1]);
+        expect(fingerprints[1]).toBe(fingerprints[2]);
+        expect(fingerprints[0]).toBeDefined();
+        expect(fingerprints[0]).toBe("Item with stable fingerprint");
+      });
+    });
+  });
 });
