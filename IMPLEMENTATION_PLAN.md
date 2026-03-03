@@ -53,7 +53,7 @@
 - [x] **TP002**: Implement `tools/taskpad-knowledge-revalidation-refresh-contract-parity.ts` by adapting existing refresh-parity patterns for revalidation artifact detection + wiring validation across message/router/handler/save-trigger surfaces.
 - [x] **TP003**: Add deterministic fixtures/tests in `tests/tools/taskpad-knowledge-revalidation-refresh-contract-parity.test.ts` for pass/no-artifact/missing-message/missing-router/missing-handler/missing-save-trigger drift states.
 - [x] **TP004**: Wire script/docs surface (`package.json`, `README.md`, `docs/quality/*` as needed) so gate usage and output contract are canonical and machine-auditable.
-- [ ] **TP005**: Integrate gate into `tools/taskpad-intake-autoplan.ts` execution flow and expand `tests/tools/taskpad-intake-autoplan.test.ts` so parity failures deterministically block progression with actionable next actions.
+- [x] **TP005**: Integrate gate into `tools/taskpad-intake-autoplan.ts` execution flow and expand `tests/tools/taskpad-intake-autoplan.test.ts` so parity failures deterministically block progression with actionable next actions.
 
 ### Acceptance Criteria
 - Gate deterministically fails whenever planned revalidation artifacts are missing any required save-flow wiring surface.
