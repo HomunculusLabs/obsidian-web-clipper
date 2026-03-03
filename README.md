@@ -2902,6 +2902,138 @@ bun run pilot:response-proof -- \
 ### Manual acceptance (as-needed)
 Manual acceptance checks are documented in `TEST_REQUIREMENTS.md` and should be run for extension UX/runtime changes that automation does not fully cover.
 
+### TASKPAD Evidence-Gap Refresh Contract Parity
+
+The `taskpad:evidence-gap-refresh-contract-parity` gate validates that planned evidence-gap artifacts are fully wired through save-flow runtime surfaces (`popup/save.ts`, `messages.ts`, `router.ts`, and background handlers) before release.
+
+**Purpose:** Block drift when planned evidence-gap artifacts (`evidence-gap-inbox.md`, `evidence-gap-state-sync.md`) are missing required refresh wiring across save-flow surfaces. This prevents silent shipping of stale or never-updated evidence-gap notes while intake verification still appears green.
+
+**Usage:**
+
+```bash
+# Validate evidence-gap refresh wiring parity with JSON output
+bun run taskpad:evidence-gap-refresh-contract-parity -- \
+  --taskpad "/absolute/path/to/TASKPAD.md" \
+  --plan IMPLEMENTATION_PLAN.md \
+  --project-root . \
+  --format json
+
+# Human-readable output
+bun run taskpad:evidence-gap-refresh-contract-parity -- \
+  --taskpad "/absolute/path/to/TASKPAD.md" \
+  --plan IMPLEMENTATION_PLAN.md \
+  --project-root . \
+  --format human
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | All evidence-gap artifacts have complete wiring across all required surfaces |
+| `1` | One or more evidence-gap artifacts are missing required wiring |
+| `2` | Input validation failure (invalid arguments, unreadable files) |
+
+**Rule IDs:**
+
+| Rule ID | Severity | Description |
+|---------|----------|-------------|
+| `EGCP001_MISSING_MESSAGE_TYPE` | `error` | Evidence-gap refresh message type not defined in `messages.ts` |
+| `EGCP002_MISSING_ROUTER_CASE` | `error` | Evidence-gap refresh handler not routed in `router.ts` |
+| `EGCP003_MISSING_HANDLER_FILE` | `error` | Evidence-gap refresh handler file does not exist |
+| `EGCP004_MISSING_HANDLER_EXPORT` | `error` | Evidence-gap refresh handler not exported from file |
+| `EGCP005_MISSING_SAVE_TRIGGER` | `error` | Evidence-gap refresh not invoked in popup save flow |
+| `EGCP006_HANDLER_IMPORT_MISSING` | `error` | Handler not imported in router |
+| `EGCP007_MESSAGE_TYPE_MISMATCH` | `error` | Message type definition does not match expected pattern |
+| `EGCP008_RESPONSE_TYPE_INCOMPLETE` | `warning` | Message response type missing required fields |
+| `EGCP009_HANDLER_SIGNATURE_MISMATCH` | `error` | Handler function signature does not match message type |
+| `EGCP010_NO_ARTIFACT_TARGETS` | `warning` | No evidence-gap artifacts defined in plan |
+
+**Expected JSON Output (Pass):**
+
+```json
+{
+  "status": "pass",
+  "inputs": {
+    "taskpadPath": "/path/to/TASKPAD.md",
+    "planPath": "IMPLEMENTATION_PLAN.md",
+    "projectRoot": "."
+  },
+  "artifacts": [
+    {
+      "artifactName": "evidence-gap-inbox",
+      "plannedInSlice": true,
+      "wiring": {
+        "messageType": { "present": true, "requestDefined": true, "responseDefined": true },
+        "router": { "present": true, "caseExists": true, "handlerImported": true },
+        "handler": { "present": true, "fileExists": true, "handlerExported": true },
+        "saveTrigger": { "present": true, "refreshFunctionExists": true, "invokedInSaveFlow": true }
+      }
+    }
+  ],
+  "summary": {
+    "totalArtifacts": 1,
+    "fullyWiredArtifacts": 1,
+    "partiallyWiredArtifacts": 0,
+    "missingWiringArtifacts": 0
+  },
+  "violations": [],
+  "timestamp": "2026-03-03T14:33:18.000Z"
+}
+```
+
+**Expected JSON Output (Fail - Missing Wiring):**
+
+```json
+{
+  "status": "fail",
+  "inputs": { "taskpadPath": "/path/to/TASKPAD.md", "planPath": "IMPLEMENTATION_PLAN.md", "projectRoot": "." },
+  "artifacts": [
+    {
+      "artifactName": "evidence-gap-inbox",
+      "plannedInSlice": true,
+      "wiring": {
+        "messageType": { "present": false, "requestDefined": false, "responseDefined": false },
+        "router": { "present": false, "caseExists": false, "handlerImported": false },
+        "handler": { "present": false, "fileExists": false, "handlerExported": false },
+        "saveTrigger": { "present": false, "refreshFunctionExists": false, "invokedInSaveFlow": false }
+      }
+    }
+  ],
+  "summary": { "totalArtifacts": 1, "fullyWiredArtifacts": 0, "partiallyWiredArtifacts": 0, "missingWiringArtifacts": 1 },
+  "violations": [
+    {
+      "ruleId": "EGCP001_MISSING_MESSAGE_TYPE",
+      "severity": "error",
+      "artifactName": "evidence-gap-inbox",
+      "surface": "messageType",
+      "details": { "expectedActionName": "refreshEvidenceGapInbox", "filePath": "src/shared/messages.ts" },
+      "remediation": {
+        "description": "Add refreshEvidenceGapInbox message type to src/shared/messages.ts",
+        "scaffoldCommand": "cat > src/shared/messages.ts.patch << 'EOF'\ndiff --git a/src/shared/messages.ts...\nEOF\npatch -p1 < src/shared/messages.ts.patch"
+      }
+    }
+  ],
+  "timestamp": "2026-03-03T14:33:18.000Z"
+}
+```
+
+**Remediation Payload:**
+
+Each violation includes a `remediation.scaffoldCommand` field containing a shell command that generates a unified diff patch to add missing wiring. This provides one-step scaffold commands for rapid remediation.
+
+**Integration with intake verification:**
+
+The evidence-gap refresh contract parity gate runs as part of the canonical intake verification sequence after fallback artifact parity and before plan integrity:
+
+```
+typecheck → queue-health → planned-command-parity → fallback-artifact-parity
+  → evidence-gap-refresh-contract-parity ← NEW
+  → plan:integrity
+```
+
+**For full contract documentation**, see: `docs/quality/taskpad-evidence-gap-refresh-contract-parity.md`
+
 ## Configuration
 
 Use `webclipper.json` or `.webclipper.json` to define defaults for browser profile, tags, vault, and tool behavior.
