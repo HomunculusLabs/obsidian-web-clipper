@@ -168,7 +168,7 @@ function computeFingerprintHash(fingerprint: WorkQueueBulletFingerprint): string
 // Archive Parsing
 // =============================================================================
 
-function parseArchiveFingerprints(archiveMarkdown: string | null): ArchiveAnalysis {
+export function parseArchiveFingerprints(archiveMarkdown: string | null): ArchiveAnalysis {
   if (!archiveMarkdown || archiveMarkdown.trim().length === 0) {
     return {
       exists: false,
@@ -276,7 +276,7 @@ function isArchiveCandidate(bullet: WorkQueueBulletFingerprint): boolean {
   return bullet.checkboxState === "checked" || bullet.plannedDate !== null;
 }
 
-function parseTaskpadArchivedBullets(taskpadMarkdown: string): TaskpadAnalysis {
+export function parseTaskpadArchivedBullets(taskpadMarkdown: string): TaskpadAnalysis {
   const lines = taskpadMarkdown.split(/\r?\n/);
   const workQueueHeadingIndexes: number[] = [];
 
@@ -385,7 +385,7 @@ function sortViolationsCanonical(violations: ParityViolation[]): ParityViolation
   });
 }
 
-function validateArchiveParity(
+export function validateArchiveParity(
   taskpadPath: string,
   archivePath: string,
   taskpadMarkdown: string,
