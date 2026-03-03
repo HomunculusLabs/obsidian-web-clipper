@@ -9,6 +9,70 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Evidence-gap refresh wiring parity gate for deterministic save-flow coverage
+
+### Distilled Scope
+**Problem**
+- Evidence-gap artifacts (`evidence-gap-inbox.md`, `evidence-gap-state-sync.md`) are now central to knowledge-quality triage, but there is no deterministic gate proving each planned artifact is fully wired through save-flow runtime surfaces.
+- Missing refresh wiring across popup/messages/router/handlers can silently ship stale or never-updated evidence-gap notes while intake verification still appears green.
+- With intake queues empty and ideation required, the highest-impact reliability slice is a focused contract gate that blocks drift before release.
+
+**In scope**
+- Add deterministic `taskpad:evidence-gap-refresh-contract-parity` analysis for planned/generated evidence-gap artifacts against required runtime/save-flow wiring surfaces.
+- Validate required wiring presence in `src/popup/save.ts`, `src/shared/messages.ts`, `src/background/router.ts`, and matching `src/background/handlers/refreshEvidenceGap*.ts` handlers.
+- Emit stable rule IDs + machine-readable remediation hints (including one scaffold command) for missing wiring, missing handlers, and command/docs parity drift.
+- Add focused fixtures/tests + script/docs wiring so the gate can run in canonical intake-auto verification.
+
+**Out of scope**
+- Implementing evidence-gap product artifact generation itself.
+- Refactoring save-flow behavior beyond parity checks.
+- Broad intake orchestration redesign outside adding this gate.
+
+### Ideation Candidates Considered
+1. **[RELIABILITY]** Add deterministic `taskpad:evidence-gap-refresh-contract-parity` gate to block missing save-flow wiring for evidence-gap artifacts. **(selected)**
+2. **[OBSERVABILITY]** Add `evidence-gap-history.ndjson` telemetry (`evidence_gap_id`, `gap_type`, `first_seen_at`, `resolved_at`, `source_clip_ref_delta`) for longitudinal drift/debug traceability.
+3. **[PRODUCT]** Add deterministic `markitdown-conversion-drift-inbox.md` export that surfaces recently degraded document conversions for rapid re-clip triage.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "refresh.*Inbox|refresh.*StateSync|router|messages|taskpad-save-refresh" src tests tools docs README.md package.json`
+  - `select set IMPLEMENTATION_PLAN.md tools/taskpad-fallback-artifact-parity.ts tools/taskpad-planned-command-parity.ts tools/taskpad-queue-health.ts src/popup/save.ts src/shared/messages.ts src/background/router.ts src/background/handlers/refreshOpenQuestionsInbox.ts src/background/handlers/refreshKeyTakeawaysInbox.ts src/background/handlers/refreshKnowledgeTriageStateSync.ts src/background/handlers/refreshContradictionInbox.ts tests/tools/taskpad-fallback-artifact-parity-gate.test.ts tests/tools/taskpad-intake-autoplan.test.ts package.json README.md`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `tools/taskpad-fallback-artifact-parity.ts`
+  - `tools/taskpad-planned-command-parity.ts`
+  - `src/popup/save.ts`
+  - `src/shared/messages.ts`
+  - `src/background/router.ts`
+  - `src/background/handlers/refreshContradictionInbox.ts`
+  - `tests/tools/taskpad-fallback-artifact-parity-gate.test.ts`
+  - `tests/tools/taskpad-intake-autoplan.test.ts`
+  - `README.md`
+  - `package.json`
+
+### Task Graph
+- [x] **TP001**: Define `taskpad:evidence-gap-refresh-contract-parity` gate contract (artifact targets, required wiring surfaces, deterministic rule IDs, remediation payload schema).
+- [ ] **TP002**: Implement `tools/taskpad-evidence-gap-refresh-contract-parity.ts` to parse newest planned Work Queue evidence-gap items and verify save-flow wiring parity across popup/messages/router/handler surfaces.
+- [ ] **TP003**: Add deterministic fixture corpus + tests in `tests/tools/taskpad-evidence-gap-refresh-contract-parity.test.ts` for pass/missing-handler/missing-router/missing-message/missing-save-trigger drift states.
+- [ ] **TP004**: Wire `package.json` script + README/docs quality contract entry for gate usage and expected JSON output semantics.
+- [ ] **TP005**: Integrate gate into intake verification flow (`verify:taskpad:intake:auto` and/or nearest canonical contract path) with stable failure ordering and actionable next actions.
+- [ ] **TP006**: Extend intake-autoplan/tooling regression tests to ensure evidence-gap refresh parity failures block planning progression deterministically.
+
+### Acceptance Criteria
+- Gate deterministically fails when planned evidence-gap artifacts are missing any required save-flow wiring surface.
+- Failures include stable rule IDs and machine-readable remediation hints with at least one scaffold command.
+- Tests lock pass/fail/no-artifact behavior with deterministic output ordering.
+- Script/docs/verifier wiring make gate invocable as part of canonical intake quality checks.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-evidence-gap-refresh-contract-parity.test.ts
+bun run taskpad:evidence-gap-refresh-contract-parity -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --project-root . --format json
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Deterministic contradiction inbox for cross-clip claim conflict triage
 
 ### Distilled Scope
