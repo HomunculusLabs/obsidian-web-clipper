@@ -9,6 +9,69 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-03): Work Queue archive-prune + parity gate for deterministic ideation signal
+
+### Distilled Scope
+**Problem**
+- `TASKPAD.md` currently accumulates large volumes of checked/planned `## Work Queue` bullets, which degrades ideation readability and weakens queue-health signal quality even when executable queues are empty.
+- Existing `taskpad:plan-prune` targets `IMPLEMENTATION_PLAN.md` slices, but there is no canonical Work Queue prune command + parity gate that proves archived entries exactly match removed bullets.
+- Without deterministic Work Queue archive parity, intake loops can drift between what was marked planned and what remains visible in TASKPAD, increasing false confidence in autonomous planning runs.
+
+**In scope**
+- Add deterministic `taskpad:work-queue-prune` command that archives completed/planned Work Queue bullets into monthly `docs/archive/TASKPAD_ARCHIVE_YYYY-MM.md` while preserving unchecked active items in TASKPAD.
+- Add deterministic `taskpad:work-queue-archive-parity` gate validating one-to-one fingerprint parity between pruned TASKPAD bullets and archive entries.
+- Add focused fixtures/tests for prune pass/noop/missing-section and archive-parity pass/fail drift states.
+- Wire canonical script/docs coverage so intake-auto flows can invoke Work Queue pruning with machine-readable outcomes.
+
+**Out of scope**
+- Product clipping/extractor feature changes.
+- Re-ranking ideation candidate heuristics.
+- Broad redesign of TASKPAD schema outside Work Queue prune/parity surfaces.
+
+### Ideation Candidates Considered
+1. **[AUTOMATION]** Add deterministic `taskpad:work-queue-prune` + `taskpad:work-queue-archive-parity` flow and wire into intake-auto so completed Work Queue history is archived without losing auditability. **(selected)**
+2. **[RELIABILITY]** Add `taskpad:work-queue-staleness-gate` that fails when checked/planned Work Queue density exceeds threshold and suggests prune actions.
+3. **[OBSERVABILITY]** Add `taskpad:queue-burndown-report` telemetry for unchecked/planned/archived queue deltas per intake run.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree`
+  - `search "markitdown|document conversion|golden-corpus|retirement-contract|auto-ideation|work queue"`
+  - `search "queue-health|workQueueUncheckedCount|QH001_EXECUTABLE_QUEUES_EMPTY|plan-prune|planned-command-parity|implementation-plan-integrity" package.json tools tests docs/quality README.md`
+  - `select set IMPLEMENTATION_PLAN.md tools/taskpad-queue-health.ts tools/taskpad-auto-ideation.ts tools/taskpad-planned-command-parity.ts tools/taskpad-plan-prune.ts tests/tools/taskpad-queue-health.test.ts tests/tools/taskpad-auto-ideation.test.ts docs/quality/taskpad-queue-health.md README.md package.json`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `tools/taskpad-plan-prune.ts`
+  - `tools/taskpad-queue-health.ts`
+  - `tools/taskpad-auto-ideation.ts`
+  - `tests/tools/taskpad-queue-health.test.ts`
+  - `docs/quality/taskpad-queue-health.md`
+  - `README.md`
+  - `package.json`
+
+### Task Graph
+- [x] **TP001**: Define `taskpad:work-queue-prune` and `taskpad:work-queue-archive-parity` contracts (inputs, archive path policy, fingerprint schema, deterministic rule IDs, and JSON output ordering).
+- [ ] **TP002**: Implement `tools/taskpad-work-queue-prune.ts` to archive checked/planned Work Queue bullets atomically, preserve unchecked bullets in-place, and emit deterministic prune summaries.
+- [ ] **TP003**: Implement `tools/taskpad-work-queue-archive-parity.ts` to validate archive↔TASKPAD fingerprint parity and fail with actionable rule-ID diagnostics on drift.
+- [ ] **TP004**: Add fixtures + tests (`tests/tools/taskpad-work-queue-prune.test.ts`, `tests/tools/taskpad-work-queue-archive-parity.test.ts`) covering pass/noop/missing-heading and parity drift conditions.
+- [ ] **TP005**: Wire scripts/docs (`package.json`, `README.md`, `docs/quality/taskpad-queue-health.md`) and integrate canonical invocation into intake-auto verification flow.
+
+### Acceptance Criteria
+- Running Work Queue prune archives only checked/planned Work Queue bullets and leaves unchecked executable items intact.
+- Archive parity gate deterministically detects missing/extra/mutated archive entries against TASKPAD source fingerprints.
+- New tests lock pass/noop/fail behavior and stable diagnostics ordering.
+- Canonical scripts/docs make prune + parity invocations part of machine-auditable intake-auto flow.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-work-queue-prune.test.ts
+bun test tests/tools/taskpad-work-queue-archive-parity.test.ts
+bun run taskpad:work-queue-prune -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" --format json
+bun run taskpad:work-queue-archive-parity -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --archive "docs/archive/TASKPAD_ARCHIVE_2026-03.md" --format json
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Work Queue parity-count correctness for auto-ideation routing
 
 ### Distilled Scope
