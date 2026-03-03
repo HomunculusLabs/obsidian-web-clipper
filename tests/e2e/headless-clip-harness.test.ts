@@ -1940,4 +1940,1051 @@ describe("headless clip harness entrypoint", () => {
       });
     });
   });
+
+  // ============================================================================
+  // TP006: Related Clips E2E Scenarios - Section + Diagnostics Parity
+  // ============================================================================
+
+  describe("TP006: Related Clips end-to-end section + diagnostics parity", () => {
+    /**
+     * Helper to seed a pre-existing note in the vault for related clips matching.
+     * Creates a markdown file with frontmatter that can be indexed as a candidate.
+     */
+    async function seedNote(
+      sandbox: TestVaultSandbox,
+      folderPath: string,
+      filename: string,
+      frontmatter: {
+        source?: string;
+        title: string;
+        type?: string;
+        tags?: string[];
+        entities?: string[];
+        date_clipped?: string;
+        related_clips_count?: number;
+      },
+      body: string = "",
+    ): Promise<string> {
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+
+      const folderFullPath = join(sandbox.vaultRoot, folderPath);
+      await mkdir(folderFullPath, { recursive: true });
+
+      const filePath = join(folderFullPath, `${filename}.md`);
+
+      // Build frontmatter YAML
+      const lines: string[] = ["---"];
+      lines.push(`source: "${frontmatter.source || ""}"`);
+      lines.push(`title: "${frontmatter.title}"`);
+      lines.push(`type: "${frontmatter.type || "article"}"`);
+
+      if (frontmatter.tags && frontmatter.tags.length > 0) {
+        lines.push("tags:");
+        for (const tag of frontmatter.tags) {
+          lines.push(`  - "${tag}"`);
+        }
+      } else {
+        lines.push("tags: []");
+      }
+
+      if (frontmatter.entities && frontmatter.entities.length > 0) {
+        // Use keywords for vaultIndex compatibility
+        lines.push("keywords:");
+        for (const entity of frontmatter.entities) {
+          lines.push(`  - "${entity}"`);
+        }
+      }
+
+      lines.push(`date_clipped: "${frontmatter.date_clipped || "2026-03-01T12:00:00.000Z"}"`);
+
+      if (frontmatter.related_clips_count !== undefined) {
+        lines.push(`related_clips_count: ${frontmatter.related_clips_count}`);
+      }
+
+      lines.push("---");
+      lines.push("");
+      lines.push(body || `# ${frontmatter.title}`);
+      lines.push("");
+
+      await writeFile(filePath, lines.join("\n"), "utf-8");
+      return filePath;
+    }
+
+    describe("TP006: Related clips section rendering", () => {
+      test("related clips section is rendered when matching notes exist", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed a pre-existing note with matching domain
+        await seedNote(
+          sandbox,
+          "Clips",
+          "existing-note",
+          {
+            source: "https://example.com/existing-article",
+            title: "Existing Article",
+            type: "article",
+            tags: ["web-clip"],
+            entities: ["typescript", "testing"],
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+          "# Existing Article\n\nThis is existing content.",
+        );
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "new-article",
+          },
+          async ({ extracted, built }) => {
+            // Import related clips modules
+            const { buildMatcherInput, matchRelatedClipsFromCandidates } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { renderRelatedClipsSection, extractDiagnostics } = await import(
+              "../../src/shared/relatedClipsContract"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            // Index the vault to get candidate notes
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            // Build input from extracted content
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"], // shared entity
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            // Match related clips
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+              5,
+            );
+
+            // Pass gate: At least one related clip found
+            expect(matchResult.result.relatedClips.length).toBeGreaterThan(0);
+
+            // Pass gate: Related clips section is rendered
+            const section = renderRelatedClipsSection(matchResult.result);
+            expect(section).toContain("## Related Clips");
+            expect(section).toContain("Existing Article");
+
+            // Pass gate: Section contains wiki-link format
+            expect(section).toMatch(/\[\[.*\|.*\]\]/);
+
+            // Pass gate: Section includes score information
+            expect(section).toContain("score:");
+          },
+        );
+      });
+
+      test("related clips section is empty when no matching notes exist", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // No pre-existing notes seeded - vault is empty
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://different-domain.com/article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "no-matches-article",
+          },
+          async ({ extracted }) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { renderRelatedClipsSection } = await import(
+              "../../src/shared/relatedClipsContract"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              [],
+              [],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+              5,
+            );
+
+            // Pass gate: No related clips found
+            expect(matchResult.result.relatedClips.length).toBe(0);
+
+            // Pass gate: Related clips section is empty string
+            const section = renderRelatedClipsSection(matchResult.result);
+            expect(section).toBe("");
+          },
+        );
+      });
+    });
+
+    describe("TP006: Frontmatter diagnostics parity", () => {
+      test("diagnostics are emitted when related clips are found", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed multiple matching notes
+        await seedNote(
+          sandbox,
+          "Clips",
+          "related-note-1",
+          {
+            source: "https://example.com/related-1",
+            title: "Related Note 1",
+            type: "article",
+            tags: ["web-clip"],
+            entities: ["typescript", "api"],
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+        );
+
+        await seedNote(
+          sandbox,
+          "Clips",
+          "related-note-2",
+          {
+            source: "https://example.com/related-2",
+            title: "Related Note 2",
+            type: "article",
+            tags: ["web-clip"],
+            entities: ["typescript", "testing"],
+            date_clipped: "2026-03-02T12:00:00.000Z",
+          },
+        );
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "diagnostics-test",
+          },
+          async ({}) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates, getMatcherDiagnostics } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { RELATED_CLIPS_GRAPH_VERSION } = await import(
+              "../../src/shared/relatedClipsContract"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+              5,
+            );
+
+            const diagnostics = getMatcherDiagnostics(matchResult);
+
+            // Pass gate: Diagnostics have correct count
+            expect(diagnostics.related_clips_count).toBeGreaterThan(0);
+
+            // Pass gate: Top score is positive
+            expect(diagnostics.related_clips_top_score).toBeGreaterThan(0);
+
+            // Pass gate: Graph version is present and correct
+            expect(diagnostics.related_graph_version).toBe(RELATED_CLIPS_GRAPH_VERSION);
+
+            // Pass gate: Truncated flag is present (boolean)
+            expect(typeof diagnostics.related_clips_truncated).toBe("boolean");
+          },
+        );
+      });
+
+      test("no-match diagnostics have zero values and correct version", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed a note with completely different metadata (no match)
+        await seedNote(
+          sandbox,
+          "Clips",
+          "unrelated-note",
+          {
+            source: "https://unrelated-domain.com/article",
+            title: "Unrelated Note",
+            type: "video", // Different type
+            tags: ["different-tag"],
+            entities: ["unrelated-entity"],
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+        );
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "no-match-test",
+          },
+          async ({}) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates, getMatcherDiagnostics } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { RELATED_CLIPS_GRAPH_VERSION } = await import(
+              "../../src/shared/relatedClipsContract"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+              5,
+            );
+
+            const diagnostics = getMatcherDiagnostics(matchResult);
+
+            // Pass gate: Count is 0 for no-match
+            expect(diagnostics.related_clips_count).toBe(0);
+
+            // Pass gate: Top score is 0 for no-match
+            expect(diagnostics.related_clips_top_score).toBe(0);
+
+            // Pass gate: Graph version is still present and correct
+            expect(diagnostics.related_graph_version).toBe(RELATED_CLIPS_GRAPH_VERSION);
+
+            // Pass gate: Truncated is false for no-match
+            expect(diagnostics.related_clips_truncated).toBe(false);
+          },
+        );
+      });
+
+      test("diagnostics are written to frontmatter in final markdown", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed a matching note
+        await seedNote(
+          sandbox,
+          "Clips",
+          "matching-note",
+          {
+            source: "https://example.com/matching",
+            title: "Matching Note",
+            type: "article",
+            tags: ["web-clip"],
+            entities: ["typescript"],
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+        );
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "frontmatter-diagnostics-test",
+          },
+          async ({ extracted }) => {
+            // Import modules
+            const { buildMatcherInput, matchRelatedClipsFromCandidates, getMatcherDiagnostics } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { buildClipMarkdownWithRelated } = await import(
+              "../../src/shared/markdown"
+            );
+            const { buildFrontmatterFromClip } = await import(
+              "../../src/shared/buildFrontmatter"
+            );
+            const { DEFAULT_SETTINGS } = await import(
+              "../../src/shared/settings"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            // Index vault to get candidates
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+            );
+
+            const diagnostics = getMatcherDiagnostics(matchResult);
+
+            // Build frontmatter with diagnostics
+            const built = buildFrontmatterFromClip({
+              result: extracted,
+              settings: DEFAULT_SETTINGS,
+              pageType: "web",
+              currentTabUrl: fixtureUrl,
+              overrideFolder: "Clips",
+              overrideTitle: "frontmatter-diagnostics-test",
+            });
+
+            // Build final markdown with related clips diagnostics
+            const clipMarkdownWithDiagnostics = buildClipMarkdownWithRelated({
+              frontmatter: {
+                ...built.frontmatter,
+                relatedClipsDiagnostics: diagnostics,
+              },
+              bodyMarkdown: extracted.markdown,
+              relatedClipsSection: "", // Empty for this test
+            });
+
+            // Pass gate: Frontmatter contains related_clips_count
+            expect(clipMarkdownWithDiagnostics).toMatch(/related_clips_count:\s*\d+/);
+
+            // Pass gate: Frontmatter contains related_clips_top_score
+            expect(clipMarkdownWithDiagnostics).toMatch(/related_clips_top_score:\s*\d+/);
+
+            // Pass gate: Frontmatter contains related_graph_version
+            expect(clipMarkdownWithDiagnostics).toMatch(/related_graph_version:\s*"[^"]+"/);
+
+            // Pass gate: Frontmatter contains related_clips_truncated
+            expect(clipMarkdownWithDiagnostics).toMatch(/related_clips_truncated:\s*(true|false)/);
+          },
+        );
+      });
+    });
+
+    describe("TP006: Truncation behavior", () => {
+      test("truncation occurs when matches exceed MAX_RELATED_CLIPS", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed more than MAX_RELATED_CLIPS (5) matching notes
+        for (let i = 0; i < 7; i++) {
+          await seedNote(
+            sandbox,
+            "Clips",
+            `matching-note-${i}`,
+            {
+              source: `https://example.com/matching-${i}`,
+              title: `Matching Note ${i}`,
+              type: "article",
+              tags: ["web-clip"],
+              entities: ["typescript"], // All share entity for matching
+              date_clipped: `2026-03-0${(i % 9) + 1}T12:00:00.000Z`,
+            },
+          );
+        }
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "truncation-test",
+          },
+          async ({}) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates, getMatcherDiagnostics } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { MAX_RELATED_CLIPS } = await import(
+              "../../src/shared/relatedClipsContract"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+            );
+
+            // Pass gate: Results are limited to MAX_RELATED_CLIPS
+            expect(matchResult.result.relatedClips.length).toBe(MAX_RELATED_CLIPS);
+
+            // Pass gate: matchesFound reports actual count (7)
+            expect(matchResult.result.matchesFound).toBe(7);
+
+            // Pass gate: Diagnostics report truncated = true
+            const diagnostics = getMatcherDiagnostics(matchResult);
+            expect(diagnostics.related_clips_truncated).toBe(true);
+            expect(diagnostics.related_clips_count).toBe(MAX_RELATED_CLIPS);
+          },
+        );
+      });
+
+      test("no truncation when matches are within MAX_RELATED_CLIPS", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed exactly 3 matching notes (under MAX_RELATED_CLIPS of 5)
+        for (let i = 0; i < 3; i++) {
+          await seedNote(
+            sandbox,
+            "Clips",
+            `matching-note-${i}`,
+            {
+              source: `https://example.com/matching-${i}`,
+              title: `Matching Note ${i}`,
+              type: "article",
+              tags: ["web-clip"],
+              entities: ["typescript"],
+              date_clipped: `2026-03-0${i + 1}T12:00:00.000Z`,
+            },
+          );
+        }
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "no-truncation-test",
+          },
+          async ({}) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates, getMatcherDiagnostics } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+            );
+
+            // Pass gate: All 3 matches are returned
+            expect(matchResult.result.relatedClips.length).toBe(3);
+
+            // Pass gate: matchesFound equals actual count
+            expect(matchResult.result.matchesFound).toBe(3);
+
+            // Pass gate: Diagnostics report truncated = false
+            const diagnostics = getMatcherDiagnostics(matchResult);
+            expect(diagnostics.related_clips_truncated).toBe(false);
+            expect(diagnostics.related_clips_count).toBe(3);
+          },
+        );
+      });
+    });
+
+    describe("TP006: Determinism across multiple runs", () => {
+      test("related clips are deterministic across multiple runs with same inputs", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed the same notes every time
+        for (let i = 0; i < 5; i++) {
+          await seedNote(
+            sandbox,
+            "Clips",
+            `deterministic-note-${i}`,
+            {
+              source: `https://example.com/deterministic-${i}`,
+              title: `Deterministic Note ${i}`,
+              type: "article",
+              tags: ["web-clip"],
+              entities: ["typescript", `entity-${i}`], // Mix of shared and unique
+              date_clipped: `2026-03-0${(i % 9) + 1}T12:00:00.000Z`,
+            },
+          );
+        }
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        // Import modules once
+        const { buildMatcherInput, matchRelatedClipsFromCandidates, getMatcherDiagnostics } = await import(
+          "../../src/shared/relatedClipsMatcher"
+        );
+        const { indexVault } = await import("../../src/shared/vaultIndex");
+
+        // Index vault once (same candidates for all runs)
+        const indexResult = await indexVault({
+          vaultPath: sandbox.vaultRoot,
+          maxDepth: 2,
+        });
+
+        const input = buildMatcherInput(
+          fixtureUrl,
+          "article",
+          ["typescript"],
+          ["web-clip"],
+          "2026-03-03T12:00:00.000Z",
+        );
+
+        // Run matching 3 times and collect results
+        const results: Array<{
+          titles: string[];
+          scores: number[];
+          diagnostics: {
+            count: number;
+            topScore: number;
+            truncated: boolean;
+          };
+        }> = [];
+
+        for (let run = 0; run < 3; run++) {
+          const matchResult = await matchRelatedClipsFromCandidates(
+            input,
+            indexResult.candidates,
+          );
+
+          const diagnostics = getMatcherDiagnostics(matchResult);
+
+          results.push({
+            titles: matchResult.result.relatedClips.map((c) => c.title),
+            scores: matchResult.result.relatedClips.map((c) => c.score),
+            diagnostics: {
+              count: diagnostics.related_clips_count,
+              topScore: diagnostics.related_clips_top_score,
+              truncated: diagnostics.related_clips_truncated,
+            },
+          });
+        }
+
+        // Pass gate: All runs produce identical titles
+        expect(results[0].titles).toEqual(results[1].titles);
+        expect(results[1].titles).toEqual(results[2].titles);
+
+        // Pass gate: All runs produce identical scores
+        expect(results[0].scores).toEqual(results[1].scores);
+        expect(results[1].scores).toEqual(results[2].scores);
+
+        // Pass gate: All runs produce identical diagnostics
+        expect(results[0].diagnostics).toEqual(results[1].diagnostics);
+        expect(results[1].diagnostics).toEqual(results[2].diagnostics);
+      });
+
+      test("tie-breaking produces stable ordering", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed notes with identical scores (same domain, same entities, same tags)
+        // They should be tie-broken by timestamp (newer first), then by ID (alphabetical)
+        for (let i = 0; i < 3; i++) {
+          await seedNote(
+            sandbox,
+            "Clips",
+            `tiebreak-note-${String.fromCharCode(97 + i)}`, // a, b, c
+            {
+              source: `https://example.com/tiebreak-${i}`,
+              title: `Tiebreak Note ${String.fromCharCode(97 + i)}`,
+              type: "article",
+              tags: ["web-clip"],
+              entities: ["typescript"], // Same entity = same base score
+              date_clipped: `2026-03-0${3 - i}T12:00:00.000Z`, // Descending timestamps
+            },
+          );
+        }
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        // Import modules
+        const { buildMatcherInput, matchRelatedClipsFromCandidates } = await import(
+          "../../src/shared/relatedClipsMatcher"
+        );
+        const { indexVault } = await import("../../src/shared/vaultIndex");
+
+        // Index vault once
+        const indexResult = await indexVault({
+          vaultPath: sandbox.vaultRoot,
+          maxDepth: 2,
+        });
+
+        const input = buildMatcherInput(
+          fixtureUrl,
+          "article",
+          ["typescript"],
+          ["web-clip"],
+          "2026-03-03T12:00:00.000Z",
+        );
+
+        const orderings: string[][] = [];
+
+        // Run matching 3 times
+        for (let run = 0; run < 3; run++) {
+          const matchResult = await matchRelatedClipsFromCandidates(
+            input,
+            indexResult.candidates,
+          );
+
+          orderings.push(matchResult.result.relatedClips.map((c) => c.id));
+        }
+
+        // Pass gate: Ordering is identical across all runs
+        expect(orderings[0]).toEqual(orderings[1]);
+        expect(orderings[1]).toEqual(orderings[2]);
+
+        // Pass gate: Ordering respects tie-break rules (newer timestamps first)
+        // Note c has 2026-03-01, Note b has 2026-03-02, Note a has 2026-03-03
+        // So order should be: a (newest), b, c (oldest)
+        expect(orderings[0][0]).toContain("tiebreak-note-a");
+        expect(orderings[0][2]).toContain("tiebreak-note-c");
+      });
+    });
+
+    describe("TP006: Shared domain and entity matching", () => {
+      test("same domain produces higher scores than different domains", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        // Seed a note with same domain as new clip
+        await seedNote(
+          sandbox,
+          "Clips",
+          "same-domain-note",
+          {
+            source: "https://example.com/existing",
+            title: "Same Domain Note",
+            type: "article",
+            tags: ["web-clip"],
+            entities: ["unrelated-entity"], // No entity match
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+        );
+
+        // Seed a note with different domain but matching entity
+        await seedNote(
+          sandbox,
+          "Clips",
+          "different-domain-note",
+          {
+            source: "https://other-domain.com/article",
+            title: "Different Domain Note",
+            type: "article",
+            tags: ["different"],
+            entities: ["typescript"], // Entity match
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+        );
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+        const fixtureUrl = "https://example.com/new-article";
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: fixtureUrl,
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "domain-scoring-test",
+          },
+          async ({}) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              fixtureUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+            );
+
+            // Pass gate: Same domain note has higher score than different domain
+            const sameDomainClip = matchResult.result.relatedClips.find(
+              (c) => c.title === "Same Domain Note",
+            );
+            const differentDomainClip = matchResult.result.relatedClips.find(
+              (c) => c.title === "Different Domain Note",
+            );
+
+            expect(sameDomainClip).toBeDefined();
+            expect(differentDomainClip).toBeDefined();
+
+            // Same domain (50) + same content type (1) = 51
+            // Different domain + shared entity (10) + same content type (1) = 11
+            expect(sameDomainClip!.score).toBeGreaterThan(differentDomainClip!.score);
+          },
+        );
+      });
+
+      test("exact URL match produces highest possible score", async () => {
+        const sandbox = await createTestVaultSandbox({
+          timestampIso: "2026-03-03T12:00:00.000Z",
+          titlePrefix: "related-clips",
+        });
+        sandboxes.push(sandbox);
+
+        const existingUrl = "https://example.com/exact-match-article";
+
+        // Seed a note with exact same URL as new clip
+        await seedNote(
+          sandbox,
+          "Clips",
+          "exact-url-note",
+          {
+            source: existingUrl, // Exact URL match
+            title: "Exact URL Note",
+            type: "article",
+            tags: ["web-clip"],
+            entities: ["typescript"],
+            date_clipped: "2026-03-01T12:00:00.000Z",
+          },
+        );
+
+        const fixturePath = join(
+          import.meta.dir,
+          "..",
+          "extractors",
+          "fixtures",
+          "article.html",
+        );
+
+        await withScenario(
+          {
+            fixturePath,
+            simulatedUrl: existingUrl, // Same URL as existing note
+            pageType: "web",
+            sandbox,
+            overrideFolder: "Clips",
+            overrideTitle: "exact-url-test",
+          },
+          async ({}) => {
+            const { buildMatcherInput, matchRelatedClipsFromCandidates } = await import(
+              "../../src/shared/relatedClipsMatcher"
+            );
+            const { MATCH_SIGNAL_WEIGHTS, MatchSignalType } = await import(
+              "../../src/shared/relatedClipsContract"
+            );
+            const { indexVault } = await import("../../src/shared/vaultIndex");
+
+            const indexResult = await indexVault({
+              vaultPath: sandbox.vaultRoot,
+              maxDepth: 2,
+            });
+
+            const input = buildMatcherInput(
+              existingUrl,
+              "article",
+              ["typescript"],
+              ["web-clip"],
+              "2026-03-03T12:00:00.000Z",
+            );
+
+            const matchResult = await matchRelatedClipsFromCandidates(
+              input,
+              indexResult.candidates,
+            );
+
+            // Pass gate: Exact URL match found
+            const exactMatch = matchResult.result.relatedClips.find(
+              (c) => c.title === "Exact URL Note",
+            );
+            expect(exactMatch).toBeDefined();
+
+            // Pass gate: Score includes exact URL weight (highest)
+            expect(exactMatch!.score).toBeGreaterThanOrEqual(
+              MATCH_SIGNAL_WEIGHTS[MatchSignalType.EXACT_URL],
+            );
+          },
+        );
+      });
+    });
+  });
 });

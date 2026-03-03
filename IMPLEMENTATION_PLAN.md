@@ -51,7 +51,7 @@
 - [x] **TP003**: Integrate matcher into clip save pipeline and render deterministic `## Related Clips` output in note templates.
 - [x] **TP004**: Emit/update frontmatter diagnostics (`related_clips_count`, `related_clips_top_score`, `related_graph_version`, `related_clips_truncated`) with stable defaults for no-match flows.
 - [x] **TP005**: Add `tests/content/shared/related-clips-graph.test.ts` coverage for pass/no-match/truncation/tie-break determinism cases.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` scenario(s) to verify end-to-end related-clips section + diagnostics parity in disposable vault runs.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` scenario(s) to verify end-to-end related-clips section + diagnostics parity in disposable vault runs.
 
 ### Acceptance Criteria
 - Newly clipped notes can include deterministic `## Related Clips` backlinks when matching prior notes exist.
