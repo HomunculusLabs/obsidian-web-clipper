@@ -1258,3 +1258,190 @@ export function generateConflictDescription(
  * - Alphabetical sorting for source file enumeration
  * - Deterministic sorting of conflicts and claims
  */
+
+/**
+ * Extract metadata from a ContradictionInbox.
+ *
+ * @param inbox - The inbox
+ * @returns Metadata object for frontmatter
+ */
+export function extractInboxMetadata(inbox: ContradictionInbox): InboxMetadata {
+  return {
+    inbox_version: inbox.inbox_version,
+    conflicts_count: inbox.entries.length,
+    source_clips_processed: inbox.totalClips,
+    total_claims: inbox.totalClaims,
+    open_conflicts: inbox.openConflicts,
+    resolved_conflicts: inbox.resolvedConflicts,
+    false_positive_conflicts: inbox.falsePositiveConflicts,
+    inbox_truncated: inbox.truncated,
+    generated_at: inbox.generated_at,
+  };
+}
+
+/**
+ * Render the `contradiction-inbox.md` note.
+ *
+ * Format:
+ * ```markdown
+ * ---
+ * inbox_version: 1.0.0
+ * conflicts_count: 5
+ * source_clips_processed: 12
+ * total_claims: 48
+ * open_conflicts: 5
+ * resolved_conflicts: 2
+ * false_positive_conflicts: 1
+ * inbox_truncated: false
+ * generated_at: 2026-03-03T10:00:00.000Z
+ * ---
+ *
+ * # Contradiction Inbox
+ *
+ * ## Summary
+ *
+ * **Open conflicts:** 5 | **Resolved:** 2 | **False positives:** 1
+ * **Source clips:** 12 | **Total claims:** 48
+ *
+ * ## Open Conflicts
+ *
+ * ### [1] Direct negation: "X is true" vs "X is false" (score: 90)
+ *
+ * **Type:** direct-negation | **Status:** open | **Claims:** 2
+ *
+ * #### Claims
+ *
+ * 1. "X is true" (from key-takeaways-inbox.md)
+ *    - Sources: [[Clip 1|path/to/clip1.md]], [[Clip 2|path/to/clip2.md]]
+ *
+ * 2. "X is false" (from open-questions-inbox.md)
+ *    - Sources: [[Clip 3|path/to/clip3.md]]
+ *
+ * ---
+ * ```
+ *
+ * @param inbox - The inbox to render
+ * @returns Complete markdown note content
+ */
+export function renderContradictionInbox(inbox: ContradictionInbox): string {
+  const metadata = extractInboxMetadata(inbox);
+
+  // Build frontmatter
+  const frontmatterLines = ["---"];
+  frontmatterLines.push(`inbox_version: ${metadata.inbox_version}`);
+  frontmatterLines.push(`conflicts_count: ${metadata.conflicts_count}`);
+  frontmatterLines.push(`source_clips_processed: ${metadata.source_clips_processed}`);
+  frontmatterLines.push(`total_claims: ${metadata.total_claims}`);
+  frontmatterLines.push(`open_conflicts: ${metadata.open_conflicts}`);
+  frontmatterLines.push(`resolved_conflicts: ${metadata.resolved_conflicts}`);
+  frontmatterLines.push(`false_positive_conflicts: ${metadata.false_positive_conflicts}`);
+  frontmatterLines.push(`inbox_truncated: ${metadata.inbox_truncated}`);
+  frontmatterLines.push(`generated_at: ${metadata.generated_at}`);
+  frontmatterLines.push("---");
+  frontmatterLines.push("");
+
+  // Build body
+  const bodyLines: string[] = [];
+  bodyLines.push("# Contradiction Inbox");
+  bodyLines.push("");
+
+  // Summary section
+  bodyLines.push("## Summary");
+  bodyLines.push("");
+  bodyLines.push(`**Open conflicts:** ${metadata.open_conflicts}`);
+  bodyLines.push(`**Resolved:** ${metadata.resolved_conflicts}`);
+  bodyLines.push(`**False positives:** ${metadata.false_positive_conflicts}`);
+  bodyLines.push(`**Source clips:** ${metadata.source_clips_processed}`);
+  bodyLines.push(`**Total claims:** ${metadata.total_claims}`);
+  if (metadata.inbox_truncated) {
+    bodyLines.push(`> ⚠️ Inbox truncated to ${MAX_CONFLICTS} conflicts`);
+  }
+  bodyLines.push("");
+
+  // Conflicts section
+  bodyLines.push("## Open Conflicts");
+  bodyLines.push("");
+
+  if (inbox.entries.length === 0) {
+    bodyLines.push("> No conflicts found.");
+    bodyLines.push("");
+  } else {
+    for (let i = 0; i < inbox.entries.length; i++) {
+      const entry = inbox.entries[i]!;
+      const rank = i + 1;
+
+      bodyLines.push(`### [${rank}] ${entry.description}`);
+      if (entry.description_truncated) {
+        bodyLines.push("> ⚠️ Description truncated");
+      }
+      bodyLines.push("");
+
+      // Conflict metadata
+      bodyLines.push(`**Type:** ${entry.contradiction_type} | **Status:** ${entry.status} | **Claims:** ${entry.total_claims}`);
+      if (entry.claims_truncated) {
+        bodyLines.push(`> ⚠️ Showing ${entry.claims.length} of ${entry.total_claims} claims`);
+      }
+      bodyLines.push("");
+
+      // Claims subsection
+      bodyLines.push("#### Claims");
+      bodyLines.push("");
+
+      for (let j = 0; j < entry.claims.length; j++) {
+        const claim = entry.claims[j]!;
+        const claimNum = j + 1;
+
+        bodyLines.push(`${claimNum}. "${claim.claim}" (from ${claim.source})`);
+        if (claim.claim_truncated) {
+          bodyLines.push(`   > ⚠️ Claim text truncated`);
+        }
+
+        // Source refs
+        bodyLines.push(`   - Sources: ${claim.source_clip_refs.map(ref => `[[${ref.title}|${ref.path}]]`).join(", ")}`);
+        if (claim.source_clip_refs_truncated) {
+          bodyLines.push(`   - ... and ${claim.source_clip_count - MAX_SOURCE_CLIP_REFS} more sources`);
+        }
+        bodyLines.push("");
+      }
+
+      // Separator between conflicts
+      bodyLines.push("---");
+      bodyLines.push("");
+    }
+  }
+
+  // Generated footer
+  bodyLines.push("");
+  bodyLines.push(`*Generated by Obsidian Web Clipper v${metadata.inbox_version} on ${new Date(metadata.generated_at).toLocaleString()}*`);
+  bodyLines.push("");
+
+  return frontmatterLines.join("\n") + bodyLines.join("\n");
+}
+
+/**
+ * Render an empty-state inbox.
+ *
+ * This produces a valid inbox note even when there are no conflicts.
+ * The frontmatter is always populated with explicit zero/empty values.
+ *
+ * @param generatedAt - Timestamp for the inbox (optional, defaults to now)
+ * @returns Rendered markdown for empty inbox
+ */
+export function renderEmptyInbox(generatedAt?: string): string {
+  const timestamp = generatedAt || new Date().toISOString();
+
+  const emptyInbox: ContradictionInbox = {
+    entries: [],
+    totalClaims: 0,
+    totalConflicts: 0,
+    openConflicts: 0,
+    resolvedConflicts: 0,
+    falsePositiveConflicts: 0,
+    totalClips: 0,
+    truncated: false,
+    inbox_version: CONTRADICTION_INBOX_VERSION,
+    generated_at: timestamp,
+  };
+
+  return renderContradictionInbox(emptyInbox);
+}

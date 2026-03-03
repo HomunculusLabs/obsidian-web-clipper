@@ -62,7 +62,7 @@
 ### Task Graph
 - [x] **TP001**: Specify `contradiction-inbox.md` contract (conflict schema, deterministic claim fingerprinting, contradiction match rules, ordering/tie-breakers, truncation policy, diagnostics defaults).
 - [x] **TP002**: Implement shared contradiction detector/builder that ingests existing takeaway + triage artifacts and emits stable conflict entries with provenance linkbacks.
-- [ ] **TP003**: Implement deterministic exporter/renderer for `contradiction-inbox.md` with explicit empty-state behavior and bounded conflict-status metadata.
+- [x] **TP003**: Implement deterministic exporter/renderer for `contradiction-inbox.md` with explicit empty-state behavior and bounded conflict-status metadata.
 - [ ] **TP004**: Wire refresh flow through runtime contracts (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshContradictionInbox.ts`, `src/popup/save.ts`, `src/shared/settings.ts`) using non-fatal save-path behavior.
 - [ ] **TP005**: Add `tests/content/shared/contradiction-inbox.test.ts` contract coverage for contradictory-pair detection, dedupe, resolved-status handling, truncation, and rerun determinism.
 - [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` to verify end-to-end contradiction inbox refresh parity across repeated clip/save cycles.
