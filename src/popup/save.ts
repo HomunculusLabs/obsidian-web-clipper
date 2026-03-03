@@ -28,7 +28,8 @@ import { parseTags } from "../shared/tags";
 import {
   buildRetrievalQueryPack,
   getNoQueryDiagnostics,
-  isEmptyQueryPack
+  isEmptyQueryPack,
+  type VaultIndexContext,
 } from "../shared/retrievalQueryPackBuilder";
 import {
   renderRetrievalQueryPackSection,
@@ -311,6 +312,7 @@ async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
   // --- Related Clips Matching ---
   let relatedClipsSection = "";
   let relatedClipsDiagnostics = getNoMatchDiagnostics();
+  let vaultIndexContext: VaultIndexContext | undefined;
 
   if (settings.enableRelatedClips) {
     try {
@@ -331,6 +333,19 @@ async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
 
         // Get diagnostics for frontmatter
         relatedClipsDiagnostics = getMatcherDiagnostics(matcherResult);
+
+        // Build vault index context for query pack synthesis
+        // This ensures both related/query generation share one indexed corpus per save flow
+        if (matcherResult.indexedCandidates.length > 0) {
+          vaultIndexContext = {
+            candidates: matcherResult.indexedCandidates,
+            cacheDiagnostics: matcherResult.cacheDiagnostics ? {
+              cacheHit: matcherResult.cacheDiagnostics.cacheHit,
+              cacheAgeMs: matcherResult.cacheDiagnostics.cacheAgeMs,
+              cacheRebuilt: matcherResult.cacheDiagnostics.cacheRebuilt,
+            } : undefined,
+          };
+        }
       }
     } catch (err) {
       // Silently fail related clips - don't block the save
@@ -361,8 +376,9 @@ async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
       publishedDate: result.metadata?.publishedDate
     };
 
-    // Build the query pack
-    const queryPack = buildRetrievalQueryPack(queryPackInput);
+    // Build the query pack with vault context for enhanced discriminative scoring
+    // This reuses the cached vault index from related clips matching
+    const queryPack = buildRetrievalQueryPack(queryPackInput, vaultIndexContext);
 
     // Render section only if non-empty
     if (!isEmptyQueryPack(queryPack)) {

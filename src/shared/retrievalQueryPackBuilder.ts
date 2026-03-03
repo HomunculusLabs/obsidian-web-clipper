@@ -7,6 +7,11 @@
  *
  * All query generation is deterministic: given the same inputs, the same
  * queries are produced with the same scores and ordering.
+ *
+ * Vault Index Integration:
+ * When vault candidates are provided, the builder can enhance query generation
+ * by considering term frequency across the vault for discriminative scoring.
+ * This ensures related/query generation shares one indexed corpus per save flow.
  */
 
 import type {
@@ -28,6 +33,7 @@ import {
   isRecentContent,
   normalizeQueryString,
 } from "./retrievalQueryPackContract";
+import type { CandidateNote } from "./relatedClipsContract";
 
 /**
  * Common words to filter out from queries.
@@ -171,6 +177,92 @@ const ENTITY_QUERY_SEED_SOURCE_PRIORITY: Record<
   taxonomy: 20,
   keywords: 10,
 };
+
+/**
+ * Vault index context for enhanced query generation.
+ * Passed from related clips matcher to enable sharing one indexed corpus per save flow.
+ */
+export interface VaultIndexContext {
+  /** Indexed candidate notes from the vault */
+  candidates: CandidateNote[];
+
+  /** Cache diagnostics (optional, for observability) */
+  cacheDiagnostics?: {
+    cacheHit: boolean;
+    cacheAgeMs: number;
+    cacheRebuilt: boolean;
+  };
+}
+
+/**
+ * Compute term frequency across vault candidates.
+ *
+ * Used to identify discriminative terms that appear in few notes
+ * (high value for search) vs common terms (low discriminative power).
+ *
+ * @param candidates - Vault candidate notes
+ * @returns Map of lowercase term to frequency count
+ */
+function computeVaultTermFrequency(
+  candidates: CandidateNote[]
+): Map<string, number> {
+  const frequency = new Map<string, number>();
+
+  for (const candidate of candidates) {
+    // Count entities
+    for (const entity of candidate.entities) {
+      const normalized = entity.toLowerCase();
+      frequency.set(normalized, (frequency.get(normalized) || 0) + 1);
+    }
+
+    // Count tags
+    for (const tag of candidate.tags) {
+      const normalized = tag.toLowerCase();
+      frequency.set(normalized, (frequency.get(normalized) || 0) + 1);
+    }
+  }
+
+  return frequency;
+}
+
+/**
+ * Calculate discriminative score bonus based on vault term frequency.
+ *
+ * Terms that appear in fewer vault notes are more discriminative
+ * and get higher scores for search queries.
+ *
+ * @param term - Term to score
+ * @param vaultFrequency - Term frequency map from vault
+ * @param totalCandidates - Total number of candidates in vault
+ * @returns Discriminative bonus score (0-20)
+ */
+function calculateDiscriminativeBonus(
+  term: string,
+  vaultFrequency: Map<string, number>,
+  totalCandidates: number
+): number {
+  if (totalCandidates === 0) return 0;
+
+  const normalized = term.toLowerCase();
+  const freq = vaultFrequency.get(normalized) || 0;
+
+  // No occurrence in vault = unknown, neutral score
+  if (freq === 0) return 10;
+
+  // Calculate rarity ratio (0 = very rare, 1 = very common)
+  const rarityRatio = freq / totalCandidates;
+
+  // Rare terms (appear in <5% of notes) get high bonus
+  if (rarityRatio < 0.05) return 20;
+  // Uncommon terms (appear in <10% of notes) get medium bonus
+  if (rarityRatio < 0.10) return 15;
+  // Moderate terms (appear in <20% of notes) get small bonus
+  if (rarityRatio < 0.20) return 10;
+  // Common terms (appear in <50% of notes) get minimal bonus
+  if (rarityRatio < 0.50) return 5;
+  // Very common terms get no bonus
+  return 0;
+}
 
 /**
  * Tokenize text into words, removing punctuation and normalizing case.
@@ -540,14 +632,26 @@ function generateKeywordBooleanQueries(
 /**
  * Generate entity query seeds from input artifacts.
  *
+ * When vault context is provided, uses vault term frequency for
+ * discriminative scoring to prioritize terms that are rare across
+ * the vault (more useful for targeted searches).
+ *
  * @param input - Retrieval query pack input
+ * @param vaultContext - Optional vault index context for enhanced scoring
  * @returns Array of entity query seeds with scores
  */
 function generateEntityQuerySeeds(
-  input: RetrievalQueryPackInput
+  input: RetrievalQueryPackInput,
+  vaultContext?: VaultIndexContext
 ): EntityQuerySeed[] {
   const seeds: EntityQuerySeed[] = [];
   const isRecent = isRecentContent(input.publishedDate);
+
+  // Compute vault term frequency if context available
+  const vaultFrequency = vaultContext?.candidates
+    ? computeVaultTermFrequency(vaultContext.candidates)
+    : new Map<string, number>();
+  const totalCandidates = vaultContext?.candidates?.length || 0;
 
   // Track frequency across sources
   const entityMap = new Map<
@@ -638,10 +742,20 @@ function generateEntityQuerySeeds(
     // Calculate recency bonus
     const recencyScore = isRecent ? 15 : 0;
 
+    // Calculate discriminative bonus from vault context
+    const discriminativeBonus = calculateDiscriminativeBonus(
+      entity,
+      vaultFrequency,
+      totalCandidates
+    );
+
     seeds.push({
       entity,
       source: primarySource,
-      score: Math.min(100, typeScore + sourceScore + frequencyBonus + lengthBonus + recencyScore),
+      score: Math.min(
+        100,
+        typeScore + sourceScore + frequencyBonus + lengthBonus + recencyScore + discriminativeBonus
+      ),
     });
   }
 
@@ -731,16 +845,23 @@ function sortEntityQuerySeeds(
  *
  * This is the main entry point for generating query packs.
  *
+ * When vault context is provided, entity query seeds are enhanced with
+ * discriminative scoring based on vault term frequency. This ensures
+ * related/query generation shares one indexed corpus per save flow.
+ *
  * @param input - Retrieval query pack input
+ * @param vaultContext - Optional vault index context for enhanced scoring
  * @returns Complete retrieval query pack
  */
 export function buildRetrievalQueryPack(
-  input: RetrievalQueryPackInput
+  input: RetrievalQueryPackInput,
+  vaultContext?: VaultIndexContext
 ): RetrievalQueryPack {
   // Generate all query types
   const exactPhrasesUnsorted = generateExactPhraseQueries(input);
   const keywordBooleansUnsorted = generateKeywordBooleanQueries(input);
-  const entitySeedsUnsorted = generateEntityQuerySeeds(input);
+  // Pass vault context for enhanced entity seed scoring
+  const entitySeedsUnsorted = generateEntityQuerySeeds(input, vaultContext);
 
   // Sort with deterministic tie-breaks
   const exactPhrases = sortExactPhraseQueries(
@@ -803,12 +924,14 @@ export function getNoQueryDiagnostics(): QueryPackDiagnostics {
  * and immediately extracting diagnostics.
  *
  * @param input - Retrieval query pack input
+ * @param vaultContext - Optional vault index context for enhanced scoring
  * @returns Tuple of [query pack, diagnostics]
  */
 export function buildQueryPackWithDiagnostics(
-  input: RetrievalQueryPackInput
+  input: RetrievalQueryPackInput,
+  vaultContext?: VaultIndexContext
 ): [RetrievalQueryPack, QueryPackDiagnostics] {
-  const pack = buildRetrievalQueryPack(input);
+  const pack = buildRetrievalQueryPack(input, vaultContext);
   const diagnostics = extractQueryPackDiagnostics(pack);
   return [pack, diagnostics];
 }

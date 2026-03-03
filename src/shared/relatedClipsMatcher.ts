@@ -86,6 +86,25 @@ export interface RelatedClipsMatcherResult {
     /** Whether results were truncated */
     truncated: boolean;
   };
+
+  /**
+   * Indexed candidate notes from the vault.
+   * Exposed for reuse by Retrieval Query Pack synthesis path
+   * to ensure both related/query generation share one indexed corpus per save flow.
+   */
+  indexedCandidates: CandidateNote[];
+
+  /**
+   * Cache diagnostics from vault indexing.
+   * Present when using cache-aware indexing.
+   */
+  cacheDiagnostics?: {
+    cacheHit: boolean;
+    cacheAgeMs: number;
+    cacheRebuilt: boolean;
+    rebuildReason?: string;
+    vaultFilesFingerprinted: number;
+  };
 }
 
 /**
@@ -306,7 +325,17 @@ export async function matchRelatedClips(
       },
       positiveMatches,
       truncated: result.truncated
-    }
+    },
+    // Expose indexed candidates for reuse by Retrieval Query Pack synthesis
+    indexedCandidates: candidates,
+    // Expose cache diagnostics for observability
+    cacheDiagnostics: indexResult.cacheDiagnostics ? {
+      cacheHit: indexResult.cacheDiagnostics.cacheHit,
+      cacheAgeMs: indexResult.cacheDiagnostics.cacheAgeMs,
+      cacheRebuilt: indexResult.cacheDiagnostics.cacheRebuilt,
+      rebuildReason: indexResult.cacheDiagnostics.rebuildReason,
+      vaultFilesFingerprinted: indexResult.cacheDiagnostics.vaultFilesFingerprinted,
+    } : undefined,
   };
 }
 
@@ -390,7 +419,11 @@ export async function matchRelatedClipsFromCandidates(
       },
       positiveMatches,
       truncated: result.truncated
-    }
+    },
+    // Expose indexed candidates for reuse (pre-filtered)
+    indexedCandidates: filteredCandidates,
+    // No cache diagnostics when using pre-indexed candidates
+    cacheDiagnostics: undefined,
   };
 }
 
