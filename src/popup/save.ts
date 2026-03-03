@@ -25,6 +25,18 @@ import {
 } from "../shared/relatedClipsMatcher";
 import { renderRelatedClipsSection } from "../shared/relatedClipsContract";
 import { parseTags } from "../shared/tags";
+import {
+  buildRetrievalQueryPack,
+  getNoQueryDiagnostics,
+  isEmptyQueryPack
+} from "../shared/retrievalQueryPackBuilder";
+import {
+  renderRetrievalQueryPackSection,
+  extractQueryPackDiagnostics,
+  DEFAULT_NO_QUERY_DIAGNOSTICS,
+  type RetrievalQueryPackInput,
+  type QueryPackDiagnostics
+} from "../shared/retrievalQueryPackContract";
 
 const MAX_URI_CONTENT_CHARS = 180000;
 
@@ -331,11 +343,52 @@ async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
   // Add diagnostics to frontmatter
   frontmatter.relatedClipsDiagnostics = relatedClipsDiagnostics;
 
-  // Build markdown with related clips
+  // --- Retrieval Query Pack Generation ---
+  let queryPackSection = "";
+  let queryPackDiagnostics: QueryPackDiagnostics = DEFAULT_NO_QUERY_DIAGNOSTICS;
+
+  try {
+    // Build query pack input from clip artifacts
+    const queryPackInput: RetrievalQueryPackInput = {
+      title: result.title,
+      description: result.metadata?.description,
+      conceptTaxonomy: [], // TODO: Extract from template results when available
+      knowledgeEntities: [], // TODO: Extract from template results when available
+      keywords: result.metadata?.keywords,
+      sourceUrl: result.url,
+      contentType: result.metadata?.type || "article",
+      author: result.metadata?.author,
+      publishedDate: result.metadata?.publishedDate
+    };
+
+    // Build the query pack
+    const queryPack = buildRetrievalQueryPack(queryPackInput);
+
+    // Render section only if non-empty
+    if (!isEmptyQueryPack(queryPack)) {
+      queryPackSection = renderRetrievalQueryPackSection(queryPack);
+    }
+
+    // Extract diagnostics for frontmatter
+    queryPackDiagnostics = extractQueryPackDiagnostics(queryPack);
+  } catch (err) {
+    // Silently fail query pack generation - don't block the save
+    // Use default no-query diagnostics
+    queryPackDiagnostics = getNoQueryDiagnostics();
+    if (settings.debug) {
+      console.warn("[QueryPack] Generation failed:", err);
+    }
+  }
+
+  // Add diagnostics to frontmatter
+  frontmatter.queryPackDiagnostics = queryPackDiagnostics;
+
+  // Build markdown with related clips and query pack
   const rawMarkdown = buildClipMarkdownWithRelated({
     frontmatter,
     bodyMarkdown: result.markdown || "",
-    relatedClipsSection
+    relatedClipsSection,
+    queryPackSection
   });
 
   // Apply wiki-link injection if enabled

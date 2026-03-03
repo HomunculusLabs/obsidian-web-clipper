@@ -1,5 +1,6 @@
 import type { ClipMetadata, ClipContentType } from "./types";
 import type { RelatedClipsDiagnostics } from "./relatedClipsContract";
+import type { QueryPackDiagnostics } from "./retrievalQueryPackContract";
 
 export interface FrontmatterInput {
   source: string;
@@ -20,6 +21,9 @@ export interface FrontmatterInput {
 
   /** Related clips diagnostics for frontmatter */
   relatedClipsDiagnostics?: RelatedClipsDiagnostics;
+
+  /** Query pack diagnostics for frontmatter */
+  queryPackDiagnostics?: QueryPackDiagnostics;
 }
 
 /** Input for building clip markdown with related clips */
@@ -28,6 +32,8 @@ export interface ClipMarkdownInput {
   bodyMarkdown: string;
   /** Related clips section markdown (empty string if none) */
   relatedClipsSection?: string;
+  /** Retrieval query pack section markdown (empty string if none) */
+  queryPackSection?: string;
 }
 
 function yamlEscapeString(value: string): string {
@@ -128,6 +134,16 @@ export function buildFrontmatterYaml(input: FrontmatterInput): string {
     lines.push(`related_clips_truncated: ${input.relatedClipsDiagnostics.related_clips_truncated}`);
   }
 
+  // Add query pack diagnostics if present
+  if (input.queryPackDiagnostics) {
+    lines.push(`query_pack_version: ${yamlEscapeString(input.queryPackDiagnostics.query_pack_version)}`);
+    lines.push(`query_pack_exact_phrases: ${input.queryPackDiagnostics.query_pack_exact_phrases}`);
+    lines.push(`query_pack_keyword_booleans: ${input.queryPackDiagnostics.query_pack_keyword_booleans}`);
+    lines.push(`query_pack_entity_seeds: ${input.queryPackDiagnostics.query_pack_entity_seeds}`);
+    lines.push(`query_pack_total_queries: ${input.queryPackDiagnostics.query_pack_total_queries}`);
+    lines.push(`query_pack_truncated: ${input.queryPackDiagnostics.query_pack_truncated}`);
+  }
+
   const reservedKeys = new Set([
     "source",
     "title",
@@ -141,7 +157,13 @@ export function buildFrontmatterYaml(input: FrontmatterInput): string {
     "related_clips_count",
     "related_clips_top_score",
     "related_graph_version",
-    "related_clips_truncated"
+    "related_clips_truncated",
+    "query_pack_version",
+    "query_pack_exact_phrases",
+    "query_pack_keyword_booleans",
+    "query_pack_entity_seeds",
+    "query_pack_total_queries",
+    "query_pack_truncated"
   ]);
 
   if (input.extra) {
@@ -194,10 +216,15 @@ export function buildClipMarkdownWithRelated(
     ? body + (body.endsWith("\n") ? "" : "\n")
     : "";
 
+  // Append retrieval query pack section if present and non-empty
+  const queryPackSection = input.queryPackSection?.trim()
+    ? "\n" + input.queryPackSection.trim() + "\n"
+    : "";
+
   // Append related clips section if present and non-empty
   const relatedSection = input.relatedClipsSection?.trim()
     ? "\n" + input.relatedClipsSection.trim() + "\n"
     : "";
 
-  return fm + normalizedBody + relatedSection;
+  return fm + normalizedBody + queryPackSection + relatedSection;
 }
