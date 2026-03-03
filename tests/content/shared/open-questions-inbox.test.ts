@@ -4,7 +4,7 @@
  * Tests the extraction, parsing, and building utilities for the Open Questions Inbox.
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
   parseFrontmatter,
   parseClipBriefSection,
@@ -14,9 +14,23 @@ import {
   type ScanVaultOptions,
   type ParsedClipBrief
 } from "../../../src/shared/openQuestionsInboxBuilder";
-import type { OpenQuestionInput } from "../../../src/shared/openQuestionsInboxContract";
+import type { OpenQuestionInput, OpenQuestionsInbox } from "../../../src/shared/openQuestionsInboxContract";
 import { QuestionStatus } from "../../../src/shared/openQuestionsInboxContract";
-import { buildOpenQuestionsInbox } from "../../../src/shared/openQuestionsInboxContract";
+import { buildOpenQuestionsInbox, renderOpenQuestionsInbox } from "../../../src/shared/openQuestionsInboxContract";
+import {
+  resolveInboxPath,
+  isInboxEmpty,
+  renderEmptyInbox,
+  exportOpenQuestionsInbox,
+  exportEmptyInbox,
+  inboxFileExists,
+  readInboxFile,
+  deleteInboxFile,
+  getDefaultExportOptions,
+  DEFAULT_INBOX_FILENAME,
+  type ExportInboxOptions,
+  type ExportInboxResult
+} from "../../../src/shared/openQuestionsInboxExporter";
 import { promises as fs } from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -784,5 +798,535 @@ describe("buildOpenQuestionsInbox", () => {
     expect(inbox.totalClips).toBe(0);
     expect(inbox.totalQuestionInstances).toBe(0);
     expect(inbox.truncated).toBe(false);
+  });
+});
+
+describe("renderOpenQuestionsInbox", () => {
+  it("should render a complete inbox with questions", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "What is the best approach?",
+        clipPath: "/path/to/clip.md",
+        clipTitle: "Test Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    // Check frontmatter is present
+    expect(markdown).toContain("---");
+    expect(markdown).toContain("inbox_version:");
+    expect(markdown).toContain("questions_count: 1");
+    expect(markdown).toContain("source_clips_processed: 1");
+    expect(markdown).toContain("unresolved_questions: 1");
+    expect(markdown).toContain("inbox_truncated: false");
+
+    // Check body structure
+    expect(markdown).toContain("# Open Questions Inbox");
+    expect(markdown).toContain("## Summary");
+    expect(markdown).toContain("## Questions");
+    expect(markdown).toContain("What is the best approach?");
+    expect(markdown).toContain("[[Test Clip|/path/to/clip.md]]");
+  });
+
+  it("should render empty inbox with explicit empty-state behavior", () => {
+    const inbox = buildOpenQuestionsInbox([]);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    // Check frontmatter is present with explicit zero values
+    expect(markdown).toContain("---");
+    expect(markdown).toContain("inbox_version:");
+    expect(markdown).toContain("questions_count: 0");
+    expect(markdown).toContain("source_clips_processed: 0");
+    expect(markdown).toContain("unresolved_questions: 0");
+    expect(markdown).toContain("resolved_questions: 0");
+    expect(markdown).toContain("inbox_truncated: false");
+
+    // Check body structure with empty state message
+    expect(markdown).toContain("# Open Questions Inbox");
+    expect(markdown).toContain("## Summary");
+    expect(markdown).toContain("## Questions");
+    expect(markdown).toContain("> No unresolved questions found.");
+  });
+
+  it("should render truncation warning when inbox is truncated", () => {
+    // Create more than MAX_INBOX_QUESTIONS questions
+    const inputs: OpenQuestionInput[] = [];
+    for (let i = 0; i < 110; i++) {
+      inputs.push({
+        question: `Question ${i}?`,
+        clipPath: `/path/to/clip${i}.md`,
+        clipTitle: `Clip ${i}`,
+        clipUrl: `https://example.com/${i}`,
+        clipTimestamp: `2026-03-03T10:00:00.000Z`,
+        clipId: `clip${i}`,
+        status: QuestionStatus.UNRESOLVED
+      });
+    }
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    // Check truncation is indicated
+    expect(markdown).toContain("inbox_truncated: true");
+    expect(markdown).toContain("Inbox truncated to 100 questions");
+  });
+
+  it("should render resolved question count in summary", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Unresolved?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      },
+      {
+        question: "Resolved?",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.RESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const markdown = renderOpenQuestionsInbox(inbox);
+
+    expect(markdown).toContain("**Resolved:** 1");
+    expect(markdown).toContain("unresolved_questions: 1");
+    expect(markdown).toContain("resolved_questions: 1");
+  });
+});
+
+describe("resolveInboxPath", () => {
+  it("should resolve to vault root by default", () => {
+    const options: ExportInboxOptions = {
+      vaultPath: "/path/to/vault"
+    };
+
+    const result = resolveInboxPath(options);
+
+    expect(result).toBe(path.join("/path/to/vault", DEFAULT_INBOX_FILENAME));
+  });
+
+  it("should resolve to custom folder when specified", () => {
+    const options: ExportInboxOptions = {
+      vaultPath: "/path/to/vault",
+      inboxFolder: "Inbox"
+    };
+
+    const result = resolveInboxPath(options);
+
+    expect(result).toBe(path.join("/path/to/vault", "Inbox", DEFAULT_INBOX_FILENAME));
+  });
+
+  it("should resolve to custom filename when specified", () => {
+    const options: ExportInboxOptions = {
+      vaultPath: "/path/to/vault",
+      inboxFilename: "my-questions.md"
+    };
+
+    const result = resolveInboxPath(options);
+
+    expect(result).toBe(path.join("/path/to/vault", "my-questions.md"));
+  });
+
+  it("should handle nested folder paths", () => {
+    const options: ExportInboxOptions = {
+      vaultPath: "/path/to/vault",
+      inboxFolder: "Notes/Questions"
+    };
+
+    const result = resolveInboxPath(options);
+
+    expect(result).toBe(path.join("/path/to/vault", "Notes", "Questions", DEFAULT_INBOX_FILENAME));
+  });
+
+  it("should normalize folder paths with slashes", () => {
+    const options: ExportInboxOptions = {
+      vaultPath: "/path/to/vault",
+      inboxFolder: "/Inbox/"
+    };
+
+    const result = resolveInboxPath(options);
+
+    expect(result).toBe(path.join("/path/to/vault", "Inbox", DEFAULT_INBOX_FILENAME));
+  });
+});
+
+describe("isInboxEmpty", () => {
+  it("should return true for empty inbox", () => {
+    const inbox: OpenQuestionsInbox = {
+      entries: [],
+      totalQuestions: 0,
+      unresolvedQuestions: 0,
+      resolvedQuestions: 0,
+      totalClips: 0,
+      totalQuestionInstances: 0,
+      truncated: false,
+      inbox_version: "1.0.0",
+      generated_at: "2026-03-03T10:00:00.000Z"
+    };
+
+    expect(isInboxEmpty(inbox)).toBe(true);
+  });
+
+  it("should return false for inbox with questions", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Test question?",
+        clipPath: "/path/to/clip.md",
+        clipTitle: "Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    expect(isInboxEmpty(inbox)).toBe(false);
+  });
+
+  it("should return true for inbox with only resolved questions", () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Resolved question?",
+        clipPath: "/path/to/clip.md",
+        clipTitle: "Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip",
+        status: QuestionStatus.RESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+
+    // Resolved questions are filtered out, so inbox is empty
+    expect(isInboxEmpty(inbox)).toBe(true);
+  });
+});
+
+describe("renderEmptyInbox", () => {
+  it("should render valid markdown for empty inbox", () => {
+    const markdown = renderEmptyInbox("2026-03-03T10:00:00.000Z");
+
+    expect(markdown).toContain("---");
+    expect(markdown).toContain("inbox_version:");
+    expect(markdown).toContain("questions_count: 0");
+    expect(markdown).toContain("> No unresolved questions found.");
+    expect(markdown).toContain("generated_at: 2026-03-03T10:00:00.000Z");
+  });
+
+  it("should use current timestamp when not specified", () => {
+    const before = new Date().toISOString();
+    const markdown = renderEmptyInbox();
+    const after = new Date().toISOString();
+
+    // Extract generated_at from markdown
+    const match = markdown.match(/generated_at: (.+)/);
+    expect(match).not.toBeNull();
+    const generatedAt = match![1];
+
+    expect(generatedAt >= before).toBe(true);
+    expect(generatedAt <= after).toBe(true);
+  });
+});
+
+describe("exportOpenQuestionsInbox", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = path.join(os.tmpdir(), `open-questions-export-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should export inbox to vault root", async () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Test question?",
+        clipPath: "/path/to/clip.md",
+        clipTitle: "Test Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+
+    const result = await exportOpenQuestionsInbox(inbox, options);
+
+    expect(result.filePath).toBe(path.join(tempDir, DEFAULT_INBOX_FILENAME));
+    expect(result.created).toBe(true);
+    expect(result.isEmpty).toBe(false);
+    expect(result.metadata.questions_count).toBe(1);
+    expect(result.warnings).toHaveLength(0);
+
+    // Verify file exists and has content
+    const content = await fs.readFile(result.filePath, "utf-8");
+    expect(content).toContain("Test question?");
+  });
+
+  it("should export inbox to custom folder", async () => {
+    const inputs: OpenQuestionInput[] = [
+      {
+        question: "Test question?",
+        clipPath: "/path/to/clip.md",
+        clipTitle: "Test Clip",
+        clipUrl: "https://example.com",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ];
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const options: ExportInboxOptions = {
+      vaultPath: tempDir,
+      inboxFolder: "Inbox"
+    };
+
+    const result = await exportOpenQuestionsInbox(inbox, options);
+
+    expect(result.filePath).toBe(path.join(tempDir, "Inbox", DEFAULT_INBOX_FILENAME));
+    expect(result.created).toBe(true);
+
+    // Verify folder was created
+    const folderExists = await fs.access(path.join(tempDir, "Inbox")).then(() => true).catch(() => false);
+    expect(folderExists).toBe(true);
+  });
+
+  it("should export empty inbox with explicit empty-state behavior", async () => {
+    const inbox = buildOpenQuestionsInbox([]);
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+
+    const result = await exportOpenQuestionsInbox(inbox, options);
+
+    expect(result.isEmpty).toBe(true);
+    expect(result.metadata.questions_count).toBe(0);
+    expect(result.warnings).toContain("Inbox is empty (no unresolved questions)");
+
+    // Verify file still exists with empty state
+    const content = await fs.readFile(result.filePath, "utf-8");
+    expect(content).toContain("questions_count: 0");
+    expect(content).toContain("> No unresolved questions found.");
+  });
+
+  it("should update existing inbox file", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+
+    // First export
+    const inbox1 = buildOpenQuestionsInbox([
+      {
+        question: "First question?",
+        clipPath: "/path/to/clip1.md",
+        clipTitle: "Clip 1",
+        clipUrl: "https://example.com/1",
+        clipTimestamp: "2026-03-03T10:00:00.000Z",
+        clipId: "clip1",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ]);
+
+    const result1 = await exportOpenQuestionsInbox(inbox1, options);
+    expect(result1.created).toBe(true);
+
+    // Second export (update)
+    const inbox2 = buildOpenQuestionsInbox([
+      {
+        question: "Second question?",
+        clipPath: "/path/to/clip2.md",
+        clipTitle: "Clip 2",
+        clipUrl: "https://example.com/2",
+        clipTimestamp: "2026-03-03T11:00:00.000Z",
+        clipId: "clip2",
+        status: QuestionStatus.UNRESOLVED
+      }
+    ]);
+
+    const result2 = await exportOpenQuestionsInbox(inbox2, options);
+    expect(result2.created).toBe(false);
+
+    // Verify file was updated
+    const content = await fs.readFile(result2.filePath, "utf-8");
+    expect(content).toContain("Second question?");
+    expect(content).not.toContain("First question?");
+  });
+
+  it("should fail gracefully when folder cannot be created", async () => {
+    const inbox = buildOpenQuestionsInbox([]);
+    const options: ExportInboxOptions = {
+      vaultPath: tempDir,
+      inboxFolder: "nonexistent/subfolder",
+      createFolder: false
+    };
+
+    await expect(exportOpenQuestionsInbox(inbox, options)).rejects.toHaveProperty("errorType", "folder_error");
+  });
+
+  it("should include truncation warning when inbox is truncated", async () => {
+    // Create more than MAX_INBOX_QUESTIONS questions
+    const inputs: OpenQuestionInput[] = [];
+    for (let i = 0; i < 110; i++) {
+      inputs.push({
+        question: `Question ${i}?`,
+        clipPath: `/path/to/clip${i}.md`,
+        clipTitle: `Clip ${i}`,
+        clipUrl: `https://example.com/${i}`,
+        clipTimestamp: `2026-03-03T10:00:00.000Z`,
+        clipId: `clip${i}`,
+        status: QuestionStatus.UNRESOLVED
+      });
+    }
+
+    const inbox = buildOpenQuestionsInbox(inputs);
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+
+    const result = await exportOpenQuestionsInbox(inbox, options);
+
+    expect(result.metadata.inbox_truncated).toBe(true);
+    expect(result.warnings.some(w => w.includes("truncated"))).toBe(true);
+  });
+});
+
+describe("exportEmptyInbox", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = path.join(os.tmpdir(), `open-questions-export-empty-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should export empty inbox placeholder", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+
+    const result = await exportEmptyInbox(options, "2026-03-03T10:00:00.000Z");
+
+    expect(result.isEmpty).toBe(true);
+    expect(result.created).toBe(true);
+    expect(result.metadata.questions_count).toBe(0);
+
+    const content = await fs.readFile(result.filePath, "utf-8");
+    expect(content).toContain("generated_at: 2026-03-03T10:00:00.000Z");
+  });
+});
+
+describe("inboxFileExists", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = path.join(os.tmpdir(), `open-questions-exists-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should return false when file does not exist", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+    const exists = await inboxFileExists(options);
+    expect(exists).toBe(false);
+  });
+
+  it("should return true when file exists", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+    await exportEmptyInbox(options);
+
+    const exists = await inboxFileExists(options);
+    expect(exists).toBe(true);
+  });
+});
+
+describe("readInboxFile", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = path.join(os.tmpdir(), `open-questions-read-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should return null when file does not exist", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+    const content = await readInboxFile(options);
+    expect(content).toBeNull();
+  });
+
+  it("should return file content when file exists", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+    await exportEmptyInbox(options, "2026-03-03T10:00:00.000Z");
+
+    const content = await readInboxFile(options);
+    expect(content).not.toBeNull();
+    expect(content).toContain("Open Questions Inbox");
+  });
+});
+
+describe("deleteInboxFile", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = path.join(os.tmpdir(), `open-questions-delete-test-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should return false when file does not exist", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+    const deleted = await deleteInboxFile(options);
+    expect(deleted).toBe(false);
+  });
+
+  it("should delete file and return true when file exists", async () => {
+    const options: ExportInboxOptions = { vaultPath: tempDir };
+    await exportEmptyInbox(options);
+
+    const deleted = await deleteInboxFile(options);
+    expect(deleted).toBe(true);
+
+    const exists = await inboxFileExists(options);
+    expect(exists).toBe(false);
+  });
+});
+
+describe("getDefaultExportOptions", () => {
+  it("should return default options for a vault", () => {
+    const vaultPath = "/path/to/vault";
+    const options = getDefaultExportOptions(vaultPath);
+
+    expect(options.vaultPath).toBe(vaultPath);
+    expect(options.inboxFolder).toBeUndefined();
+    expect(options.inboxFilename).toBe(DEFAULT_INBOX_FILENAME);
+    expect(options.createFolder).toBe(true);
   });
 });
