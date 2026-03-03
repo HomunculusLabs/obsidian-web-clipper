@@ -46,7 +46,7 @@
 
 ### Task Graph
 - [x] **TP001**: Specify vault-index cache contract (snapshot schema, versioning, deterministic key/fingerprint strategy, invalidation triggers, corruption fallback behavior, diagnostics fields).
-- [ ] **TP002**: Implement shared cache read/write module for vault index snapshots with atomic file updates and deterministic serialization ordering.
+- [x] **TP002**: Implement shared cache read/write module for vault index snapshots with atomic file updates and deterministic serialization ordering.
 - [ ] **TP003**: Integrate cache resolution into `src/shared/vaultIndex.ts` + related matcher path so unchanged vaults use cache and changed/corrupt states trigger bounded rebuild.
 - [ ] **TP004**: Integrate cached candidate reuse into Retrieval Query Pack synthesis path so related/query generation shares one indexed corpus per save flow.
 - [ ] **TP005**: Add `tests/shared/vault-index-cache.test.ts` contract coverage for hit/miss/invalidation/corruption/no-cache scenarios with deterministic diagnostics assertions.
