@@ -3884,9 +3884,16 @@ This is an existing note that should be matched as related.`,
       // Titles should differ (different deterministic titles)
       expect(titleMatch1![1]).not.toBe(titleMatch2![1]);
 
-      // But content structure should be identical
-      const content1 = clipMarkdown1!.replace(/^title: .+$/m, "");
-      const content2 = clipMarkdown2!.replace(/^title: .+$/m, "");
+      // But content structure should be identical (normalize out title and date_clipped)
+      const normalizeForComparison = (markdown: string): string => {
+        return markdown
+          .replace(/^title: .+$/m, "")
+          .replace(/^date_clipped: .+$/m, "")
+          .trim();
+      };
+
+      const content1 = normalizeForComparison(clipMarkdown1!);
+      const content2 = normalizeForComparison(clipMarkdown2!);
       expect(content1).toBe(content2);
 
       // Both should have the same frontmatter structure
@@ -4584,9 +4591,9 @@ This is an existing article in the vault.`,
       expect(resultMiss.cacheDiagnostics?.vaultFilesFingerprinted).toBe(
         resultHit.cacheDiagnostics?.vaultFilesFingerprinted
       );
-      expect(resultMiss.metadata.filesScanned).toBe(resultHit.metadata.filesScanned);
-      expect(resultMiss.metadata.filesWithFrontmatter).toBe(
-        resultHit.metadata.filesWithFrontmatter
+      expect(resultMiss.filesScanned).toBe(resultHit.filesScanned);
+      expect(resultMiss.filesWithFrontmatter).toBe(
+        resultHit.filesWithFrontmatter
       );
     });
 
@@ -4645,7 +4652,7 @@ date_clipped: 2026-03-01T10:00:00.000Z
         const clipMarkdown = withScenario(
           {
             fixturePath,
-            simulatedUrl: `${fixtureUrl}/${i}`,
+            simulatedUrl: fixtureUrl,
             pageType: "web",
             sandbox,
             overrideFolder: "Clips",
