@@ -18,16 +18,16 @@ import { resolve, join } from "node:path";
 // =============================================================================
 
 export const RuleIds = {
-  KRCP001_MISSING_MESSAGE_TYPE: "KRCP001_MISSING_MESSAGE_TYPE",
-  KRCP002_MISSING_ROUTER_CASE: "KRCP002_MISSING_ROUTER_CASE",
-  KRCP003_MISSING_HANDLER_FILE: "KRCP003_MISSING_HANDLER_FILE",
-  KRCP004_MISSING_HANDLER_EXPORT: "KRCP004_MISSING_HANDLER_EXPORT",
-  KRCP005_MISSING_SAVE_TRIGGER: "KRCP005_MISSING_SAVE_TRIGGER",
-  KRCP006_HANDLER_IMPORT_MISSING: "KRCP006_HANDLER_IMPORT_MISSING",
-  KRCP007_MESSAGE_TYPE_MISMATCH: "KRCP007_MESSAGE_TYPE_MISMATCH",
-  KRCP008_RESPONSE_TYPE_INCOMPLETE: "KRCP008_RESPONSE_TYPE_INCOMPLETE",
-  KRCP009_HANDLER_SIGNATURE_MISMATCH: "KRCP009_HANDLER_SIGNATURE_MISMATCH",
-  KRCP010_NO_ARTIFACT_TARGETS: "KRCP010_NO_ARTIFACT_TARGETS",
+  KRRP001_MISSING_MESSAGE_TYPE: "KRRP001_MISSING_MESSAGE_TYPE",
+  KRRP002_MISSING_ROUTER_CASE: "KRRP002_MISSING_ROUTER_CASE",
+  KRRP003_MISSING_HANDLER_FILE: "KRRP003_MISSING_HANDLER_FILE",
+  KRRP004_MISSING_HANDLER_EXPORT: "KRRP004_MISSING_HANDLER_EXPORT",
+  KRRP005_MISSING_SAVE_TRIGGER: "KRRP005_MISSING_SAVE_TRIGGER",
+  KRRP006_HANDLER_IMPORT_MISSING: "KRRP006_HANDLER_IMPORT_MISSING",
+  KRRP007_MESSAGE_TYPE_MISMATCH: "KRRP007_MESSAGE_TYPE_MISMATCH",
+  KRRP008_RESPONSE_TYPE_INCOMPLETE: "KRRP008_RESPONSE_TYPE_INCOMPLETE",
+  KRRP009_HANDLER_SIGNATURE_MISMATCH: "KRRP009_HANDLER_SIGNATURE_MISMATCH",
+  KRRP010_NO_ARTIFACT_TARGETS: "KRRP010_NO_ARTIFACT_TARGETS",
 } as const;
 
 export type RuleId = (typeof RuleIds)[keyof typeof RuleIds];
@@ -37,16 +37,16 @@ export type RuleId = (typeof RuleIds)[keyof typeof RuleIds];
  * Ensures deterministic, stable ordering across runs for machine-readable output.
  */
 const CANONICAL_VIOLATION_ORDER: RuleId[] = [
-  RuleIds.KRCP001_MISSING_MESSAGE_TYPE,
-  RuleIds.KRCP007_MESSAGE_TYPE_MISMATCH,
-  RuleIds.KRCP008_RESPONSE_TYPE_INCOMPLETE,
-  RuleIds.KRCP002_MISSING_ROUTER_CASE,
-  RuleIds.KRCP006_HANDLER_IMPORT_MISSING,
-  RuleIds.KRCP003_MISSING_HANDLER_FILE,
-  RuleIds.KRCP004_MISSING_HANDLER_EXPORT,
-  RuleIds.KRCP009_HANDLER_SIGNATURE_MISMATCH,
-  RuleIds.KRCP005_MISSING_SAVE_TRIGGER,
-  RuleIds.KRCP010_NO_ARTIFACT_TARGETS,
+  RuleIds.KRRP001_MISSING_MESSAGE_TYPE,
+  RuleIds.KRRP007_MESSAGE_TYPE_MISMATCH,
+  RuleIds.KRRP008_RESPONSE_TYPE_INCOMPLETE,
+  RuleIds.KRRP002_MISSING_ROUTER_CASE,
+  RuleIds.KRRP006_HANDLER_IMPORT_MISSING,
+  RuleIds.KRRP003_MISSING_HANDLER_FILE,
+  RuleIds.KRRP004_MISSING_HANDLER_EXPORT,
+  RuleIds.KRRP009_HANDLER_SIGNATURE_MISMATCH,
+  RuleIds.KRRP005_MISSING_SAVE_TRIGGER,
+  RuleIds.KRRP010_NO_ARTIFACT_TARGETS,
 ];
 
 // =============================================================================
@@ -143,8 +143,6 @@ export interface Violation {
     expectedResponseType?: string;
     filePath?: string;
     lineNumber?: number;
-    handlerName?: string;
-    functionName?: string;
   };
   remediation: {
     description: string;
@@ -530,7 +528,7 @@ index 1234567..abcdefg 100644
 --- a/src/shared/messages.ts
 +++ b/src/shared/messages.ts
 @@ -100,6 +100,18 @@ export type RuntimeRequest =
-       action: "refreshKnowledgeConfidenceStateSync";
+       action: "refreshContradictionInbox";
        // ...
      }
 +  | {
@@ -627,19 +625,19 @@ export async function ${config.handlerName}(
   }
 
   try {
-    // TODO: Implement vault scanning and revalidation artifact building logic
+    // TODO: Implement vault scanning and inbox building logic
     // This is a placeholder implementation
     
-    const artifactFilename = "${artifact}.md";
-    const artifactPath = inboxFolder
-      ? \`\${inboxFolder.replace(/\\\\/g, "/").replace(/^\\/+|\\/+$/g, "")}/\${artifactFilename}\`
-      : artifactFilename;
+    const inboxFilename = "${artifact}.md";
+    const inboxPath = inboxFolder
+      ? \`\${inboxFolder.replace(/\\\\/g, "/").replace(/^\\/+|\\/+$/g, "")}/\${inboxFilename}\`
+      : inboxFilename;
 
     // Save via CLI
     const saveResult = await handleSaveToCli({
       action: "saveToCli",
-      filePath: artifactPath,
-      content: "# \\\${artifactFilename}\\n\\nTODO: Implement content generation",
+      filePath: inboxPath,
+      content: "# \${inboxFilename}\\n\\nTODO: Implement content generation",
       vault,
       cliPath,
     });
@@ -676,7 +674,7 @@ diff --git a/src/popup/save.ts b/src/popup/save.ts
 index 1234567..abcdefg 100644
 --- a/src/popup/save.ts
 +++ b/src/popup/save.ts
-@@ -500,6 +500,35 @@ async function refreshKnowledgeConfidenceStateSync(
+@@ -500,6 +500,35 @@ async function refreshContradictionInbox(
    }
  }
  
@@ -711,10 +709,10 @@ index 1234567..abcdefg 100644
 +
  export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> {
    // ... existing save logic ...
-@@ -680,6 +709,7 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> {
+@@ -650,6 +679,7 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> {
+         void refreshKeyTakeawaysInbox(settings, prepared.vault);
          void refreshKnowledgeTriageStateSync(settings, prepared.vault);
          void refreshContradictionInbox(settings, prepared.vault);
-         void refreshKnowledgeConfidenceStateSync(settings, prepared.vault);
 +        void ${config.refreshFunctionName}(settings, prepared.vault);
  
          return { usedClipboardFallback, usedMethod: method };
@@ -735,13 +733,13 @@ export function generateViolations(
 
   // Check message type wiring
   if (!wiring.messageType.present) {
-    let ruleId: RuleId = RuleIds.KRCP001_MISSING_MESSAGE_TYPE;
+    let ruleId: RuleId = RuleIds.KRRP001_MISSING_MESSAGE_TYPE;
     let description = `Add ${config.actionName} message type to src/shared/messages.ts with ${config.requestType} and ${config.responseType} type definitions.`;
 
     if (wiring.messageType.requestDefined && !wiring.messageType.responseDefined) {
       description = `Add ${config.responseType} response type to src/shared/messages.ts.`;
     } else if (!wiring.messageType.requestDefined && wiring.messageType.responseDefined) {
-      ruleId = RuleIds.KRCP007_MESSAGE_TYPE_MISMATCH;
+      ruleId = RuleIds.KRRP007_MESSAGE_TYPE_MISMATCH;
       description = `Add ${config.actionName} request type to src/shared/messages.ts RuntimeRequest union.`;
     }
 
@@ -765,13 +763,13 @@ export function generateViolations(
 
   // Check router wiring
   if (!wiring.router.present) {
-    let ruleId: RuleId = RuleIds.KRCP002_MISSING_ROUTER_CASE;
+    let ruleId: RuleId = RuleIds.KRRP002_MISSING_ROUTER_CASE;
     let description = `Add switch case for "${config.actionName}" in src/background/router.ts dispatch function.`;
 
     if (!wiring.router.caseExists && wiring.router.handlerImported) {
       description = `Add switch case for "${config.actionName}" and wire it to ${config.handlerName}.`;
     } else if (wiring.router.caseExists && !wiring.router.handlerImported) {
-      ruleId = RuleIds.KRCP006_HANDLER_IMPORT_MISSING;
+      ruleId = RuleIds.KRRP006_HANDLER_IMPORT_MISSING;
       description = `Add import for ${config.handlerName} in src/background/router.ts.`;
     }
 
@@ -793,11 +791,11 @@ export function generateViolations(
 
   // Check handler wiring
   if (!wiring.handler.present) {
-    let ruleId: RuleId = RuleIds.KRCP003_MISSING_HANDLER_FILE;
+    let ruleId: RuleId = RuleIds.KRRP003_MISSING_HANDLER_FILE;
     let description = `Create handler file at ${config.handlerFile} with ${config.handlerName} export.`;
 
     if (wiring.handler.fileExists && !wiring.handler.handlerExported) {
-      ruleId = RuleIds.KRCP004_MISSING_HANDLER_EXPORT;
+      ruleId = RuleIds.KRRP004_MISSING_HANDLER_EXPORT;
       description = `Add export for ${config.handlerName} function in ${config.handlerFile}.`;
     }
 
@@ -819,7 +817,7 @@ export function generateViolations(
 
   // Check save trigger wiring
   if (!wiring.saveTrigger.present) {
-    let ruleId: RuleId = RuleIds.KRCP005_MISSING_SAVE_TRIGGER;
+    let ruleId: RuleId = RuleIds.KRRP005_MISSING_SAVE_TRIGGER;
     let description = `Add ${config.refreshFunctionName} function and fire-and-forget invocation in src/popup/save.ts.`;
 
     if (wiring.saveTrigger.refreshFunctionExists && !wiring.saveTrigger.invokedInSaveFlow) {
@@ -1173,7 +1171,6 @@ export function main(args: string[]): void {
 }
 
 // Run CLI if executed directly
-// Check if this file is being run directly (not imported)
-if (require.main === module || (globalThis as { __filename?: string }).__filename?.endsWith("taskpad-knowledge-revalidation-refresh-contract-parity.ts")) {
+if (import.meta.main) {
   main(process.argv.slice(2));
 }

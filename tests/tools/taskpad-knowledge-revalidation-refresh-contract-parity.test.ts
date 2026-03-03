@@ -188,7 +188,7 @@ describe("TP003: Surface validation functions", () => {
     };
 
     test("detects present handler wiring", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-handler-pass-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-handler-pass-"));
       const handlerDir = join(tempDir, "src", "background", "handlers");
       mkdirSync(handlerDir, { recursive: true });
       writeFileSync(join(handlerDir, "refreshKnowledgeRevalidationInbox.ts"), readSurfaceFile("handler-pass.ts"));
@@ -204,7 +204,7 @@ describe("TP003: Surface validation functions", () => {
     });
 
     test("detects missing handler file", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-handler-missing-file-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-handler-missing-file-"));
 
       try {
         const wiring = validateHandlerWiring(tempDir, artifact, config);
@@ -217,7 +217,7 @@ describe("TP003: Surface validation functions", () => {
     });
 
     test("detects missing handler export", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-handler-missing-export-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-handler-missing-export-"));
       const handlerDir = join(tempDir, "src", "background", "handlers");
       mkdirSync(handlerDir, { recursive: true });
       writeFileSync(join(handlerDir, "refreshKnowledgeRevalidationInbox.ts"), readSurfaceFile("handler-missing-export.ts"));
@@ -271,36 +271,36 @@ describe("TP003: Violation generation", () => {
 
   test("generates violations for all missing surfaces", () => {
     const wiring = {
-      messageType: { present: false, requestDefined: false, responseDefined: false, requestType: "RefreshKnowledgeRevalidationInboxRequest", responseType: "RefreshKnowledgeRevalidationInboxResponse" },
-      router: { present: false, caseExists: false, handlerImported: false, actionName: "refreshKnowledgeRevalidationInbox" },
-      handler: { present: false, fileExists: false, handlerExported: false, filePath: "src/background/handlers/refreshKnowledgeRevalidationInbox.ts", handlerName: "handleRefreshKnowledgeRevalidationInbox" },
-      saveTrigger: { present: false, refreshFunctionExists: false, invokedInSaveFlow: false, functionName: "refreshKnowledgeRevalidationInbox" },
+      messageType: { present: false, requestDefined: false, responseDefined: false },
+      router: { present: false, caseExists: false, handlerImported: false },
+      handler: { present: false, fileExists: false, handlerExported: false },
+      saveTrigger: { present: false, refreshFunctionExists: false, invokedInSaveFlow: false },
     };
 
     const violations = generateViolations(artifact, wiring);
     expect(violations.length).toBeGreaterThan(0);
 
-    // Should include KRCP001 for missing message type
-    const messageViolation = violations.find(v => v.ruleId === RuleIds.KRCP001_MISSING_MESSAGE_TYPE);
+    // Should include KRRP001 for missing message type
+    const messageViolation = violations.find(v => v.ruleId === RuleIds.KRRP001_MISSING_MESSAGE_TYPE);
     expect(messageViolation).toBeDefined();
     expect(messageViolation?.artifactName).toBe(artifact);
     expect(messageViolation?.surface).toBe("messageType");
     expect(messageViolation?.severity).toBe("error");
 
-    // Should include KRCP002 for missing router case
-    const routerViolation = violations.find(v => v.ruleId === RuleIds.KRCP002_MISSING_ROUTER_CASE);
+    // Should include KRRP002 for missing router case
+    const routerViolation = violations.find(v => v.ruleId === RuleIds.KRRP002_MISSING_ROUTER_CASE);
     expect(routerViolation).toBeDefined();
     expect(routerViolation?.artifactName).toBe(artifact);
     expect(routerViolation?.surface).toBe("router");
 
-    // Should include KRCP003 for missing handler file
-    const handlerViolation = violations.find(v => v.ruleId === RuleIds.KRCP003_MISSING_HANDLER_FILE);
+    // Should include KRRP003 for missing handler file
+    const handlerViolation = violations.find(v => v.ruleId === RuleIds.KRRP003_MISSING_HANDLER_FILE);
     expect(handlerViolation).toBeDefined();
     expect(handlerViolation?.artifactName).toBe(artifact);
     expect(handlerViolation?.surface).toBe("handler");
 
-    // Should include KRCP005 for missing save trigger
-    const saveTriggerViolation = violations.find(v => v.ruleId === RuleIds.KRCP005_MISSING_SAVE_TRIGGER);
+    // Should include KRRP005 for missing save trigger
+    const saveTriggerViolation = violations.find(v => v.ruleId === RuleIds.KRRP005_MISSING_SAVE_TRIGGER);
     expect(saveTriggerViolation).toBeDefined();
     expect(saveTriggerViolation?.artifactName).toBe(artifact);
     expect(saveTriggerViolation?.surface).toBe("saveTrigger");
@@ -308,10 +308,10 @@ describe("TP003: Violation generation", () => {
 
   test("generates no violations when all wiring present", () => {
     const wiring = {
-      messageType: { present: true, requestDefined: true, responseDefined: true, requestType: "RefreshKnowledgeRevalidationInboxRequest", responseType: "RefreshKnowledgeRevalidationInboxResponse" },
-      router: { present: true, caseExists: true, handlerImported: true, actionName: "refreshKnowledgeRevalidationInbox" },
-      handler: { present: true, fileExists: true, handlerExported: true, filePath: "src/background/handlers/refreshKnowledgeRevalidationInbox.ts", handlerName: "handleRefreshKnowledgeRevalidationInbox" },
-      saveTrigger: { present: true, refreshFunctionExists: true, invokedInSaveFlow: true, functionName: "refreshKnowledgeRevalidationInbox" },
+      messageType: { present: true, requestDefined: true, responseDefined: true },
+      router: { present: true, caseExists: true, handlerImported: true },
+      handler: { present: true, fileExists: true, handlerExported: true },
+      saveTrigger: { present: true, refreshFunctionExists: true, invokedInSaveFlow: true },
     };
 
     const violations = generateViolations(artifact, wiring);
@@ -320,10 +320,10 @@ describe("TP003: Violation generation", () => {
 
   test("violations include remediation with scaffold command", () => {
     const wiring = {
-      messageType: { present: false, requestDefined: false, responseDefined: false, requestType: "RefreshKnowledgeRevalidationInboxRequest", responseType: "RefreshKnowledgeRevalidationInboxResponse" },
-      router: { present: true, caseExists: true, handlerImported: true, actionName: "refreshKnowledgeRevalidationInbox" },
-      handler: { present: true, fileExists: true, handlerExported: true, filePath: "src/background/handlers/refreshKnowledgeRevalidationInbox.ts", handlerName: "handleRefreshKnowledgeRevalidationInbox" },
-      saveTrigger: { present: true, refreshFunctionExists: true, invokedInSaveFlow: true, functionName: "refreshKnowledgeRevalidationInbox" },
+      messageType: { present: false, requestDefined: false, responseDefined: false },
+      router: { present: true, caseExists: true, handlerImported: true },
+      handler: { present: true, fileExists: true, handlerExported: true },
+      saveTrigger: { present: true, refreshFunctionExists: true, invokedInSaveFlow: true },
     };
 
     const violations = generateViolations(artifact, wiring);
@@ -345,7 +345,7 @@ describe("TP003: Violation ordering", () => {
   test("sorts violations in canonical order by rule ID", () => {
     const violations: Violation[] = [
       {
-        ruleId: RuleIds.KRCP003_MISSING_HANDLER_FILE,
+        ruleId: RuleIds.KRRP003_MISSING_HANDLER_FILE,
         severity: "error",
         artifactName: "knowledge-revalidation-inbox",
         surface: "handler",
@@ -353,7 +353,7 @@ describe("TP003: Violation ordering", () => {
         remediation: { description: "Create handler file", scaffoldCommand: "" },
       },
       {
-        ruleId: RuleIds.KRCP001_MISSING_MESSAGE_TYPE,
+        ruleId: RuleIds.KRRP001_MISSING_MESSAGE_TYPE,
         severity: "error",
         artifactName: "knowledge-revalidation-inbox",
         surface: "messageType",
@@ -361,7 +361,7 @@ describe("TP003: Violation ordering", () => {
         remediation: { description: "Add message type", scaffoldCommand: "" },
       },
       {
-        ruleId: RuleIds.KRCP005_MISSING_SAVE_TRIGGER,
+        ruleId: RuleIds.KRRP005_MISSING_SAVE_TRIGGER,
         severity: "error",
         artifactName: "knowledge-revalidation-inbox",
         surface: "saveTrigger",
@@ -372,17 +372,17 @@ describe("TP003: Violation ordering", () => {
 
     const sorted = sortViolationsCanonical(violations);
 
-    // KRCP001 should come before KRCP003
-    expect(sorted[0].ruleId).toBe(RuleIds.KRCP001_MISSING_MESSAGE_TYPE);
-    // KRCP003 should come before KRCP005
-    expect(sorted[1].ruleId).toBe(RuleIds.KRCP003_MISSING_HANDLER_FILE);
-    expect(sorted[2].ruleId).toBe(RuleIds.KRCP005_MISSING_SAVE_TRIGGER);
+    // KRRP001 should come before KRRP003
+    expect(sorted[0].ruleId).toBe(RuleIds.KRRP001_MISSING_MESSAGE_TYPE);
+    // KRRP003 should come before KRRP005
+    expect(sorted[1].ruleId).toBe(RuleIds.KRRP003_MISSING_HANDLER_FILE);
+    expect(sorted[2].ruleId).toBe(RuleIds.KRRP005_MISSING_SAVE_TRIGGER);
   });
 
   test("breaks ties by artifact name", () => {
     const violations: Violation[] = [
       {
-        ruleId: RuleIds.KRCP003_MISSING_HANDLER_FILE,
+        ruleId: RuleIds.KRRP003_MISSING_HANDLER_FILE,
         severity: "error",
         artifactName: "knowledge-revalidation-state-sync",
         surface: "handler",
@@ -390,7 +390,7 @@ describe("TP003: Violation ordering", () => {
         remediation: { description: "", scaffoldCommand: "" },
       },
       {
-        ruleId: RuleIds.KRCP003_MISSING_HANDLER_FILE,
+        ruleId: RuleIds.KRRP003_MISSING_HANDLER_FILE,
         severity: "error",
         artifactName: "knowledge-revalidation-inbox",
         surface: "handler",
@@ -409,7 +409,7 @@ describe("TP003: Violation ordering", () => {
   test("breaks ties by surface order", () => {
     const violations: Violation[] = [
       {
-        ruleId: RuleIds.KRCP001_MISSING_MESSAGE_TYPE,
+        ruleId: RuleIds.KRRP001_MISSING_MESSAGE_TYPE,
         severity: "error",
         artifactName: "knowledge-revalidation-inbox",
         surface: "saveTrigger",
@@ -417,7 +417,7 @@ describe("TP003: Violation ordering", () => {
         remediation: { description: "", scaffoldCommand: "" },
       },
       {
-        ruleId: RuleIds.KRCP001_MISSING_MESSAGE_TYPE,
+        ruleId: RuleIds.KRRP001_MISSING_MESSAGE_TYPE,
         severity: "error",
         artifactName: "knowledge-revalidation-inbox",
         surface: "messageType",
@@ -441,7 +441,7 @@ describe("TP003: Violation ordering", () => {
 describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => {
   describe("pass state - all wiring present", () => {
     test("gate passes when all surfaces wired correctly", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-pass-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-pass-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -486,7 +486,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
   describe("missing-handler drift state", () => {
     test("gate fails when handler file is missing", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-missing-handler-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-missing-handler-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -513,7 +513,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
         // Should have handler file violations for both artifacts
         const handlerViolations = result.violations.filter(
-          v => v.ruleId === RuleIds.KRCP003_MISSING_HANDLER_FILE
+          v => v.ruleId === RuleIds.KRRP003_MISSING_HANDLER_FILE
         );
         expect(handlerViolations.length).toBe(2); // One for each artifact
 
@@ -529,7 +529,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
     });
 
     test("gate fails when handler export is missing", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-missing-export-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-missing-export-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -558,7 +558,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
         // Should have handler export violations
         const exportViolations = result.violations.filter(
-          v => v.ruleId === RuleIds.KRCP004_MISSING_HANDLER_EXPORT
+          v => v.ruleId === RuleIds.KRRP004_MISSING_HANDLER_EXPORT
         );
         expect(exportViolations.length).toBe(2);
       } finally {
@@ -569,7 +569,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
   describe("missing-router drift state", () => {
     test("gate fails when router case is missing", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-missing-router-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-missing-router-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -597,7 +597,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
         // Should have router case violations
         const routerViolations = result.violations.filter(
-          v => v.ruleId === RuleIds.KRCP002_MISSING_ROUTER_CASE
+          v => v.ruleId === RuleIds.KRRP002_MISSING_ROUTER_CASE
         );
         expect(routerViolations.length).toBe(2);
 
@@ -613,7 +613,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
   describe("missing-message drift state", () => {
     test("gate fails when message type is missing", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-missing-message-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-missing-message-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -641,7 +641,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
         // Should have message type violations
         const messageViolations = result.violations.filter(
-          v => v.ruleId === RuleIds.KRCP001_MISSING_MESSAGE_TYPE
+          v => v.ruleId === RuleIds.KRRP001_MISSING_MESSAGE_TYPE
         );
         expect(messageViolations.length).toBe(2);
 
@@ -657,7 +657,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
   describe("missing-save-trigger drift state", () => {
     test("gate fails when save trigger is missing", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-missing-save-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-missing-save-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -685,7 +685,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
         // Should have save trigger violations
         const saveViolations = result.violations.filter(
-          v => v.ruleId === RuleIds.KRCP005_MISSING_SAVE_TRIGGER
+          v => v.ruleId === RuleIds.KRRP005_MISSING_SAVE_TRIGGER
         );
         expect(saveViolations.length).toBe(2);
 
@@ -701,7 +701,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
   describe("no-artifacts state", () => {
     test("gate passes when no knowledge-revalidation artifacts in TASKPAD", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-no-artifacts-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-no-artifacts-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
 
@@ -727,7 +727,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
   describe("multiple violations - deterministic ordering", () => {
     test("violations are sorted in canonical order", () => {
-      const tempDir = mkdtempSync(join(tmpdir(), "krcp-multi-violations-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "krrp-multi-violations-"));
       const taskpadPath = join(tempDir, "TASKPAD.md");
       const planPath = join(tempDir, "PLAN.md");
       const srcDir = join(tempDir, "src");
@@ -756,15 +756,15 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
         // Violations should be in canonical order
         const ruleIds = result.violations.map(v => v.ruleId);
 
-        // KRCP001 should come before KRCP002, etc.
-        const krcp001Index = ruleIds.findIndex(id => id === RuleIds.KRCP001_MISSING_MESSAGE_TYPE);
-        const krcp002Index = ruleIds.findIndex(id => id === RuleIds.KRCP002_MISSING_ROUTER_CASE);
-        const krcp003Index = ruleIds.findIndex(id => id === RuleIds.KRCP003_MISSING_HANDLER_FILE);
-        const krcp005Index = ruleIds.findIndex(id => id === RuleIds.KRCP005_MISSING_SAVE_TRIGGER);
+        // KRRP001 should come before KRRP002, etc.
+        const krrp001Index = ruleIds.findIndex(id => id === RuleIds.KRRP001_MISSING_MESSAGE_TYPE);
+        const krrp002Index = ruleIds.findIndex(id => id === RuleIds.KRRP002_MISSING_ROUTER_CASE);
+        const krrp003Index = ruleIds.findIndex(id => id === RuleIds.KRRP003_MISSING_HANDLER_FILE);
+        const krrp005Index = ruleIds.findIndex(id => id === RuleIds.KRRP005_MISSING_SAVE_TRIGGER);
 
-        expect(krcp001Index).toBeLessThan(krcp002Index);
-        expect(krcp002Index).toBeLessThan(krcp003Index);
-        expect(krcp003Index).toBeLessThan(krcp005Index);
+        expect(krrp001Index).toBeLessThan(krrp002Index);
+        expect(krrp002Index).toBeLessThan(krrp003Index);
+        expect(krrp003Index).toBeLessThan(krrp005Index);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
@@ -778,7 +778,7 @@ describe("TP003: Knowledge-Revalidation Parity Gate - Drift State Tests", () => 
 
 describe("TP003: Output format and determinism", () => {
   test("produces valid JSON output", () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "krcp-json-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "krrp-json-"));
     const taskpadPath = join(tempDir, "TASKPAD.md");
     const planPath = join(tempDir, "PLAN.md");
 
@@ -802,7 +802,7 @@ describe("TP003: Output format and determinism", () => {
   });
 
   test("produces deterministic output across multiple runs", () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "krcp-determinism-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "krrp-determinism-"));
     const taskpadPath = join(tempDir, "TASKPAD.md");
     const planPath = join(tempDir, "PLAN.md");
     const srcDir = join(tempDir, "src");
@@ -843,7 +843,7 @@ describe("TP003: Output format and determinism", () => {
   });
 
   test("output includes all required fields", () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "krcp-fields-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "krrp-fields-"));
     const taskpadPath = join(tempDir, "TASKPAD.md");
     const planPath = join(tempDir, "PLAN.md");
 
@@ -893,10 +893,10 @@ describe("TP003: Output format and determinism", () => {
 // =============================================================================
 
 describe("TP003: Rule IDs contract", () => {
-  test("all rule IDs follow KRCP### pattern", () => {
+  test("all rule IDs follow KRRP### pattern", () => {
     const ruleIds = Object.values(RuleIds);
     for (const ruleId of ruleIds) {
-      expect(ruleId).toMatch(/^KRCP\d+_/);
+      expect(ruleId).toMatch(/^KRRP\d+_/);
     }
   });
 
@@ -907,15 +907,15 @@ describe("TP003: Rule IDs contract", () => {
   });
 
   test("includes all expected rule IDs", () => {
-    expect(RuleIds.KRCP001_MISSING_MESSAGE_TYPE).toBe("KRCP001_MISSING_MESSAGE_TYPE");
-    expect(RuleIds.KRCP002_MISSING_ROUTER_CASE).toBe("KRCP002_MISSING_ROUTER_CASE");
-    expect(RuleIds.KRCP003_MISSING_HANDLER_FILE).toBe("KRCP003_MISSING_HANDLER_FILE");
-    expect(RuleIds.KRCP004_MISSING_HANDLER_EXPORT).toBe("KRCP004_MISSING_HANDLER_EXPORT");
-    expect(RuleIds.KRCP005_MISSING_SAVE_TRIGGER).toBe("KRCP005_MISSING_SAVE_TRIGGER");
-    expect(RuleIds.KRCP006_HANDLER_IMPORT_MISSING).toBe("KRCP006_HANDLER_IMPORT_MISSING");
-    expect(RuleIds.KRCP007_MESSAGE_TYPE_MISMATCH).toBe("KRCP007_MESSAGE_TYPE_MISMATCH");
-    expect(RuleIds.KRCP008_RESPONSE_TYPE_INCOMPLETE).toBe("KRCP008_RESPONSE_TYPE_INCOMPLETE");
-    expect(RuleIds.KRCP009_HANDLER_SIGNATURE_MISMATCH).toBe("KRCP009_HANDLER_SIGNATURE_MISMATCH");
-    expect(RuleIds.KRCP010_NO_ARTIFACT_TARGETS).toBe("KRCP010_NO_ARTIFACT_TARGETS");
+    expect(RuleIds.KRRP001_MISSING_MESSAGE_TYPE).toBe("KRRP001_MISSING_MESSAGE_TYPE");
+    expect(RuleIds.KRRP002_MISSING_ROUTER_CASE).toBe("KRRP002_MISSING_ROUTER_CASE");
+    expect(RuleIds.KRRP003_MISSING_HANDLER_FILE).toBe("KRRP003_MISSING_HANDLER_FILE");
+    expect(RuleIds.KRRP004_MISSING_HANDLER_EXPORT).toBe("KRRP004_MISSING_HANDLER_EXPORT");
+    expect(RuleIds.KRRP005_MISSING_SAVE_TRIGGER).toBe("KRRP005_MISSING_SAVE_TRIGGER");
+    expect(RuleIds.KRRP006_HANDLER_IMPORT_MISSING).toBe("KRRP006_HANDLER_IMPORT_MISSING");
+    expect(RuleIds.KRRP007_MESSAGE_TYPE_MISMATCH).toBe("KRRP007_MESSAGE_TYPE_MISMATCH");
+    expect(RuleIds.KRRP008_RESPONSE_TYPE_INCOMPLETE).toBe("KRRP008_RESPONSE_TYPE_INCOMPLETE");
+    expect(RuleIds.KRRP009_HANDLER_SIGNATURE_MISMATCH).toBe("KRRP009_HANDLER_SIGNATURE_MISMATCH");
+    expect(RuleIds.KRRP010_NO_ARTIFACT_TARGETS).toBe("KRRP010_NO_ARTIFACT_TARGETS");
   });
 });
