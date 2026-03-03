@@ -1183,8 +1183,9 @@ describe("taskpad-auto-ideation", () => {
       );
 
       // Compute queue parity status for Work Queue
+      // Pass ORIGINAL markdown (not updatedTaskpadMarkdown) - function adds +1 for insertion
       const queueParityStatus = computeQueueParityStatus(
-        insertion.updatedTaskpadMarkdown,
+        taskpad,
         "work",
         insertion,
         true,

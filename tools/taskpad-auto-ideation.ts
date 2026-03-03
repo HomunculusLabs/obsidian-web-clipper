@@ -1071,7 +1071,7 @@ export function computeQueueParityStatus(
 
   // Count unchecked items in the target queue section
   const targetQueueUncheckedCount = targetQueue === "work"
-    ? queueStatus.autonomousUncheckedCount
+    ? queueStatus.workQueueUncheckedCount
     : queueStatus.selfImprovementUncheckedCount;
 
   // If ideation was triggered and we inserted a new item, account for it
