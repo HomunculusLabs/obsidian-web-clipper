@@ -39,7 +39,7 @@ import {
   type RetrievalQueryPackInput,
   type QueryPackDiagnostics
 } from "../shared/retrievalQueryPackContract";
-import type { RefreshOpenQuestionsInboxResponse, RefreshKnowledgeTriageStateSyncResponse, RefreshContradictionInboxResponse } from "../shared/messages";
+import type { RefreshOpenQuestionsInboxResponse, RefreshKnowledgeTriageStateSyncResponse, RefreshContradictionInboxResponse, RefreshKnowledgeConfidenceStateSyncResponse } from "../shared/messages";
 
 const MAX_URI_CONTENT_CHARS = 180000;
 
@@ -824,6 +824,77 @@ async function refreshContradictionInbox(
 }
 
 /**
+ * Refresh the Knowledge Confidence State Sync after a successful save.
+ *
+ * This is a fire-and-forget operation that:
+ * 1. Scans the vault for confidence items from multiple source artifacts
+ * 2. Builds the state sync deterministically
+ * 3. Saves it via CLI
+ *
+ * On any error, logs and continues (does not block or corrupt).
+ */
+async function refreshKnowledgeConfidenceStateSync(
+  settings: Settings,
+  vault: string
+): Promise<void> {
+  // Skip if sync is disabled (no explicit setting yet, always enable)
+  // For now, we always run the sync if CLI is configured
+
+  // Skip if CLI is not configured (sync requires CLI for file write)
+  if (!settings.obsidianCli?.enabled || !settings.obsidianCli.cliPath) {
+    if (settings.debug) {
+      console.warn("[KnowledgeConfidenceStateSync] CLI not configured, skipping sync refresh");
+    }
+    return;
+  }
+
+  // Get vault path (required for scanning)
+  const vaultPath = getVaultPathFromSettings(settings);
+  if (!vaultPath) {
+    if (settings.debug) {
+      console.warn("[KnowledgeConfidenceStateSync] Vault path not available, skipping sync refresh");
+    }
+    return;
+  }
+
+  try {
+    const response = await runtimeSendMessage<
+      RuntimeRequest,
+      RefreshKnowledgeConfidenceStateSyncResponse
+    >({
+      action: "refreshKnowledgeConfidenceStateSync",
+      vaultPath,
+      cliPath: settings.obsidianCli.cliPath,
+      vault,
+      syncFolder: undefined, // Save to vault root by default
+      maxFiles: 100,
+      maxDepth: 3,
+    });
+
+    if (response?.success) {
+      if (settings.debug) {
+        console.log(
+          "[KnowledgeConfidenceStateSync] Refreshed sync:",
+          `${response.itemsCount} items from ${response.sourceArtifactsProcessed} artifacts`
+        );
+      }
+    } else {
+      if (settings.debug) {
+        console.warn(
+          "[KnowledgeConfidenceStateSync] Refresh failed:",
+          response?.error || "Unknown error"
+        );
+      }
+    }
+  } catch (err) {
+    // Deterministic fallback: log error and continue
+    if (settings.debug) {
+      console.warn("[KnowledgeConfidenceStateSync] Refresh error:", err);
+    }
+  }
+}
+
+/**
  * Main save function with method routing and fallback chain.
  *
  * Fallback chain: CLI → URI → clipboard
@@ -915,6 +986,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
 
         // Refresh Contradiction Inbox (fire-and-forget, non-blocking)
         void refreshContradictionInbox(settings, prepared.vault);
+
+        // Refresh Knowledge Confidence State Sync (fire-and-forget, non-blocking)
+        void refreshKnowledgeConfidenceStateSync(settings, prepared.vault);
 
         return { usedClipboardFallback, usedMethod: method };
       }

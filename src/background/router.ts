@@ -18,6 +18,7 @@ import { handleRefreshOpenQuestionsInbox } from "./handlers/refreshOpenQuestions
 import { handleRefreshKeyTakeawaysInbox } from "./handlers/refreshKeyTakeawaysInbox";
 import { handleRefreshKnowledgeTriageStateSync } from "./handlers/refreshKnowledgeTriageStateSync";
 import { handleRefreshContradictionInbox } from "./handlers/refreshContradictionInbox";
+import { handleRefreshKnowledgeConfidenceStateSync } from "./handlers/refreshKnowledgeConfidenceStateSync";
 
 export async function dispatch(request: RuntimeRequest): Promise<unknown> {
   switch (request.action) {
@@ -51,6 +52,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleRefreshKnowledgeTriageStateSync(request);
     case "refreshContradictionInbox":
       return handleRefreshContradictionInbox(request);
+    case "refreshKnowledgeConfidenceStateSync":
+      return handleRefreshKnowledgeConfidenceStateSync(request);
     case "testNativeHost":
       return handleTestNativeHost(request);
     default: {

@@ -87,6 +87,21 @@ export type RuntimeRequest =
       /** Maximum files to scan (optional) */
       maxFiles?: number;
     }
+  | {
+      action: "refreshKnowledgeConfidenceStateSync";
+      /** Vault path on filesystem */
+      vaultPath: string;
+      /** CLI path for saving the sync */
+      cliPath: string;
+      /** Vault name */
+      vault: string;
+      /** Folder to save the sync (optional, defaults to vault root) */
+      syncFolder?: string;
+      /** Maximum files to scan (optional) */
+      maxFiles?: number;
+      /** Maximum depth to recurse when scanning (optional) */
+      maxDepth?: number;
+    }
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
@@ -173,6 +188,20 @@ export type RefreshContradictionInboxResponse =
       openConflicts: number;
       resolvedConflicts: number;
       falsePositiveConflicts: number;
+      truncated: boolean;
+    }
+  | { success: false; error: string };
+
+export type RefreshKnowledgeConfidenceStateSyncResponse =
+  | {
+      success: true;
+      itemsCount: number;
+      sourceArtifactsProcessed: number;
+      statusCountsUnverified: number;
+      statusCountsVerified: number;
+      statusCountsRejected: number;
+      statusCountsDeferred: number;
+      totalSourceRefs: number;
       truncated: boolean;
     }
   | { success: false; error: string };
