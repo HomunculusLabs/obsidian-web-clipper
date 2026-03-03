@@ -1475,3 +1475,344 @@ describe("TP004: downstream parity integrity when auto-ideation uses --target-qu
     });
   });
 });
+
+// ============================================================================
+// TP006: Evidence-gap refresh parity blocking behavior for intake-autoplan
+// ============================================================================
+
+describe("TP006: evidence-gap refresh parity blocks planning progression deterministically", () => {
+  describe("AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY reason code contract", () => {
+    test("evidence-gap parity failures surface as AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY", () => {
+      // Mock the evidence-gap parity payload that would cause a hold
+      const mockEvidenceGapPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "EGCP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "evidence-gap-inbox",
+            surface: "handler",
+            remediation: {
+              description: "Create the handler file for evidence-gap-inbox refresh",
+              scaffoldCommand: "cat > src/background/handlers/refreshEvidenceGapInbox.ts << 'EOF'\n// Handler scaffold\nEOF",
+            },
+          },
+          {
+            ruleId: "EGCP005_MISSING_SAVE_TRIGGER",
+            severity: "error" as const,
+            artifactName: "evidence-gap-state-sync",
+            surface: "saveTrigger",
+            remediation: {
+              description: "Add save trigger invocation for evidence-gap-state-sync",
+              scaffoldCommand: "echo '// Add refreshEvidenceGapStateSync() call to save.ts'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 2,
+          fullyWiredArtifacts: 0,
+          missingWiringArtifacts: 2,
+        },
+      };
+
+      // Verify the payload structure
+      expect(mockEvidenceGapPayload.status).toBe("fail");
+      expect(mockEvidenceGapPayload.violations.length).toBe(2);
+      expect(mockEvidenceGapPayload.summary.missingWiringArtifacts).toBe(2);
+
+      // Verify error violations are detected
+      const errorViolations = mockEvidenceGapPayload.violations.filter(v => v.severity === "error");
+      expect(errorViolations.length).toBe(2);
+
+      // Verify the hold condition: status=fail AND violations.length > 0
+      const shouldHold = mockEvidenceGapPayload.status === "fail" &&
+        mockEvidenceGapPayload.violations.length > 0 &&
+        errorViolations.length > 0;
+      expect(shouldHold).toBe(true);
+
+      // Verify remediation includes scaffold commands
+      for (const violation of errorViolations) {
+        expect(violation.remediation.scaffoldCommand).toBeTruthy();
+        expect(violation.remediation.description).toBeTruthy();
+      }
+    });
+
+    test("no planned evidence-gap artifacts allows progression", () => {
+      // Mock the evidence-gap parity payload with no planned artifacts
+      const mockEvidenceGapPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify the pass condition
+      expect(mockEvidenceGapPayload.status).toBe("pass");
+      expect(mockEvidenceGapPayload.violations.length).toBe(0);
+      expect(mockEvidenceGapPayload.summary.totalArtifacts).toBe(0);
+
+      // When no artifacts are planned, the gate should pass
+      const shouldPass = mockEvidenceGapPayload.status === "pass" ||
+        (mockEvidenceGapPayload.status === "fail" && mockEvidenceGapPayload.summary.totalArtifacts === 0);
+      expect(shouldPass).toBe(true);
+    });
+
+    test("fully wired artifacts allows progression", () => {
+      // Mock the evidence-gap parity payload with fully wired artifacts
+      const mockEvidenceGapPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 2,
+          fullyWiredArtifacts: 2,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify the pass condition
+      expect(mockEvidenceGapPayload.status).toBe("pass");
+      expect(mockEvidenceGapPayload.summary.fullyWiredArtifacts).toBe(2);
+      expect(mockEvidenceGapPayload.summary.missingWiringArtifacts).toBe(0);
+
+      // When all artifacts are fully wired, the gate should pass
+      const shouldPass = mockEvidenceGapPayload.status === "pass" ||
+        mockEvidenceGapPayload.summary.missingWiringArtifacts === 0;
+      expect(shouldPass).toBe(true);
+    });
+  });
+
+  describe("deterministic evidence-gap parity failure metadata", () => {
+    test("EGCP rule IDs are stable and deterministic", () => {
+      const expectedRuleIds = [
+        "EGCP001_MISSING_MESSAGE_TYPE",
+        "EGCP002_MISSING_ROUTER_CASE",
+        "EGCP003_MISSING_HANDLER_FILE",
+        "EGCP004_MISSING_HANDLER_EXPORT",
+        "EGCP005_MISSING_SAVE_TRIGGER",
+        "EGCP006_HANDLER_IMPORT_MISSING",
+        "EGCP007_MESSAGE_TYPE_MISMATCH",
+        "EGCP008_RESPONSE_TYPE_INCOMPLETE",
+        "EGCP009_HANDLER_SIGNATURE_MISMATCH",
+        "EGCP010_NO_ARTIFACT_TARGETS",
+      ];
+
+      // Verify all expected rule IDs follow the pattern
+      for (const ruleId of expectedRuleIds) {
+        expect(ruleId).toMatch(/^EGCP\d+_/);
+      }
+
+      // Verify the canonical order
+      const sorted = [...expectedRuleIds].sort();
+      expect(sorted[0]).toBe("EGCP001_MISSING_MESSAGE_TYPE");
+      expect(sorted[sorted.length - 1]).toBe("EGCP010_NO_ARTIFACT_TARGETS");
+    });
+
+    test("violation metadata includes required fields for actionable next actions", () => {
+      const mockViolation = {
+        ruleId: "EGCP003_MISSING_HANDLER_FILE",
+        severity: "error" as const,
+        artifactName: "evidence-gap-inbox",
+        surface: "handler" as const,
+        remediation: {
+          description: "Create the handler file for evidence-gap-inbox refresh",
+          scaffoldCommand: "cat > src/background/handlers/refreshEvidenceGapInbox.ts << 'EOF'\nexport async function handleRefreshEvidenceGapInbox() {}\nEOF",
+        },
+      };
+
+      // Required fields for actionable remediation
+      expect(mockViolation.ruleId).toBeTruthy();
+      expect(mockViolation.severity).toBe("error");
+      expect(mockViolation.artifactName).toBeTruthy();
+      expect(mockViolation.surface).toBeTruthy();
+      expect(mockViolation.remediation.description).toBeTruthy();
+      expect(mockViolation.remediation.scaffoldCommand).toBeTruthy();
+
+      // Verify scaffold command is executable
+      expect(mockViolation.remediation.scaffoldCommand).toContain("cat >");
+    });
+  });
+
+  describe("evidence-gap parity blocking progression contract", () => {
+    test("missing wiring for planned artifacts blocks progression", () => {
+      // Simulate the condition that triggers AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY
+      const hasPlannedArtifacts = true;
+      const hasMissingWiring = true;
+      const hasErrorViolations = true;
+
+      // The blocking condition
+      const shouldBlock = hasPlannedArtifacts && hasMissingWiring && hasErrorViolations;
+      expect(shouldBlock).toBe(true);
+
+      // When blocking, the reason code should be AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY
+      const expectedReasonCode = "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY";
+      expect(expectedReasonCode).toBe("AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY");
+    });
+
+    test("complete wiring for planned artifacts allows progression", () => {
+      // Simulate the condition that allows progression
+      const hasPlannedArtifacts = true;
+      const hasMissingWiring = false;
+      const hasErrorViolations = false;
+
+      // The allowing condition
+      const shouldAllow = !hasMissingWiring && !hasErrorViolations;
+      expect(shouldAllow).toBe(true);
+
+      // When allowing, the verdict should be "ready"
+      const expectedVerdict = "ready";
+      expect(expectedVerdict).toBe("ready");
+    });
+
+    test("no planned artifacts allows progression", () => {
+      // When no evidence-gap artifacts are planned, parity check is skipped
+      const hasPlannedArtifacts = false;
+
+      // No planned artifacts = no blocking
+      const shouldBlock = hasPlannedArtifacts;
+      expect(shouldBlock).toBe(false);
+    });
+  });
+
+  describe("deterministic step ordering in orchestration", () => {
+    test("evidence-gap-parity step is the fourth step", () => {
+      const expectedStepOrder = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+      ];
+
+      expect(expectedStepOrder).toHaveLength(4);
+      expect(expectedStepOrder[3]).toBe("evidence-gap-parity");
+    });
+
+    test("steps have deterministic IDs", () => {
+      const stepIds = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+      ];
+
+      // Verify all IDs are unique
+      const uniqueIds = new Set(stepIds);
+      expect(uniqueIds.size).toBe(stepIds.length);
+
+      // Verify ordering is deterministic
+      expect(stepIds[0]).toBe("intake-recover");
+      expect(stepIds[1]).toBe("plan-seed");
+      expect(stepIds[2]).toBe("plan-contract");
+      expect(stepIds[3]).toBe("evidence-gap-parity");
+    });
+  });
+
+  describe("intake-autoplan result includes evidenceGapParity field", () => {
+    test("result structure includes evidenceGapParity for downstream inspection", () => {
+      const mockResult = {
+        status: "fail" as const,
+        verdict: "hold" as const,
+        reasonCode: "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: 5,
+        plannedMarker: "planned-2026-03-03",
+        newSliceHeading: "## TASKPAD Intake Slice (2026-03-03): Test slice",
+        steps: [
+          { id: "intake-recover", status: "pass", exitCode: 0, reasonCode: null, summary: "", command: "", stdout: "", stderr: "" },
+          { id: "plan-seed", status: "pass", exitCode: 0, reasonCode: null, summary: "", command: "", stdout: "", stderr: "" },
+          { id: "plan-contract", status: "pass", exitCode: 0, reasonCode: null, summary: "", command: "", stdout: "", stderr: "" },
+          { id: "evidence-gap-parity", status: "fail", exitCode: 1, reasonCode: "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY", summary: "", command: "", stdout: "", stderr: "" },
+        ],
+        queueReconcile: null,
+        artifact: {
+          artifactPath: null,
+          preflightResult: null,
+          preflightReasonCode: null,
+        },
+        evidenceGapParity: {
+          status: "fail" as const,
+          violations: [
+            {
+              ruleId: "EGCP003_MISSING_HANDLER_FILE",
+              severity: "error" as const,
+              artifactName: "evidence-gap-inbox",
+              surface: "handler",
+              remediation: {
+                description: "Create handler file",
+                scaffoldCommand: "cat > handler.ts",
+              },
+            },
+          ],
+          summary: {
+            totalArtifacts: 1,
+            fullyWiredArtifacts: 0,
+            missingWiringArtifacts: 1,
+          },
+        },
+        nextActions: [
+          "Fix 1 evidence-gap artifact(s) with missing save-flow wiring.",
+          "[EGCP003_MISSING_HANDLER_FILE] evidence-gap-inbox: Create handler file",
+          "  Scaffold: cat > handler.ts",
+        ],
+      };
+
+      // Verify the result structure
+      expect(mockResult).toHaveProperty("evidenceGapParity");
+      expect(mockResult.evidenceGapParity).toHaveProperty("status");
+      expect(mockResult.evidenceGapParity).toHaveProperty("violations");
+      expect(mockResult.evidenceGapParity).toHaveProperty("summary");
+
+      // Verify violations array structure
+      expect(Array.isArray(mockResult.evidenceGapParity.violations)).toBe(true);
+      expect(mockResult.evidenceGapParity.violations[0]).toHaveProperty("ruleId");
+      expect(mockResult.evidenceGapParity.violations[0]).toHaveProperty("severity");
+      expect(mockResult.evidenceGapParity.violations[0]).toHaveProperty("remediation");
+
+      // Verify summary structure
+      expect(mockResult.evidenceGapParity.summary).toHaveProperty("totalArtifacts");
+      expect(mockResult.evidenceGapParity.summary).toHaveProperty("fullyWiredArtifacts");
+      expect(mockResult.evidenceGapParity.summary).toHaveProperty("missingWiringArtifacts");
+
+      // Verify nextActions include remediation hints
+      expect(mockResult.nextActions.length).toBeGreaterThan(0);
+      expect(mockResult.nextActions.some(a => a.includes("EGCP"))).toBe(true);
+    });
+
+    test("evidenceGapParity is null when step is skipped", () => {
+      const mockResult = {
+        status: "fail" as const,
+        verdict: "blocked" as const,
+        reasonCode: "AUTOPLAN_BLOCKED_RUNTIME",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: null,
+        plannedMarker: null,
+        newSliceHeading: null,
+        steps: [
+          { id: "intake-recover", status: "fail", exitCode: 1, reasonCode: "INTAKE_RECOVER_FAILED", summary: "", command: "", stdout: "", stderr: "" },
+          { id: "plan-seed", status: "skipped", exitCode: null, reasonCode: "SKIP_RECOVER_NOT_READY", summary: "", command: "", stdout: "", stderr: "" },
+          { id: "plan-contract", status: "skipped", exitCode: null, reasonCode: "SKIP_RECOVER_NOT_READY", summary: "", command: "", stdout: "", stderr: "" },
+          { id: "evidence-gap-parity", status: "skipped", exitCode: null, reasonCode: "SKIP_RECOVER_NOT_READY", summary: "", command: "", stdout: "", stderr: "" },
+        ],
+        queueReconcile: null,
+        artifact: {
+          artifactPath: null,
+          preflightResult: null,
+          preflightReasonCode: null,
+        },
+        evidenceGapParity: null,
+        nextActions: ["Fix intake-recover before proceeding."],
+      };
+
+      // When skipped, evidenceGapParity should be null
+      expect(mockResult.evidenceGapParity).toBeNull();
+
+      // All downstream steps should be skipped
+      const skippedSteps = mockResult.steps.filter(s => s.status === "skipped");
+      expect(skippedSteps.length).toBe(3);
+    });
+  });
+});

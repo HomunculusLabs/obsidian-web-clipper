@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import type { QueueReconcileResult } from "./lib/taskpad-queue-reconcile";
 import type { TaskpadWritePreflightResult, TaskpadWritePreflightReasonCode } from "./taskpad-write-preflight";
 
-type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract";
+type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity";
 type AutoplanStepStatus = "pass" | "fail" | "skipped";
 type AutoplanVerdict = "ready" | "hold" | "blocked";
 
@@ -30,6 +30,27 @@ interface PlanSeedArtifactMetadata {
   preflightReasonCode: TaskpadWritePreflightReasonCode | null;
 }
 
+interface EvidenceGapParityPayload {
+  status: "pass" | "fail";
+  violations: EvidenceGapParityViolation[];
+  summary: {
+    totalArtifacts: number;
+    fullyWiredArtifacts: number;
+    missingWiringArtifacts: number;
+  };
+}
+
+interface EvidenceGapParityViolation {
+  ruleId: string;
+  severity: "error" | "warning";
+  artifactName: string;
+  surface: string;
+  remediation: {
+    description: string;
+    scaffoldCommand: string;
+  };
+}
+
 interface TaskpadIntakeAutoplanResult {
   status: "pass" | "fail";
   verdict: AutoplanVerdict;
@@ -39,9 +60,10 @@ interface TaskpadIntakeAutoplanResult {
   selectedBacklogLine: number | null;
   plannedMarker: string | null;
   newSliceHeading: string | null;
-  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
+  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
   queueReconcile: QueueReconcileResult | null;
   artifact: PlanSeedArtifactMetadata;
+  evidenceGapParity: EvidenceGapParityPayload | null;
   nextActions: string[];
 }
 
@@ -99,12 +121,14 @@ interface IntegrityViolation {
 
 const SKIP_RECOVER_NOT_READY = "SKIP_RECOVER_NOT_READY";
 const SKIP_PLAN_SEED_FAILED = "SKIP_PLAN_SEED_FAILED";
+const SKIP_PLAN_CONTRACT_FAILED = "SKIP_PLAN_CONTRACT_FAILED";
 
 const AUTOPLAN_READY_PLANNED = "AUTOPLAN_READY_PLANNED";
 const AUTOPLAN_READY_NOOP_ALREADY_PLANNED = "AUTOPLAN_READY_NOOP_ALREADY_PLANNED";
 const AUTOPLAN_HOLD_RECOVERY = "AUTOPLAN_HOLD_RECOVERY";
 const AUTOPLAN_HOLD_PLAN_CONTRACT = "AUTOPLAN_HOLD_PLAN_CONTRACT";
 const AUTOPLAN_HOLD_STRICT_ACTIVE_SLICE = "AUTOPLAN_HOLD_STRICT_ACTIVE_SLICE";
+const AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY = "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY";
 const AUTOPLAN_BLOCKED_RUNTIME = "AUTOPLAN_BLOCKED_RUNTIME";
 
 const STRICT_MODE_RULE_NO_UNCHECKED = "PLI009_NO_UNCHECKED_TP_TASKS";
@@ -364,6 +388,55 @@ function parseIntegrityReportJson(stdout: string): IntegrityReport | null {
   }
 }
 
+function parseEvidenceGapParityPayload(stdout: string): EvidenceGapParityPayload | null {
+  // The evidence-gap parity gate outputs raw JSON when --format json is used
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null) {
+      return null;
+    }
+
+    const report = parsed as Record<string, unknown>;
+
+    // Validate required fields
+    if (report.status !== "pass" && report.status !== "fail") {
+      return null;
+    }
+
+    if (!Array.isArray(report.violations)) {
+      return null;
+    }
+
+    if (typeof report.summary !== "object" || report.summary === null) {
+      return null;
+    }
+
+    const summary = report.summary as Record<string, unknown>;
+    if (typeof summary.totalArtifacts !== "number" ||
+        typeof summary.fullyWiredArtifacts !== "number" ||
+        typeof summary.missingWiringArtifacts !== "number") {
+      return null;
+    }
+
+    return {
+      status: report.status,
+      violations: report.violations as EvidenceGapParityViolation[],
+      summary: {
+        totalArtifacts: summary.totalArtifacts,
+        fullyWiredArtifacts: summary.fullyWiredArtifacts,
+        missingWiringArtifacts: summary.missingWiringArtifacts,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function makeSkippedStep(id: AutoplanStepId, command: string, reasonCode: string, summary: string): AutoplanStepResult {
   return {
     id,
@@ -402,6 +475,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
   let recoverStep: AutoplanStepResult;
   let seedStep: AutoplanStepResult;
   let contractStep: AutoplanStepResult;
+  let parityStep: AutoplanStepResult;
 
   if (!recoverPayload) {
     recoverStep = {
@@ -430,6 +504,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a ready verdict.",
     );
 
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -439,13 +520,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
         preflightResult: null,
         preflightReasonCode: null,
       },
+      evidenceGapParity: null,
       nextActions: [
         "Inspect taskpad:intake:recover output contract markers and rerun taskpad:intake:autoplan.",
         "Resolve runtime/contract issues before retrying orchestration.",
@@ -484,6 +566,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a valid ready verdict.",
     );
 
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a valid ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -493,13 +582,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
         preflightResult: null,
         preflightReasonCode: null,
       },
+      evidenceGapParity: null,
       nextActions: [
         "Fix intake-recover exit semantics so ready maps to exit 0 and non-ready maps to non-zero.",
         "Rerun taskpad:intake:autoplan after contract semantics are restored.",
@@ -537,6 +627,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover verdict was not ready.",
     );
 
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover verdict was not ready.",
+    );
+
     if (recoverPayload.verdict === "hold") {
       return {
         status: "fail",
@@ -547,13 +644,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: null,
         plannedMarker: null,
         newSliceHeading: null,
-        steps: [recoverStep, seedStep, contractStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep],
         queueReconcile: null,
         artifact: {
           artifactPath: null,
           preflightResult: null,
           preflightReasonCode: null,
         },
+        evidenceGapParity: null,
         nextActions: [
           "Follow intake-recover next actions and rerun taskpad:intake:autoplan once intake is ready.",
           "Keep plan-seed and plan-contract skipped until recovery reaches ready.",
@@ -570,13 +668,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
         preflightResult: null,
         preflightReasonCode: null,
       },
+      evidenceGapParity: null,
       nextActions: [
         "Inspect intake-recover failure output and remediate runtime or contract issues.",
         "Rerun taskpad:intake:autoplan after recover stops returning blocked.",
@@ -611,6 +710,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed did not produce a valid payload.",
     );
 
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed did not produce a valid payload.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -620,13 +726,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
         preflightResult: null,
         preflightReasonCode: null,
       },
+      evidenceGapParity: null,
       nextActions: [
         "Fix taskpad:plan-seed output contract markers and rerun taskpad:intake:autoplan.",
         "Ensure plan-seed returns deterministic status/reasonCode fields.",
@@ -658,6 +765,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed failed deterministic contract semantics.",
     );
 
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed failed deterministic contract semantics.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -667,13 +781,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
         preflightResult: null,
         preflightReasonCode: null,
       },
+      evidenceGapParity: null,
       nextActions: [
         "Repair plan-seed exit semantics so seeded/noop/fallback exit 0 and failed exits non-zero.",
         "Rerun taskpad:intake:autoplan after plan-seed contract is restored.",
@@ -708,6 +823,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed returned failed status.",
     );
 
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed returned failed status.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -717,9 +839,10 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
+      evidenceGapParity: null,
       nextActions: [
         "Resolve taskpad:plan-seed failure reason and rerun taskpad:intake:autoplan.",
         "Do not run plan-contract until plan-seed succeeds or returns deterministic noop/fallback.",
@@ -794,6 +917,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
 
   if (contractStep.status === "fail") {
     if (isMissingScriptFailure(contractStep)) {
+      parityStep = makeSkippedStep(
+        "evidence-gap-parity",
+        buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with missing script.",
+      );
+
       return {
         status: "fail",
         verdict: "blocked",
@@ -803,9 +933,10 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
         plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
         newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
+        evidenceGapParity: null,
         nextActions: [
           "Wire taskpad:plan-contract script or keep plan:integrity available for fallback.",
           "Rerun taskpad:intake:autoplan once the contract command is executable.",
@@ -857,6 +988,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         nextActions.push("Fix strict-active-slice violations reported by plan:integrity.");
       }
 
+      parityStep = makeSkippedStep(
+        "evidence-gap-parity",
+        buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with strict-active-slice violation.",
+      );
+
       return {
         status: "fail",
         verdict: "hold",
@@ -867,12 +1005,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: hasMutation ? seedPayload.selectedBacklogLine : null,
         plannedMarker: hasMutation ? plannedMarker : null,
         newSliceHeading: hasMutation ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
+        evidenceGapParity: null,
         nextActions,
       };
     }
+
+    parityStep = makeSkippedStep(
+      "evidence-gap-parity",
+      buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because plan-contract step failed.",
+    );
 
     return {
       status: "fail",
@@ -883,15 +1029,161 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
       plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
       newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-      steps: [recoverStep, seedStep, contractStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
+      evidenceGapParity: null,
       nextActions: [
         "Fix plan contract/integrity failures in IMPLEMENTATION_PLAN.md.",
         "Rerun taskpad:intake:autoplan after contract gate passes.",
       ],
     };
   }
+
+  // Evidence-gap parity check runs after plan-contract passes
+  const evidenceGapParityRun = runScript("taskpad:evidence-gap-refresh-contract-parity", [
+    "--taskpad", taskpadPath,
+    "--plan", planPath,
+    "--project-root", ".",
+    "--format", "json",
+  ]);
+  const evidenceGapPayload = parseEvidenceGapParityPayload(evidenceGapParityRun.stdout);
+
+  if (!evidenceGapPayload) {
+    parityStep = {
+      id: "evidence-gap-parity",
+      command: evidenceGapParityRun.command,
+      status: "fail",
+      exitCode: evidenceGapParityRun.exitCode,
+      reasonCode: "EVIDENCE_GAP_PARITY_JSON_MISSING_OR_INVALID",
+      summary: "Evidence-gap parity step did not emit a parseable machine-readable payload.",
+      stdout: evidenceGapParityRun.stdout,
+      stderr: evidenceGapParityRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: null,
+      nextActions: [
+        "Fix taskpad:evidence-gap-refresh-contract-parity output contract markers.",
+        "Ensure the gate returns valid JSON with status, violations, and summary fields.",
+      ],
+    };
+  }
+
+  const parityContractValid =
+    (evidenceGapPayload.status === "pass" && evidenceGapParityRun.exitCode === 0) ||
+    (evidenceGapPayload.status === "fail" && evidenceGapParityRun.exitCode !== 0);
+
+  if (!parityContractValid) {
+    parityStep = {
+      id: "evidence-gap-parity",
+      command: evidenceGapParityRun.command,
+      status: "fail",
+      exitCode: evidenceGapParityRun.exitCode,
+      reasonCode: "EVIDENCE_GAP_PARITY_EXIT_SEMANTICS_INVALID",
+      summary: "Evidence-gap parity output violated deterministic status/exit semantics.",
+      stdout: evidenceGapParityRun.stdout,
+      stderr: evidenceGapParityRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      nextActions: [
+        "Repair evidence-gap parity exit semantics so pass exits 0 and fail exits non-zero.",
+        "Rerun taskpad:intake:autoplan after parity contract is restored.",
+      ],
+    };
+  }
+
+  // Check if evidence-gap parity failed with violations
+  if (evidenceGapPayload.status === "fail" && evidenceGapPayload.violations.length > 0) {
+    const errorViolations = evidenceGapPayload.violations.filter(v => v.severity === "error");
+    const hasPlannedArtifactsWithMissingWiring = evidenceGapPayload.summary.totalArtifacts > 0 &&
+      evidenceGapPayload.summary.missingWiringArtifacts > 0;
+
+    if (errorViolations.length > 0 || hasPlannedArtifactsWithMissingWiring) {
+      parityStep = {
+        id: "evidence-gap-parity",
+        command: evidenceGapParityRun.command,
+        status: "fail",
+        exitCode: evidenceGapParityRun.exitCode,
+        reasonCode: AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY,
+        summary: `Evidence-gap parity gate failed with ${errorViolations.length} error violations and ${evidenceGapPayload.summary.missingWiringArtifacts} artifacts with missing wiring.`,
+        stdout: evidenceGapParityRun.stdout,
+        stderr: evidenceGapParityRun.stderr,
+      };
+
+      const nextActions: string[] = [
+        `Fix ${evidenceGapPayload.summary.missingWiringArtifacts} evidence-gap artifact(s) with missing save-flow wiring.`,
+      ];
+
+      // Add specific remediation actions for each violation
+      for (const violation of errorViolations.slice(0, 3)) {
+        nextActions.push(`[${violation.ruleId}] ${violation.artifactName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      if (errorViolations.length > 3) {
+        nextActions.push(`... and ${errorViolations.length - 3} more violations.`);
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after evidence-gap wiring is complete.");
+
+      return {
+        status: "fail",
+        verdict: "hold",
+        reasonCode: AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY,
+        taskpadPath,
+        planPath,
+        selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+        plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+        newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+        steps: [recoverStep, seedStep, contractStep, parityStep],
+        queueReconcile: seedPayload.queueReconcile,
+        artifact: seedPayload.artifact,
+        evidenceGapParity: evidenceGapPayload,
+        nextActions,
+      };
+    }
+  }
+
+  // Evidence-gap parity passed (or has no planned artifacts)
+  parityStep = {
+    id: "evidence-gap-parity",
+    command: evidenceGapParityRun.command,
+    status: "pass",
+    exitCode: evidenceGapParityRun.exitCode,
+    reasonCode: null,
+    summary: evidenceGapPayload.summary.totalArtifacts === 0
+      ? "Evidence-gap parity gate passed (no planned evidence-gap artifacts)."
+      : `Evidence-gap parity gate passed (${evidenceGapPayload.summary.fullyWiredArtifacts}/${evidenceGapPayload.summary.totalArtifacts} artifacts fully wired).`,
+    stdout: evidenceGapParityRun.stdout,
+    stderr: evidenceGapParityRun.stderr,
+  };
 
   return {
     status: "pass",
@@ -902,9 +1194,10 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
     plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
     newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-    steps: [recoverStep, seedStep, contractStep],
+    steps: [recoverStep, seedStep, contractStep, parityStep],
     queueReconcile: seedPayload.queueReconcile,
     artifact: seedPayload.artifact,
+    evidenceGapParity: evidenceGapPayload,
     nextActions: ["Proceed with Builder dispatch using the newest active plan slice."],
   };
 }
@@ -1019,6 +1312,12 @@ function main(): void {
           SKIP_RECOVER_NOT_READY,
           "Skipped due to runtime exception.",
         ),
+        makeSkippedStep(
+          "evidence-gap-parity",
+          buildCommand("taskpad:evidence-gap-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+          SKIP_RECOVER_NOT_READY,
+          "Skipped due to runtime exception.",
+        ),
       ],
       queueReconcile: null,
       artifact: {
@@ -1026,6 +1325,7 @@ function main(): void {
         preflightResult: null,
         preflightReasonCode: null,
       },
+      evidenceGapParity: null,
       nextActions: [
         "Inspect runtime exception and ensure required files/scripts exist.",
         "Rerun taskpad:intake:autoplan after resolving the runtime issue.",
