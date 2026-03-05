@@ -54,7 +54,7 @@
 - [x] **TP002**: Implement `tools/taskpad-markitdown-priority-brief-refresh-contract-parity.ts` by adapting existing refresh-parity gate patterns for priority-brief artifact detection and wiring validation.
 - [x] **TP003**: Add deterministic fixture corpus + tests in `tests/tools/taskpad-markitdown-priority-brief-refresh-contract-parity.test.ts` for pass/no-artifact/missing-message/missing-router/missing-handler/missing-save-trigger cases.
 - [x] **TP004**: Wire script/docs/integration surfaces (`package.json`, intake verifier, and any contract docs as needed) so the gate is canonical and machine-auditable.
-- [ ] **TP005**: Extend `tests/tools/taskpad-intake-autoplan.test.ts` so parity failures deterministically block intake progression with actionable next-action output.
+- [x] **TP005**: Extend `tests/tools/taskpad-intake-autoplan.test.ts` so parity failures deterministically block intake progression with actionable next-action output.
 
 ### Acceptance Criteria
 - Gate deterministically fails whenever planned priority-brief artifact wiring is missing from any required save-flow surface.

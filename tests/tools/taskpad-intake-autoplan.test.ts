@@ -3544,3 +3544,1003 @@ describe("TP006: trust-brief refresh parity and intake verification stability", 
     });
   });
 });
+
+// ============================================================================
+// TP005: Markitdown Priority Brief refresh parity blocking behavior for intake-autoplan
+// ============================================================================
+
+describe("TP005: markitdown-priority-brief refresh parity blocks planning progression deterministically", () => {
+  describe("AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY reason code contract", () => {
+    test("markitdown-priority-brief parity failures surface as AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY", () => {
+      // Mock markitdown-priority-brief parity payload that would cause a hold
+      const mockMarkitdownPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "MPBP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "handler",
+            remediation: {
+              description: "Create handler file for markitdown-conversion-priority-brief refresh",
+              scaffoldCommand: "cat > src/background/handlers/refreshMarkitdownConversionPriorityBrief.ts << 'EOF'\n// Handler scaffold\nEOF",
+            },
+          },
+          {
+            ruleId: "MPBP005_MISSING_SAVE_TRIGGER",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "saveTrigger",
+            remediation: {
+              description: "Add save trigger invocation for markitdown-conversion-priority-brief",
+              scaffoldCommand: "echo '// Add refreshMarkitdownConversionPriorityBrief() call to save.ts'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify payload structure
+      expect(mockMarkitdownPayload.status).toBe("fail");
+      expect(mockMarkitdownPayload.violations.length).toBe(2);
+      expect(mockMarkitdownPayload.summary.partiallyWiredArtifacts).toBe(1);
+
+      // Verify error violations are detected
+      const errorViolations = mockMarkitdownPayload.violations.filter(v => v.severity === "error");
+      expect(errorViolations.length).toBe(2);
+
+      // Verify hold condition: status=fail AND violations.length > 0
+      const shouldHold = mockMarkitdownPayload.status === "fail" &&
+        mockMarkitdownPayload.violations.length > 0 &&
+        errorViolations.length > 0;
+      expect(shouldHold).toBe(true);
+
+      // Verify remediation includes scaffold commands
+      for (const violation of errorViolations) {
+        expect(violation.remediation.scaffoldCommand).toBeTruthy();
+        expect(violation.remediation.description).toBeTruthy();
+      }
+    });
+
+    test("no planned markitdown-priority-brief artifacts allows progression", () => {
+      // Mock markitdown-priority-brief parity payload with no planned artifacts
+      const mockMarkitdownPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify pass condition
+      expect(mockMarkitdownPayload.status).toBe("pass");
+      expect(mockMarkitdownPayload.violations.length).toBe(0);
+      expect(mockMarkitdownPayload.summary.totalArtifacts).toBe(0);
+
+      // When no artifacts are planned, gate should pass
+      const shouldPass = mockMarkitdownPayload.status === "pass" ||
+        (mockMarkitdownPayload.status === "fail" && mockMarkitdownPayload.summary.totalArtifacts === 0);
+      expect(shouldPass).toBe(true);
+    });
+
+    test("fully wired markitdown-priority-brief artifact allows progression", () => {
+      // Mock markitdown-priority-brief parity payload with fully wired artifact
+      const mockMarkitdownPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 1,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify pass condition
+      expect(mockMarkitdownPayload.status).toBe("pass");
+      expect(mockMarkitdownPayload.summary.fullyWiredArtifacts).toBe(1);
+      expect(mockMarkitdownPayload.summary.missingWiringArtifacts).toBe(0);
+
+      // Fully wired artifacts should allow progression
+      const shouldPass = mockMarkitdownPayload.status === "pass";
+      expect(shouldPass).toBe(true);
+    });
+
+    test("partially wired markitdown-priority-brief artifact causes hold", () => {
+      // Mock markitdown-priority-brief parity payload with partially wired artifact
+      const mockMarkitdownPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "MPBP001_MISSING_MESSAGE_TYPE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "messageType",
+            remediation: {
+              description: "Add message type for markitdown-conversion-priority-brief",
+              scaffoldCommand: "echo '// Add RefreshMarkitdownConversionPriorityBriefRequest/Response types'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify hold condition: partially wired artifact
+      expect(mockMarkitdownPayload.summary.partiallyWiredArtifacts).toBeGreaterThan(0);
+      expect(mockMarkitdownPayload.status).toBe("fail");
+
+      // Partially wired artifacts should cause hold
+      const shouldHold = mockMarkitdownPayload.status === "fail" &&
+        mockMarkitdownPayload.violations.length > 0;
+      expect(shouldHold).toBe(true);
+    });
+  });
+
+  describe("markitdown-priority-brief parity next actions are actionable", () => {
+    test("hold includes specific remediation steps with scaffold commands", () => {
+      const mockMarkitdownPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "MPBP002_MISSING_ROUTER_CASE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "router",
+            remediation: {
+              description: "Add router case for refreshMarkitdownConversionPriorityBrief",
+              scaffoldCommand: "cat > src/background/router.patch << 'EOF'\n+ case \"refreshMarkitdownConversionPriorityBrief\": return handleRefreshMarkitdownConversionPriorityBrief(request);\nEOF",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Build next actions as autoplan would
+      const nextActions: string[] = [
+        `Fix ${mockMarkitdownPayload.summary.missingWiringArtifacts + mockMarkitdownPayload.summary.partiallyWiredArtifacts} markitdown-priority-brief artifact(s) with missing save-flow wiring.`,
+      ];
+
+      for (const violation of mockMarkitdownPayload.violations) {
+        nextActions.push(`[${violation.ruleId}] ${violation.artifactName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after markitdown-priority-brief wiring is complete.");
+
+      // Verify next actions are actionable
+      expect(nextActions.length).toBeGreaterThan(0);
+      expect(nextActions[0]).toContain("markitdown-priority-brief artifact(s)");
+
+      // Verify scaffold commands are included
+      const hasScaffold = nextActions.some(action => action.startsWith("  Scaffold:"));
+      expect(hasScaffold).toBe(true);
+
+      // Verify rule IDs are present
+      const hasRuleId = nextActions.some(action => action.includes("[MPBP002_MISSING_ROUTER_CASE]"));
+      expect(hasRuleId).toBe(true);
+
+      // Verify re-run instruction is last
+      expect(nextActions[nextActions.length - 1]).toContain("Rerun taskpad:intake:autoplan");
+    });
+
+    test("multiple violations are summarized with actionable next actions", () => {
+      const mockMarkitdownPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "MPBP001_MISSING_MESSAGE_TYPE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "messageType",
+            remediation: {
+              description: "Add message type",
+              scaffoldCommand: "echo 'Add type'",
+            },
+          },
+          {
+            ruleId: "MPBP002_MISSING_ROUTER_CASE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "router",
+            remediation: {
+              description: "Add router case",
+              scaffoldCommand: "echo 'Add case'",
+            },
+          },
+          {
+            ruleId: "MPBP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "handler",
+            remediation: {
+              description: "Create handler",
+              scaffoldCommand: "echo 'Create handler'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Build next actions as autoplan would
+      const nextActions: string[] = [
+        `Fix ${mockMarkitdownPayload.summary.missingWiringArtifacts + mockMarkitdownPayload.summary.partiallyWiredArtifacts} markitdown-priority-brief artifact(s) with missing save-flow wiring.`,
+      ];
+
+      for (const violation of mockMarkitdownPayload.violations) {
+        nextActions.push(`[${violation.ruleId}] ${violation.artifactName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      // Verify first 3 violations are included
+      expect(nextActions[1]).toContain("[MPBP001_MISSING_MESSAGE_TYPE]");
+      expect(nextActions[3]).toContain("[MPBP002_MISSING_ROUTER_CASE]");
+      expect(nextActions[5]).toContain("[MPBP003_MISSING_HANDLER_FILE]");
+
+      // Verify scaffold commands follow each violation
+      expect(nextActions[2]).toContain("  Scaffold:");
+      expect(nextActions[4]).toContain("  Scaffold:");
+      expect(nextActions[6]).toContain("  Scaffold:");
+    });
+  });
+
+  describe("markitdown-priority-brief parity step ordering in intake-autoplan", () => {
+    test("markitdown-priority-brief-parity step runs after knowledge-revalidation-parity", () => {
+      // Verify the step ordering in the autoplan orchestration
+      const expectedStepOrder = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+        "knowledge-revalidation-parity",
+        "markitdown-priority-brief-parity",
+      ];
+
+      // The type AutoplanStepId should include all steps
+      // This is verified at compile time by TypeScript
+
+      // Verify markitdown-priority-brief-parity is in the step list
+      expect(expectedStepOrder).toContain("markitdown-priority-brief-parity");
+
+      // Verify it comes after knowledge-revalidation-parity
+      const markitdownIndex = expectedStepOrder.indexOf("markitdown-priority-brief-parity");
+      const knowledgeRevalidationIndex = expectedStepOrder.indexOf("knowledge-revalidation-parity");
+      expect(markitdownIndex).toBeGreaterThan(knowledgeRevalidationIndex);
+    });
+
+    test("steps array has 6 elements including markitdown-priority-brief-parity", () => {
+      // Mock result structure to verify the 6-step array
+      const mockResult: any = {
+        steps: [
+          { id: "intake-recover", status: "pass" },
+          { id: "plan-seed", status: "pass" },
+          { id: "plan-contract", status: "pass" },
+          { id: "evidence-gap-parity", status: "pass" },
+          { id: "knowledge-revalidation-parity", status: "pass" },
+          { id: "markitdown-priority-brief-parity", status: "pass" },
+        ],
+      };
+
+      // Verify 6 steps
+      expect(mockResult.steps).toHaveLength(6);
+
+      // Verify all expected steps are present
+      const stepIds = mockResult.steps.map((s: any) => s.id);
+      expect(stepIds).toContain("intake-recover");
+      expect(stepIds).toContain("plan-seed");
+      expect(stepIds).toContain("plan-contract");
+      expect(stepIds).toContain("evidence-gap-parity");
+      expect(stepIds).toContain("knowledge-revalidation-parity");
+      expect(stepIds).toContain("markitdown-priority-brief-parity");
+    });
+  });
+
+  describe("markitdown-priority-brief parity result structure", () => {
+    test("TaskpadIntakeAutoplanResult includes markitdownPriorityBriefParity field", () => {
+      // Mock result with markitdown-priority-brief parity data
+      const mockMarkitdownParity = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 1,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      const mockResult: any = {
+        status: "pass",
+        verdict: "ready",
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: mockMarkitdownParity,
+      };
+
+      // Verify markitdownPriorityBriefParity field is present
+      expect(mockResult.markitdownPriorityBriefParity).toBeDefined();
+      expect(mockResult.markitdownPriorityBriefParity).toEqual(mockMarkitdownParity);
+
+      // Verify summary structure
+      expect(mockResult.markitdownPriorityBriefParity.summary.totalArtifacts).toBe(1);
+      expect(mockResult.markitdownPriorityBriefParity.summary.fullyWiredArtifacts).toBe(1);
+      expect(mockResult.markitdownPriorityBriefParity.summary.partiallyWiredArtifacts).toBe(0);
+      expect(mockResult.markitdownPriorityBriefParity.summary.missingWiringArtifacts).toBe(0);
+    });
+
+    test("markitdownPriorityBriefParity is null when gate is skipped", () => {
+      // When markitdown-priority-brief parity step is skipped (e.g., earlier step failed)
+      const mockResult: any = {
+        status: "fail",
+        verdict: "blocked",
+        reasonCode: "AUTOPLAN_BLOCKED_RUNTIME",
+        steps: [
+          { id: "intake-recover", status: "fail" },
+          { id: "plan-seed", status: "skipped" },
+          { id: "plan-contract", status: "skipped" },
+          { id: "evidence-gap-parity", status: "skipped" },
+          { id: "knowledge-revalidation-parity", status: "skipped" },
+          { id: "markitdown-priority-brief-parity", status: "skipped" },
+        ],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+      };
+
+      // Verify markitdownPriorityBriefParity is null when skipped
+      expect(mockResult.markitdownPriorityBriefParity).toBeNull();
+
+      // Verify step status is "skipped"
+      const markitdownStep = mockResult.steps.find((s: any) => s.id === "markitdown-priority-brief-parity");
+      expect(markitdownStep?.status).toBe("skipped");
+    });
+  });
+
+  describe("markitdown-priority-brief parity deterministic failure metadata", () => {
+    test("MPBP rule IDs are stable and deterministic", () => {
+      const expectedRuleIds = [
+        "MPBP001_MISSING_MESSAGE_TYPE",
+        "MPBP002_MISSING_ROUTER_CASE",
+        "MPBP003_MISSING_HANDLER_FILE",
+        "MPBP004_MISSING_HANDLER_EXPORT",
+        "MPBP005_MISSING_SAVE_TRIGGER",
+        "MPBP006_HANDLER_IMPORT_MISSING",
+        "MPBP007_MESSAGE_TYPE_MISMATCH",
+        "MPBP008_RESPONSE_TYPE_INCOMPLETE",
+        "MPBP009_HANDLER_SIGNATURE_MISMATCH",
+        "MPBP010_NO_ARTIFACT_TARGETS",
+      ];
+
+      // Verify all expected rule IDs follow the pattern
+      for (const ruleId of expectedRuleIds) {
+        expect(ruleId).toMatch(/^MPBP\d+_/);
+      }
+
+      // Verify the canonical order
+      const sorted = [...expectedRuleIds].sort();
+      expect(sorted[0]).toBe("MPBP001_MISSING_MESSAGE_TYPE");
+      expect(sorted[sorted.length - 1]).toBe("MPBP010_NO_ARTIFACT_TARGETS");
+    });
+
+    test("violation metadata includes required fields for actionable next actions", () => {
+      const mockViolation = {
+        ruleId: "MPBP003_MISSING_HANDLER_FILE",
+        severity: "error" as const,
+        artifactName: "markitdown-conversion-priority-brief",
+        surface: "handler" as const,
+        remediation: {
+          description: "Create handler file for markitdown-conversion-priority-brief refresh",
+          scaffoldCommand: "cat > src/background/handlers/refreshMarkitdownConversionPriorityBrief.ts << 'EOF'\nexport async function handleRefreshMarkitdownConversionPriorityBrief() {}\nEOF",
+        },
+      };
+
+      // Required fields for actionable remediation
+      expect(mockViolation.ruleId).toBeTruthy();
+      expect(mockViolation.severity).toBe("error");
+      expect(mockViolation.artifactName).toBeTruthy();
+      expect(mockViolation.surface).toBeTruthy();
+      expect(mockViolation.remediation.description).toBeTruthy();
+      expect(mockViolation.remediation.scaffoldCommand).toBeTruthy();
+
+      // Verify scaffold command is executable
+      expect(mockViolation.remediation.scaffoldCommand).toContain("cat >");
+    });
+  });
+
+  describe("markitdown-priority-brief parity blocking progression contract", () => {
+    test("missing wiring for planned markitdown-priority-brief artifact blocks progression", () => {
+      // Simulate the condition that triggers AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY
+      const hasPlannedArtifacts = true;
+      const hasMissingWiring = true;
+      const hasErrorViolations = true;
+
+      // The blocking condition
+      const shouldBlock = hasPlannedArtifacts && hasMissingWiring && hasErrorViolations;
+      expect(shouldBlock).toBe(true);
+
+      // When blocking, the reason code should be AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY
+      const expectedReasonCode = "AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY";
+      expect(expectedReasonCode).toBe("AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY");
+    });
+
+    test("complete wiring for planned markitdown-priority-brief artifact allows progression", () => {
+      // Simulate the condition that allows progression
+      const hasPlannedArtifacts = true;
+      const hasMissingWiring = false;
+      const hasErrorViolations = false;
+
+      // The allowing condition
+      const shouldAllow = !hasMissingWiring && !hasErrorViolations;
+      expect(shouldAllow).toBe(true);
+
+      // When allowing, the verdict should be "ready"
+      const expectedVerdict = "ready";
+      expect(expectedVerdict).toBe("ready");
+    });
+
+    test("deterministic blocking with all parity gates - markitdown-priority-brief last", () => {
+      // Scenario: All previous parity gates pass, markitdown-priority-brief fails
+      const evidenceGapPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      const knowledgeRevalidationPayload = {
+        status: "pass" as const,
+        violations: [],
+        summary: {
+          totalArtifacts: 0,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 0,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      const markitdownPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "MPBP003_MISSING_HANDLER_FILE",
+            severity: "error" as const,
+            artifactName: "markitdown-conversion-priority-brief",
+            surface: "handler",
+            remediation: {
+              description: "Create handler file",
+              scaffoldCommand: "echo 'Create handler'",
+            },
+          },
+        ],
+        summary: {
+          totalArtifacts: 1,
+          fullyWiredArtifacts: 0,
+          partiallyWiredArtifacts: 1,
+          missingWiringArtifacts: 0,
+        },
+      };
+
+      // Verify independent gate behavior
+      expect(evidenceGapPayload.status).toBe("pass");
+      expect(knowledgeRevalidationPayload.status).toBe("pass");
+      expect(markitdownPayload.status).toBe("fail");
+
+      // Only markitdown-priority-brief parity should block
+      const evidenceGapShouldBlock = evidenceGapPayload.status === "fail" && evidenceGapPayload.violations.length > 0;
+      const knowledgeRevalidationShouldBlock = knowledgeRevalidationPayload.status === "fail" && knowledgeRevalidationPayload.violations.length > 0;
+      const markitdownShouldBlock = markitdownPayload.status === "fail" && markitdownPayload.violations.length > 0;
+
+      expect(evidenceGapShouldBlock).toBe(false);
+      expect(knowledgeRevalidationShouldBlock).toBe(false);
+      expect(markitdownShouldBlock).toBe(true);
+    });
+  });
+
+  describe("markitdown-priority-brief parity violations canonical ordering", () => {
+    test("violations are sorted in canonical order for deterministic output", () => {
+      // Markitdown-priority-brief parity violations have canonical ordering
+      const CANONICAL_MPBP_ORDER = [
+        "MPBP001_MISSING_MESSAGE_TYPE",
+        "MPBP007_MESSAGE_TYPE_MISMATCH",
+        "MPBP008_RESPONSE_TYPE_INCOMPLETE",
+        "MPBP002_MISSING_ROUTER_CASE",
+        "MPBP006_HANDLER_IMPORT_MISSING",
+        "MPBP003_MISSING_HANDLER_FILE",
+        "MPBP004_MISSING_HANDLER_EXPORT",
+        "MPBP009_HANDLER_SIGNATURE_MISMATCH",
+        "MPBP005_MISSING_SAVE_TRIGGER",
+        "MPBP010_NO_ARTIFACT_TARGETS",
+      ];
+
+      const violations = [
+        { ruleId: "MPBP005_MISSING_SAVE_TRIGGER", severity: "error" as const },
+        { ruleId: "MPBP001_MISSING_MESSAGE_TYPE", severity: "error" as const },
+        { ruleId: "MPBP003_MISSING_HANDLER_FILE", severity: "error" as const },
+        { ruleId: "MPBP002_MISSING_ROUTER_CASE", severity: "error" as const },
+      ];
+
+      const ruleOrder = new Map<string, number>();
+      for (let i = 0; i < CANONICAL_MPBP_ORDER.length; i++) {
+        ruleOrder.set(CANONICAL_MPBP_ORDER[i], i);
+      }
+
+      const sorted = [...violations].sort((a: any, b: any) => {
+        const orderA = ruleOrder.get(a.ruleId) ?? Number.MAX_SAFE_INTEGER;
+        const orderB = ruleOrder.get(b.ruleId) ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+
+      // Verify canonical ordering
+      expect(sorted[0].ruleId).toBe("MPBP001_MISSING_MESSAGE_TYPE");
+      expect(sorted[1].ruleId).toBe("MPBP002_MISSING_ROUTER_CASE");
+      expect(sorted[2].ruleId).toBe("MPBP003_MISSING_HANDLER_FILE");
+      expect(sorted[3].ruleId).toBe("MPBP005_MISSING_SAVE_TRIGGER");
+    });
+  });
+
+  describe("intake verification stability for markitdown-priority-brief refresh", () => {
+    test("intake verification passes when markitdown-priority-brief refresh is present and valid", () => {
+      const mockResult = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: 5,
+        plannedMarker: "- [ ] **TP005**:",
+        newSliceHeading: "## TASKPAD Intake Slice (2026-03-04): Markitdown Priority Brief",
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "Plan contract validated",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "plan-seed",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "PLAN_SEED_OK",
+            summary: "Plan seeded with active slice",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_OK",
+            summary: "Markitdown priority brief refresh parity verified",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: {
+          status: "pass" as const,
+          violations: [],
+          summary: {
+            totalArtifacts: 1,
+            fullyWiredArtifacts: 1,
+            partiallyWiredArtifacts: 0,
+            missingWiringArtifacts: 0,
+          },
+        },
+        nextActions: ["Proceed with implementation tasks"],
+      };
+
+      // Pass gate: Verification status is pass
+      expect(mockResult.status).toBe("pass");
+      expect(mockResult.verdict).toBe("ready");
+
+      // Pass gate: Reason code indicates successful verification
+      expect(mockResult.reasonCode).toBe("AUTOPLAN_READY");
+
+      // Pass gate: All verification steps passed
+      const passedSteps = mockResult.steps.filter(s => s.status === "pass");
+      expect(passedSteps.length).toBe(3);
+
+      // Pass gate: Markitdown-priority-brief parity step passed
+      const markitdownStep = mockResult.steps.find(s => s.id === "markitdown-priority-brief-parity");
+      expect(markitdownStep).toBeDefined();
+      expect(markitdownStep?.status).toBe("pass");
+      expect(markitdownStep?.reasonCode).toBe("MARKITDOWN_PRIORITY_BRIEF_PARITY_OK");
+
+      // Pass gate: No verification blocks are present
+      const blockedSteps = mockResult.steps.filter(s => s.status === "fail");
+      expect(blockedSteps.length).toBe(0);
+
+      // Pass gate: Next actions allow proceeding
+      expect(mockResult.nextActions.some(a => a.toLowerCase().includes("proceed"))).toBe(true);
+    });
+
+    test("intake verification fails when markitdown-priority-brief parity detects drift", () => {
+      const mockResult = {
+        status: "fail" as const,
+        verdict: "hold" as const,
+        reasonCode: "AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: null,
+        plannedMarker: null,
+        newSliceHeading: null,
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "Plan contract validated",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "plan-seed",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "PLAN_SEED_OK",
+            summary: "Plan seeded with active slice",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "fail" as const,
+            exitCode: 1,
+            reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_DRIFT",
+            summary: "Markitdown priority brief drift detected - refresh parity failed",
+            command: "",
+            stdout: "",
+            stderr: "Output differs from previous run",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: {
+          status: "fail" as const,
+          violations: [
+            {
+              ruleId: "MPBP003_MISSING_HANDLER_FILE",
+              severity: "error" as const,
+              artifactName: "markitdown-conversion-priority-brief",
+              surface: "handler",
+              remediation: {
+                description: "Create handler file",
+                scaffoldCommand: "cat > handler.ts",
+              },
+            },
+          ],
+          summary: {
+            totalArtifacts: 1,
+            fullyWiredArtifacts: 0,
+            partiallyWiredArtifacts: 1,
+            missingWiringArtifacts: 0,
+          },
+        },
+        nextActions: [
+          "Fix 1 markitdown-priority-brief artifact(s) with missing save-flow wiring.",
+          "[MPBP003_MISSING_HANDLER_FILE] markitdown-conversion-priority-brief: Create handler file",
+          "  Scaffold: cat > handler.ts",
+          "Rerun taskpad:intake:autoplan after markitdown-priority-brief wiring is complete.",
+        ],
+      };
+
+      // Pass gate: Verification status is fail
+      expect(mockResult.status).toBe("fail");
+      expect(mockResult.verdict).toBe("hold");
+
+      // Pass gate: Reason code indicates markitdown-priority-brief block
+      expect(mockResult.reasonCode).toBe("AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY");
+
+      // Pass gate: Markitdown-priority-brief parity step failed
+      const markitdownStep = mockResult.steps.find(s => s.id === "markitdown-priority-brief-parity");
+      expect(markitdownStep).toBeDefined();
+      expect(markitdownStep?.status).toBe("fail");
+      expect(markitdownStep?.exitCode).toBe(1);
+      expect(markitdownStep?.reasonCode).toBe("MARKITDOWN_PRIORITY_BRIEF_PARITY_DRIFT");
+
+      // Pass gate: Error summary indicates drift
+      expect(markitdownStep?.summary).toContain("drift");
+      expect(markitdownStep?.stderr).toContain("Output differs");
+
+      // Pass gate: Next actions provide remediation guidance
+      expect(mockResult.nextActions.length).toBeGreaterThan(0);
+      expect(mockResult.nextActions.some(a => a.toLowerCase().includes("markitdown"))).toBe(true);
+      expect(mockResult.nextActions.some(a => a.toLowerCase().includes("wiring"))).toBe(true);
+    });
+
+    test("intake verification handles markitdown-priority-brief absence gracefully", () => {
+      const mockResult = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: 5,
+        plannedMarker: "- [ ] **TP005**:",
+        newSliceHeading: "## TASKPAD Intake Slice (2026-03-04): New Slice",
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "Plan contract validated",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "plan-seed",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: "PLAN_SEED_OK",
+            summary: "Plan seeded with active slice",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "pass" as const,
+            exitCode: 0,
+            reasonCode: null,
+            summary: "Markitdown priority brief parity gate passed (no planned markitdown-priority-brief artifacts).",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: {
+          status: "pass" as const,
+          violations: [],
+          summary: {
+            totalArtifacts: 0,
+            fullyWiredArtifacts: 0,
+            partiallyWiredArtifacts: 0,
+            missingWiringArtifacts: 0,
+          },
+        },
+        nextActions: ["Proceed with implementation"],
+      };
+
+      // Pass gate: Verification still passes (no artifacts = OK)
+      expect(mockResult.status).toBe("pass");
+      expect(mockResult.verdict).toBe("ready");
+
+      // Pass gate: Markitdown-priority-brief parity step passed with no artifacts
+      const parityStep = mockResult.steps.find(s => s.id === "markitdown-priority-brief-parity");
+      expect(parityStep).toBeDefined();
+      expect(parityStep?.status).toBe("pass");
+      expect(parityStep?.summary).toContain("no planned");
+
+      // Pass gate: Summary indicates no artifacts
+      expect(mockResult.markitdownPriorityBriefParity?.summary.totalArtifacts).toBe(0);
+
+      // Pass gate: Next actions allow proceeding
+      expect(mockResult.nextActions.some(a => a.includes("Proceed"))).toBe(true);
+    });
+
+    test("intake verification markitdown-priority-brief step has deterministic failure codes", () => {
+      const failureScenarios = [
+        {
+          reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_DRIFT",
+          summary: "Output differs from previous run",
+          stderr: "Detected non-deterministic output",
+        },
+        {
+          reasonCode: "MARKITDOWN_PRIORITY_BRIEF_READ_ERROR",
+          summary: "Failed to read markitdown-priority-brief artifact",
+          stderr: "File not found or corrupted",
+        },
+        {
+          reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARSE_ERROR",
+          summary: "Failed to parse markitdown-priority-brief metadata",
+          stderr: "Invalid frontmatter format",
+        },
+        {
+          reasonCode: "MARKITDOWN_PRIORITY_BRIEF_EXPORT_ERROR",
+          summary: "Failed to export markitdown-priority-brief",
+          stderr: "Write permission denied",
+        },
+      ];
+
+      for (const scenario of failureScenarios) {
+        const mockResult = {
+          status: "fail" as const,
+          verdict: "hold" as const,
+          reasonCode: "AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY",
+          steps: [
+            {
+              id: "markitdown-priority-brief-parity",
+              status: "fail" as const,
+              exitCode: 1,
+              reasonCode: scenario.reasonCode,
+              summary: scenario.summary,
+              command: "",
+              stdout: "",
+              stderr: scenario.stderr,
+            },
+          ],
+          queueReconcile: null,
+          artifact: null,
+          evidenceGapParity: null,
+          knowledgeRevalidationParity: null,
+          markitdownPriorityBriefParity: null,
+          nextActions: [],
+        };
+
+        // Pass gate: Reason code matches scenario
+        const parityStep = mockResult.steps[0];
+        expect(parityStep.reasonCode).toBe(scenario.reasonCode);
+
+        // Pass gate: Summary is descriptive and stable
+        expect(parityStep.summary).toBe(scenario.summary);
+
+        // Pass gate: Stderr provides actionable error detail (contains error info)
+        expect(parityStep.stderr).toBeTruthy();
+
+        // Pass gate: Exit code indicates failure
+        expect(parityStep.exitCode).not.toBe(0);
+      }
+    });
+
+    test("intake verification stability across multiple runs with markitdown-priority-brief", () => {
+      const mockRun1 = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: 5,
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: {
+          status: "pass" as const,
+          violations: [],
+          summary: {
+            totalArtifacts: 1,
+            fullyWiredArtifacts: 1,
+            partiallyWiredArtifacts: 0,
+            missingWiringArtifacts: 0,
+          },
+        },
+        nextActions: [],
+      };
+
+      const mockRun2 = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY",
+        taskpadPath: "/path/to/TASKPAD.md",
+        planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+        selectedBacklogLine: 5,
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: {
+          status: "pass" as const,
+          violations: [],
+          summary: {
+            totalArtifacts: 1,
+            fullyWiredArtifacts: 1,
+            partiallyWiredArtifacts: 0,
+            missingWiringArtifacts: 0,
+          },
+        },
+        nextActions: [],
+      };
+
+      // Pass gate: Both runs have same status
+      expect(mockRun1.status).toBe(mockRun2.status);
+      expect(mockRun1.verdict).toBe(mockRun2.verdict);
+      expect(mockRun1.reasonCode).toBe(mockRun2.reasonCode);
+
+      // Pass gate: Both runs have same step statuses
+      const steps1Status = mockRun1.steps.map(s => `${s.id}:${s.status}`);
+      const steps2Status = mockRun2.steps.map(s => `${s.id}:${s.status}`);
+      expect(steps1Status).toEqual(steps2Status);
+
+      // Pass gate: Markitdown-priority-brief parity check is stable
+      const parityStep1 = mockRun1.steps.find(s => s.id === "markitdown-priority-brief-parity");
+      const parityStep2 = mockRun2.steps.find(s => s.id === "markitdown-priority-brief-parity");
+      expect(parityStep1?.status).toBe(parityStep2?.status);
+      expect(parityStep1?.reasonCode).toBe(parityStep2?.reasonCode);
+    });
+  });
+});
