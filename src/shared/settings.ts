@@ -111,6 +111,11 @@ export interface Settings {
   contradictionInboxMaxFiles: number;
   contradictionInboxFolder: string;
 
+  // --- Knowledge Trust Kickoff Brief settings ---
+  enableKnowledgeTrustKickoffBrief: boolean;
+  knowledgeTrustKickoffBriefMaxFiles: number;
+  knowledgeTrustKickoffBriefFolder: string;
+
   // --- Debug settings ---
   debug: boolean; // Enable debug logging to console
 
@@ -242,6 +247,11 @@ export const DEFAULT_SETTINGS: Settings = {
   contradictionInboxMaxFiles: 100,
   contradictionInboxFolder: "",
 
+  // --- Knowledge Trust Kickoff Brief settings ---
+  enableKnowledgeTrustKickoffBrief: false,
+  knowledgeTrustKickoffBriefMaxFiles: 100,
+  knowledgeTrustKickoffBriefFolder: "",
+
   // --- Debug settings ---
   debug: false, // Disabled by default
 
@@ -317,6 +327,10 @@ export const SETTINGS_KEYS = [
   "enableContradictionInbox",
   "contradictionInboxMaxFiles",
   "contradictionInboxFolder",
+  // Knowledge Trust Kickoff Brief
+  "enableKnowledgeTrustKickoffBrief",
+  "knowledgeTrustKickoffBriefMaxFiles",
+  "knowledgeTrustKickoffBriefFolder",
   // Debug
   "debug",
   // Schema version

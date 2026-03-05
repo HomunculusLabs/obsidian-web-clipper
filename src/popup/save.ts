@@ -3,7 +3,8 @@ import type {
   RuntimeRequest,
   SaveAttachmentToCliResponse,
   SaveToCliResponse,
-  RefreshKeyTakeawaysInboxResponse
+  RefreshKeyTakeawaysInboxResponse,
+  RefreshKnowledgeTrustKickoffBriefResponse
 } from "../shared/messages";
 import type { Settings } from "../shared/settings";
 import { DEFAULT_SETTINGS } from "../shared/settings";
@@ -895,6 +896,79 @@ async function refreshKnowledgeConfidenceStateSync(
 }
 
 /**
+ * Refresh the Knowledge Trust Kickoff Brief after a successful save.
+ *
+ * This is a fire-and-forget operation that:
+ * 1. Scans the vault for trust items from dashboard, state-sync, and history artifacts
+ * 2. Builds the kickoff brief deterministically
+ * 3. Saves it via CLI
+ *
+ * On any error, logs and continues (does not block or corrupt).
+ */
+async function refreshKnowledgeTrustKickoffBrief(
+  settings: Settings,
+  vault: string
+): Promise<void> {
+  // Skip if brief is disabled
+  if (!settings.enableKnowledgeTrustKickoffBrief) {
+    return;
+  }
+
+  // Skip if CLI is not configured (brief requires CLI for file write)
+  if (!settings.obsidianCli?.enabled || !settings.obsidianCli.cliPath) {
+    if (settings.debug) {
+      console.warn("[KnowledgeTrustKickoffBrief] CLI not configured, skipping brief refresh");
+    }
+    return;
+  }
+
+  // Get vault path (required for scanning)
+  const vaultPath = getVaultPathFromSettings(settings);
+  if (!vaultPath) {
+    if (settings.debug) {
+      console.warn("[KnowledgeTrustKickoffBrief] Vault path not available, skipping brief refresh");
+    }
+    return;
+  }
+
+  try {
+    const response = await runtimeSendMessage<
+      RuntimeRequest,
+      RefreshKnowledgeTrustKickoffBriefResponse
+    >({
+      action: "refreshKnowledgeTrustKickoffBrief",
+      vaultPath,
+      cliPath: settings.obsidianCli.cliPath,
+      vault,
+      briefFolder: settings.knowledgeTrustKickoffBriefFolder || undefined,
+      maxFiles: settings.knowledgeTrustKickoffBriefMaxFiles || 100,
+      maxDepth: 3,
+    });
+
+    if (response?.success) {
+      if (settings.debug) {
+        console.log(
+          "[KnowledgeTrustKickoffBrief] Refreshed brief:",
+          `${response.entriesCount} entries from ${response.sourceArtifactsProcessed} artifacts`
+        );
+      }
+    } else {
+      if (settings.debug) {
+        console.warn(
+          "[KnowledgeTrustKickoffBrief] Refresh failed:",
+          response?.error || "Unknown error"
+        );
+      }
+    }
+  } catch (err) {
+    // Deterministic fallback: log error and continue
+    if (settings.debug) {
+      console.warn("[KnowledgeTrustKickoffBrief] Refresh error:", err);
+    }
+  }
+}
+
+/**
  * Main save function with method routing and fallback chain.
  *
  * Fallback chain: CLI → URI → clipboard
@@ -989,6 +1063,9 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
 
         // Refresh Knowledge Confidence State Sync (fire-and-forget, non-blocking)
         void refreshKnowledgeConfidenceStateSync(settings, prepared.vault);
+
+        // Refresh Knowledge Trust Kickoff Brief (fire-and-forget, non-blocking)
+        void refreshKnowledgeTrustKickoffBrief(settings, prepared.vault);
 
         return { usedClipboardFallback, usedMethod: method };
       }

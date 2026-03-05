@@ -102,6 +102,21 @@ export type RuntimeRequest =
       /** Maximum depth to recurse when scanning (optional) */
       maxDepth?: number;
     }
+  | {
+      action: "refreshKnowledgeTrustKickoffBrief";
+      /** Vault path on filesystem */
+      vaultPath: string;
+      /** CLI path for saving the brief */
+      cliPath: string;
+      /** Vault name */
+      vault: string;
+      /** Folder to save the brief (optional, defaults to vault root) */
+      briefFolder?: string;
+      /** Maximum files to scan (optional) */
+      maxFiles?: number;
+      /** Maximum depth to recurse when scanning (optional) */
+      maxDepth?: number;
+    }
   | { action: "testNativeHost" };
 
 export type SaveContentResponse =
@@ -202,6 +217,21 @@ export type RefreshKnowledgeConfidenceStateSyncResponse =
       statusCountsRejected: number;
       statusCountsDeferred: number;
       totalSourceRefs: number;
+      truncated: boolean;
+    }
+  | { success: false; error: string };
+
+export type RefreshKnowledgeTrustKickoffBriefResponse =
+  | {
+      success: true;
+      entriesCount: number;
+      sourceArtifactsProcessed: number;
+      activeItems: number;
+      inProgressItems: number;
+      resolvedItems: number;
+      dismissedItems: number;
+      criticalRiskCount: number;
+      highRiskCount: number;
       truncated: boolean;
     }
   | { success: false; error: string };
