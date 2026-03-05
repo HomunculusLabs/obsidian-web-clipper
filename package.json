@@ -35,6 +35,7 @@
     "taskpad:fallback-artifact-parity": "bun run tools/taskpad-fallback-artifact-parity.ts",
     "taskpad:evidence-gap-refresh-contract-parity": "bun run tools/taskpad-evidence-gap-refresh-contract-parity.ts",
     "taskpad:knowledge-revalidation-refresh-contract-parity": "bun run tools/taskpad-knowledge-revalidation-refresh-contract-parity.ts",
+    "taskpad:markitdown-priority-brief-refresh-contract-parity": "bun run tools/taskpad-markitdown-priority-brief-refresh-contract-parity.ts",
     "taskpad:verification-pack": "bun run tools/taskpad-verification-pack.ts",
     "taskpad:verification-pack-contract": "bun run tools/taskpad-verification-pack-contract.ts",
     "taskpad:verification-pack-execution-gate": "bun run tools/taskpad-verification-pack-execution-gate.ts",
