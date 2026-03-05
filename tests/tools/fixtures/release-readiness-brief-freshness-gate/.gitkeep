@@ -1,0 +1,17 @@
+# Release Readiness Brief Freshness Gate Fixtures
+
+This directory contains test fixtures for the `taskpad-markitdown-release-readiness-brief-freshness-gate` tests.
+
+## Structure
+
+- `briefs/` - Release readiness brief fixtures (pass, stale, missing-fingerprint states)
+- `sources/` - Source artifact fixtures (priority-brief, regression-hotspots, remediation-playbook, state-sync, review-inbox, history)
+
+## Usage
+
+These fixtures are used by `tests/tools/taskpad-markitdown-release-readiness-brief-freshness-gate.test.ts` to test:
+- Pass state: All sources fresh with matching fingerprints
+- No-brief state: Brief file doesn't exist
+- No-source state: Source artifacts missing
+- Stale-aggregate state: Required composite inputs are stale
+- Multi-failure ordering: Deterministic violation ordering
