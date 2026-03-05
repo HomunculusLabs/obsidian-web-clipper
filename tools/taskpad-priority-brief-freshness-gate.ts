@@ -180,7 +180,7 @@ export interface PriorityBriefFreshnessResult {
 /**
  * Brief family configurations with source artifact mappings
  */
-const BRIEF_FAMILY_CONFIGS: BriefFamilyConfig[] = [
+export const BRIEF_FAMILY_CONFIGS: BriefFamilyConfig[] = [
   {
     briefName: "knowledge-trust-kickoff-brief",
     briefFilename: "knowledge-trust-kickoff-brief.md",
@@ -657,13 +657,14 @@ export function generateViolations(
       hasStaleSource = true;
 
       // Determine appropriate rule ID based on source type
+      // Check more specific patterns first to avoid false matches
       let ruleId: RuleId;
-      if (sourceCheck.sourceName.includes("dashboard") || sourceCheck.sourceName.includes("review-inbox")) {
-        ruleId = RuleIds.PBFG002_SOURCE_STALE_DASHBOARD;
-      } else if (sourceCheck.sourceName.includes("state-sync")) {
+      if (sourceCheck.sourceName.includes("state-sync")) {
         ruleId = RuleIds.PBFG003_SOURCE_STALE_STATE_SYNC;
       } else if (sourceCheck.sourceName.includes("history")) {
         ruleId = RuleIds.PBFG004_SOURCE_STALE_HISTORY;
+      } else if (sourceCheck.sourceName.includes("dashboard") || sourceCheck.sourceName.includes("review-inbox")) {
+        ruleId = RuleIds.PBFG002_SOURCE_STALE_DASHBOARD;
       } else {
         ruleId = RuleIds.PBFG005_MISSING_FINGERPRINT;
       }
@@ -945,10 +946,12 @@ async function main(): Promise<number> {
   return status === "pass" ? 0 : 1;
 }
 
-// Run main
-main().then((exitCode) => {
-  process.exit(exitCode);
-}).catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(2);
-});
+// Run main only when executed directly
+if (import.meta.main) {
+  main().then((exitCode) => {
+    process.exit(exitCode);
+  }).catch((error) => {
+    console.error("Fatal error:", error);
+    process.exit(2);
+  });
+}
