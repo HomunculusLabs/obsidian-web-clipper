@@ -9,6 +9,69 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-05): MarkItDown release-readiness brief freshness gate
+
+### Distilled Scope
+**Problem**
+- `markitdown-release-readiness-brief.md` now aggregates go/no-go context, but there is no dedicated freshness gate proving the brief is current versus its composite MarkItDown source artifacts.
+- Existing freshness/parity checks cover component artifacts (`priority-brief`, `regression-hotspots`, `remediation-playbook`, `state-sync`) individually, yet a stale aggregate brief can still pass those checks and mislead release decisions.
+- Intake is in AUTO_IDEATION mode with no unchecked queue items, so the highest-impact next reliability slice is a deterministic guard that blocks stale release-readiness output before session kickoff.
+
+**In scope**
+- Add deterministic `taskpad:markitdown-release-readiness-brief-freshness-gate` for planned/generated `markitdown-release-readiness-brief.md` artifacts.
+- Validate freshness against required composite inputs:
+  - `markitdown-conversion-priority-brief.md`
+  - `markitdown-conversion-regression-hotspots.md`
+  - `markitdown-conversion-remediation-playbook.md`
+  - `markitdown-conversion-state-sync.md`
+- Include canonical upstream freshness support surfaces (`markitdown-conversion-review-inbox.md`, `markitdown-conversion-history.ndjson`) to prevent false-green aggregate status.
+- Emit stable rule IDs, deterministic violation ordering, machine-readable remediation hints, and one scaffold command; wire into intake-auto verification flow.
+
+**Out of scope**
+- Reworking release-readiness scoring/ranking logic.
+- New MarkItDown product artifact schemas.
+- Broad orchestration refactors outside this new freshness gate integration.
+
+### Ideation Candidates Considered
+1. **[RELIABILITY]** Add deterministic `taskpad:markitdown-release-readiness-brief-freshness-gate` to fail when aggregated release-readiness context is stale versus component artifacts and canonical upstream surfaces. **(selected)**
+2. **[RELIABILITY]** Add deterministic `taskpad:markitdown-release-readiness-brief-refresh-contract-parity` gate to enforce save-flow wiring parity for release-readiness refresh handler/message/router/save trigger.
+3. **[OBSERVABILITY]** Add `markitdown-release-readiness-history.ndjson` telemetry (`readiness_version`, `release_readiness_status`, `blocking_cluster_refs`, `source_fingerprint`, `generated_at`) for run-to-run drift traceability.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `search "AUTO_IDEATION|Work Queue|markitdown|priority-brief|release-readiness" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md"`
+  - `search "release-readiness|markitdown-conversion-priority-brief|markitdown-conversion-regression-hotspots|markitdown-conversion-remediation-playbook|state-sync" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `select set "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/FLOW_STATUS.md"`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/FLOW_STATUS.md`
+
+### Task Graph
+- [x] **TP001**: Specify freshness-gate contract (required artifact set, source precedence, stale-threshold policy, deterministic rule IDs, remediation payload schema, and violation ordering).
+- [ ] **TP002**: Implement `tools/taskpad-markitdown-release-readiness-brief-freshness-gate.ts` to parse planned artifacts and evaluate brief freshness against composite inputs + canonical upstream surfaces.
+- [ ] **TP003**: Add deterministic fixture corpus + contract tests in `tests/tools/taskpad-markitdown-release-readiness-brief-freshness-gate.test.ts` for pass/no-brief/no-source/stale-aggregate/multi-failure ordering scenarios.
+- [ ] **TP004**: Wire script/docs surfaces (`package.json`, docs/quality references as needed) so the gate is canonical, machine-invocable, and remediation output remains stable.
+- [ ] **TP005**: Integrate gate into intake-auto verification (`tools/taskpad-intake-autoplan.ts`) and extend `tests/tools/taskpad-intake-autoplan.test.ts` so stale release-readiness briefs block planning with actionable next actions.
+
+### Acceptance Criteria
+- Gate deterministically fails when `markitdown-release-readiness-brief.md` is stale relative to required component artifacts.
+- Failure output includes stable rule IDs, deterministic ordering, machine-readable remediation hints, and one scaffold command.
+- Tests lock pass/fail/no-input behavior for aggregate freshness decisions.
+- `verify:taskpad:intake:auto` treats this gate as a blocking reliability check.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-markitdown-release-readiness-brief-freshness-gate.test.ts
+bun run taskpad:markitdown-release-readiness-brief-freshness-gate -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --project-root . --format json
+bun test tests/tools/taskpad-intake-autoplan.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-04): Priority-brief freshness gate for stale kickoff context prevention
 
 ### Distilled Scope
