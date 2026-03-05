@@ -54,7 +54,7 @@
 - [x] **TP001**: Specify freshness gate contract (source↔brief mapping, staleness heuristics, deterministic fingerprint precedence, rule IDs, remediation payload schema).
 - [x] **TP002**: Implement `tools/taskpad-priority-brief-freshness-gate.ts` to evaluate freshness for trust + MarkItDown briefing artifacts using deterministic source evidence ordering.
 - [x] **TP003**: Add deterministic fixture corpus + tests in `tests/tools/taskpad-priority-brief-freshness-gate.test.ts` for pass/no-brief/no-source/stale-trust/stale-markitdown/multi-failure ordering cases.
-- [ ] **TP004**: Wire script/integration surfaces (`package.json`, docs/quality references as needed) so the gate is canonical and machine-invocable.
+- [x] **TP004**: Wire script/integration surfaces (`package.json`, docs/quality references as needed) so the gate is canonical and machine-invocable.
 - [ ] **TP005**: Integrate gate into intake-auto verification flow and extend `tests/tools/taskpad-intake-autoplan.test.ts` so freshness failures block planning with actionable next actions.
 
 ### Acceptance Criteria
