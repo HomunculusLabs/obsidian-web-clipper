@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import type { QueueReconcileResult } from "./lib/taskpad-queue-reconcile";
 import type { TaskpadWritePreflightResult, TaskpadWritePreflightReasonCode } from "./taskpad-write-preflight";
 
-type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity" | "knowledge-revalidation-parity" | "markitdown-priority-brief-parity" | "priority-brief-freshness";
+type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity" | "knowledge-revalidation-parity" | "markitdown-priority-brief-parity" | "priority-brief-freshness" | "release-readiness-brief-freshness";
 type AutoplanStepStatus = "pass" | "fail" | "skipped";
 type AutoplanVerdict = "ready" | "hold" | "blocked";
 
@@ -119,6 +119,73 @@ interface FreshnessViolation {
   };
 }
 
+interface ReleaseReadinessFreshnessPayload {
+  status: "pass" | "fail";
+  inputs: {
+    taskpadPath: string;
+    planPath: string;
+    projectRoot: string;
+    vaultPath?: string;
+  };
+  brief: {
+    briefName: string;
+    briefPath: string;
+    exists: boolean;
+    isStale: boolean;
+    generatedAt?: string;
+  };
+  sources: {
+    requiredCompositeInputs: ReleaseReadinessSourceCheck[];
+    upstreamSurfaces: ReleaseReadinessSourceCheck[];
+  };
+  summary: {
+    totalSources: number;
+    freshSources: number;
+    staleSources: number;
+    missingSources: number;
+    requiredStale: number;
+    upstreamStale: number;
+  };
+  violations: ReleaseReadinessViolation[];
+  timestamp: string;
+}
+
+interface ReleaseReadinessSourceCheck {
+  sourceName: string;
+  sourcePath: string;
+  precedenceLevel: number;
+  isRequired: boolean;
+  exists: boolean;
+  isStale: boolean;
+  stalenessReason?: string;
+  briefFingerprint?: string;
+  currentFingerprint?: string;
+  briefMtime?: string;
+  sourceMtime?: string;
+}
+
+interface ReleaseReadinessViolation {
+  ruleId: string;
+  severity: "error" | "warning";
+  briefName: string;
+  briefPath: string;
+  sourceName?: string;
+  sourcePath?: string;
+  details: {
+    briefFingerprint?: string;
+    currentFingerprint?: string;
+    briefGeneratedAt?: string;
+    sourceModifiedAt?: string;
+    stalenessDuration?: string;
+    precedenceLevel?: number;
+    isRequired?: boolean;
+  };
+  remediation: {
+    description: string;
+    scaffoldCommand: string;
+  };
+}
+
 interface EvidenceGapParityViolation {
   ruleId: string;
   severity: "error" | "warning";
@@ -161,13 +228,14 @@ interface TaskpadIntakeAutoplanResult {
   selectedBacklogLine: number | null;
   plannedMarker: string | null;
   newSliceHeading: string | null;
-  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
+  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
   queueReconcile: QueueReconcileResult | null;
   artifact: PlanSeedArtifactMetadata;
   evidenceGapParity: EvidenceGapParityPayload | null;
   knowledgeRevalidationParity: KnowledgeRevalidationParityPayload | null;
   markitdownPriorityBriefParity: MarkitdownPriorityBriefParityPayload | null;
   priorityBriefFreshness: PriorityBriefFreshnessPayload | null;
+  releaseReadinessFreshness: ReleaseReadinessFreshnessPayload | null;
   nextActions: string[];
 }
 
@@ -236,6 +304,7 @@ const AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY = "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY";
 const AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY = "AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY";
 const AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY = "AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY";
 const AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS = "AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS";
+const AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS = "AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS";
 const AUTOPLAN_BLOCKED_RUNTIME = "AUTOPLAN_BLOCKED_RUNTIME";
 
 const STRICT_MODE_RULE_NO_UNCHECKED = "PLI009_NO_UNCHECKED_TP_TASKS";
@@ -708,6 +777,77 @@ function parsePriorityBriefFreshnessPayload(stdout: string): PriorityBriefFreshn
   }
 }
 
+function parseReleaseReadinessFreshnessPayload(stdout: string): ReleaseReadinessFreshnessPayload | null {
+  // The release-readiness-brief-freshness-gate outputs raw JSON when --format json is used
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null) {
+      return null;
+    }
+
+    const report = parsed as Record<string, unknown>;
+
+    // Validate required fields
+    if (report.status !== "pass" && report.status !== "fail") {
+      return null;
+    }
+
+    if (typeof report.inputs !== "object" || report.inputs === null) {
+      return null;
+    }
+
+    if (typeof report.brief !== "object" || report.brief === null) {
+      return null;
+    }
+
+    if (typeof report.sources !== "object" || report.sources === null) {
+      return null;
+    }
+
+    if (typeof report.summary !== "object" || report.summary === null) {
+      return null;
+    }
+
+    if (!Array.isArray(report.violations)) {
+      return null;
+    }
+
+    const summary = report.summary as Record<string, unknown>;
+    if (typeof summary.totalSources !== "number" ||
+        typeof summary.freshSources !== "number" ||
+        typeof summary.staleSources !== "number" ||
+        typeof summary.missingSources !== "number" ||
+        typeof summary.requiredStale !== "number" ||
+        typeof summary.upstreamStale !== "number") {
+      return null;
+    }
+
+    return {
+      status: report.status,
+      inputs: report.inputs as ReleaseReadinessFreshnessPayload["inputs"],
+      brief: report.brief as ReleaseReadinessFreshnessPayload["brief"],
+      sources: report.sources as ReleaseReadinessFreshnessPayload["sources"],
+      summary: {
+        totalSources: summary.totalSources,
+        freshSources: summary.freshSources,
+        staleSources: summary.staleSources,
+        missingSources: summary.missingSources,
+        requiredStale: summary.requiredStale,
+        upstreamStale: summary.upstreamStale,
+      },
+      violations: report.violations as ReleaseReadinessViolation[],
+      timestamp: report.timestamp as string,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function makeSkippedStep(id: AutoplanStepId, command: string, reasonCode: string, summary: string): AutoplanStepResult {
   return {
     id,
@@ -750,6 +890,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
   let knowledgeRevalidationParityStep: AutoplanStepResult;
   let markitdownPriorityBriefParityStep: AutoplanStepResult;
   let freshnessStep: AutoplanStepResult;
+  let releaseReadinessFreshnessStep: AutoplanStepResult;
 
   if (!recoverPayload) {
     recoverStep = {
@@ -806,6 +947,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a ready verdict.",
     );
 
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -815,7 +963,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -826,6 +974,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
       priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Inspect taskpad:intake:recover output contract markers and rerun taskpad:intake:autoplan.",
         "Resolve runtime/contract issues before retrying orchestration.",
@@ -885,6 +1034,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a valid ready verdict.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a valid ready verdict.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a valid ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -894,7 +1057,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -905,6 +1068,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
       priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Fix intake-recover exit semantics so ready maps to exit 0 and non-ready maps to non-zero.",
         "Rerun taskpad:intake:autoplan after contract semantics are restored.",
@@ -963,6 +1127,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover verdict was not ready.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover verdict was not ready.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover verdict was not ready.",
+    );
+
     if (recoverPayload.verdict === "hold") {
       return {
         status: "fail",
@@ -973,7 +1151,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: null,
         plannedMarker: null,
         newSliceHeading: null,
-        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
         queueReconcile: null,
         artifact: {
           artifactPath: null,
@@ -984,6 +1162,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         knowledgeRevalidationParity: null,
         markitdownPriorityBriefParity: null,
         priorityBriefFreshness: null,
+        releaseReadinessFreshness: null,
         nextActions: [
           "Follow intake-recover next actions and rerun taskpad:intake:autoplan once intake is ready.",
           "Keep plan-seed and plan-contract skipped until recovery reaches ready.",
@@ -1000,7 +1179,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -1010,6 +1189,8 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Inspect intake-recover failure output and remediate runtime or contract issues.",
         "Rerun taskpad:intake:autoplan after recover stops returning blocked.",
@@ -1065,6 +1246,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed did not produce a valid payload.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed did not produce a valid payload.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed did not produce a valid payload.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -1074,7 +1269,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -1084,6 +1279,8 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Fix taskpad:plan-seed output contract markers and rerun taskpad:intake:autoplan.",
         "Ensure plan-seed returns deterministic status/reasonCode fields.",
@@ -1136,6 +1333,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed failed deterministic contract semantics.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed failed deterministic contract semantics.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed failed deterministic contract semantics.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -1145,7 +1356,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -1155,6 +1366,8 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Repair plan-seed exit semantics so seeded/noop/fallback exit 0 and failed exits non-zero.",
         "Rerun taskpad:intake:autoplan after plan-seed contract is restored.",
@@ -1210,6 +1423,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-seed returned failed status.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed returned failed status.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_SEED_FAILED,
+      "Skipped because plan-seed returned failed status.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -1219,12 +1446,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Resolve taskpad:plan-seed failure reason and rerun taskpad:intake:autoplan.",
         "Do not run plan-contract until plan-seed succeeds or returns deterministic noop/fallback.",
@@ -1320,6 +1549,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         "Skipped because plan-contract step failed with missing script.",
       );
 
+      freshnessStep = makeSkippedStep(
+        "priority-brief-freshness",
+        buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with missing script.",
+      );
+
+      releaseReadinessFreshnessStep = makeSkippedStep(
+        "release-readiness-brief-freshness",
+        buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with missing script.",
+      );
+
       return {
         status: "fail",
         verdict: "blocked",
@@ -1329,12 +1572,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
         plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
         newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
         evidenceGapParity: null,
         knowledgeRevalidationParity: null,
         markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: null,
+        releaseReadinessFreshness: null,
         nextActions: [
           "Wire taskpad:plan-contract script or keep plan:integrity available for fallback.",
           "Rerun taskpad:intake:autoplan once the contract command is executable.",
@@ -1407,6 +1652,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         "Skipped because plan-contract step failed with strict-active-slice violation.",
       );
 
+      freshnessStep = makeSkippedStep(
+        "priority-brief-freshness",
+        buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with strict-active-slice violation.",
+      );
+
+      releaseReadinessFreshnessStep = makeSkippedStep(
+        "release-readiness-brief-freshness",
+        buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+        SKIP_PLAN_CONTRACT_FAILED,
+        "Skipped because plan-contract step failed with strict-active-slice violation.",
+      );
+
       return {
         status: "fail",
         verdict: "hold",
@@ -1417,12 +1676,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: hasMutation ? seedPayload.selectedBacklogLine : null,
         plannedMarker: hasMutation ? plannedMarker : null,
         newSliceHeading: hasMutation ? seedPayload.newSliceHeading : null,
-        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
         queueReconcile: seedPayload.queueReconcile,
         artifact: seedPayload.artifact,
         evidenceGapParity: null,
         knowledgeRevalidationParity: null,
         markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: null,
+        releaseReadinessFreshness: null,
         nextActions,
       };
     }
@@ -1448,6 +1709,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because plan-contract step failed.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because plan-contract step failed.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because plan-contract step failed.",
+    );
+
     return {
       status: "fail",
       verdict: "hold",
@@ -1457,7 +1732,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
       plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
       newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: null,
@@ -1505,6 +1780,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because evidence-gap parity step failed.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because evidence-gap parity step failed.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because evidence-gap parity step failed.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -1514,12 +1803,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
       plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
       newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
       queueReconcile: seedPayload.queueReconcile,
       artifact: seedPayload.artifact,
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
+      releaseReadinessFreshness: null,
       nextActions: [
         "Fix taskpad:evidence-gap-refresh-contract-parity output contract markers.",
         "Ensure the gate returns valid JSON with status, violations, and summary fields.",
@@ -1553,6 +1844,20 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     markitdownPriorityBriefParityStep = makeSkippedStep(
       "markitdown-priority-brief-parity",
       buildCommand("taskpad:markitdown-priority-brief-refresh-contract-parity", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because evidence-gap parity step failed.",
+    );
+
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_PLAN_CONTRACT_FAILED,
+      "Skipped because evidence-gap parity step failed.",
+    );
+
+    releaseReadinessFreshnessStep = makeSkippedStep(
+      "release-readiness-brief-freshness",
+      buildCommand("taskpad:markitdown-release-readiness-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
       SKIP_PLAN_CONTRACT_FAILED,
       "Skipped because evidence-gap parity step failed.",
     );
@@ -2141,6 +2446,164 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     stderr: freshnessRun.stderr,
   };
 
+  // Release-readiness brief freshness gate runs after priority-brief-freshness passes
+  const releaseReadinessRun = runScript("taskpad:markitdown-release-readiness-brief-freshness-gate", [
+    "--taskpad", taskpadPath,
+    "--plan", planPath,
+    "--project-root", ".",
+    "--format", "json",
+  ]);
+  const releaseReadinessPayload = parseReleaseReadinessFreshnessPayload(releaseReadinessRun.stdout);
+
+  if (!releaseReadinessPayload) {
+    releaseReadinessFreshnessStep = {
+      id: "release-readiness-brief-freshness",
+      command: releaseReadinessRun.command,
+      status: "fail",
+      exitCode: releaseReadinessRun.exitCode,
+      reasonCode: "RELEASE_READINESS_FRESHNESS_JSON_MISSING_OR_INVALID",
+      summary: "Release-readiness brief freshness gate did not emit a parseable machine-readable payload.",
+      stdout: releaseReadinessRun.stdout,
+      stderr: releaseReadinessRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: knowledgeRevalidationPayload,
+      markitdownPriorityBriefParity: markitdownPayload,
+      priorityBriefFreshness: freshnessPayload,
+      releaseReadinessFreshness: null,
+      nextActions: [
+        "Fix taskpad:markitdown-release-readiness-brief-freshness-gate output contract markers.",
+        "Ensure the gate returns valid JSON with status, brief, sources, violations, and summary fields.",
+      ],
+    };
+  }
+
+  const releaseReadinessContractValid =
+    (releaseReadinessPayload.status === "pass" && releaseReadinessRun.exitCode === 0) ||
+    (releaseReadinessPayload.status === "fail" && releaseReadinessRun.exitCode !== 0);
+
+  if (!releaseReadinessContractValid) {
+    releaseReadinessFreshnessStep = {
+      id: "release-readiness-brief-freshness",
+      command: releaseReadinessRun.command,
+      status: "fail",
+      exitCode: releaseReadinessRun.exitCode,
+      reasonCode: "RELEASE_READINESS_FRESHNESS_EXIT_SEMANTICS_INVALID",
+      summary: "Release-readiness brief freshness output violated deterministic status/exit semantics.",
+      stdout: releaseReadinessRun.stdout,
+      stderr: releaseReadinessRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: knowledgeRevalidationPayload,
+      markitdownPriorityBriefParity: markitdownPayload,
+      priorityBriefFreshness: freshnessPayload,
+      releaseReadinessFreshness: releaseReadinessPayload,
+      nextActions: [
+        "Repair release-readiness brief freshness exit semantics so pass exits 0 and fail exits non-zero.",
+        "Rerun taskpad:intake:autoplan after freshness contract is restored.",
+      ],
+    };
+  }
+
+  // Check if release-readiness freshness gate failed with violations
+  if (releaseReadinessPayload.status === "fail" && releaseReadinessPayload.violations.length > 0) {
+    const errorViolations = releaseReadinessPayload.violations.filter(v => v.severity === "error");
+    const hasRequiredStale = releaseReadinessPayload.summary.requiredStale > 0;
+
+    if (errorViolations.length > 0 || hasRequiredStale) {
+      releaseReadinessFreshnessStep = {
+        id: "release-readiness-brief-freshness",
+        command: releaseReadinessRun.command,
+        status: "fail",
+        exitCode: releaseReadinessRun.exitCode,
+        reasonCode: AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS,
+        summary: `Release-readiness brief freshness gate failed with ${errorViolations.length} error violations and ${releaseReadinessPayload.summary.requiredStale} stale required source(s).`,
+        stdout: releaseReadinessRun.stdout,
+        stderr: releaseReadinessRun.stderr,
+      };
+
+      const nextActions: string[] = [
+        `Refresh stale release-readiness brief (${releaseReadinessPayload.summary.requiredStale} required source(s) stale).`,
+      ];
+
+      // Add specific remediation actions for each error violation
+      for (const violation of errorViolations.slice(0, 3)) {
+        nextActions.push(`[${violation.ruleId}] ${violation.briefName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      if (errorViolations.length > 3) {
+        nextActions.push(`... and ${errorViolations.length - 3} more violations.`);
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after release-readiness brief freshness is restored.");
+
+      return {
+        status: "fail",
+        verdict: "hold",
+        reasonCode: AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS,
+        taskpadPath,
+        planPath,
+        selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+        plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+        newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
+        queueReconcile: seedPayload.queueReconcile,
+        artifact: seedPayload.artifact,
+        evidenceGapParity: evidenceGapPayload,
+        knowledgeRevalidationParity: knowledgeRevalidationPayload,
+        markitdownPriorityBriefParity: markitdownPayload,
+        priorityBriefFreshness: freshnessPayload,
+        releaseReadinessFreshness: releaseReadinessPayload,
+        nextActions,
+      };
+    }
+  }
+
+  // Release-readiness brief freshness passed (or has no stale required sources)
+  releaseReadinessFreshnessStep = {
+    id: "release-readiness-brief-freshness",
+    command: releaseReadinessRun.command,
+    status: "pass",
+    exitCode: releaseReadinessRun.exitCode,
+    reasonCode: null,
+    summary: !releaseReadinessPayload.brief.exists
+      ? "Release-readiness brief freshness gate passed (brief does not exist yet)."
+      : releaseReadinessPayload.summary.totalSources === 0
+        ? "Release-readiness brief freshness gate passed (no sources to check)."
+        : `Release-readiness brief freshness gate passed (${releaseReadinessPayload.summary.freshSources}/${releaseReadinessPayload.summary.totalSources} sources fresh, ${releaseReadinessPayload.summary.staleSources} stale, ${releaseReadinessPayload.summary.missingSources} missing).`,
+    stdout: releaseReadinessRun.stdout,
+    stderr: releaseReadinessRun.stderr,
+  };
+
   return {
     status: "pass",
     verdict: "ready",
@@ -2150,13 +2613,14 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
     plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
     newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-    steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
+    steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep, releaseReadinessFreshnessStep],
     queueReconcile: seedPayload.queueReconcile,
     artifact: seedPayload.artifact,
     evidenceGapParity: evidenceGapPayload,
     knowledgeRevalidationParity: knowledgeRevalidationPayload,
     markitdownPriorityBriefParity: markitdownPayload,
     priorityBriefFreshness: freshnessPayload,
+    releaseReadinessFreshness: releaseReadinessPayload,
     nextActions: ["Proceed with Builder dispatch using the newest active plan slice."],
   };
 }

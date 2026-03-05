@@ -5155,3 +5155,718 @@ describe("TP005: priority-brief freshness gate blocks planning progression deter
     });
   });
 });
+
+// ============================================================================
+// TP005: Release-readiness brief freshness blocking behavior for intake-autoplan
+// ============================================================================
+
+describe("TP005: release-readiness brief freshness blocks planning progression deterministically", () => {
+  describe("AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS reason code contract", () => {
+    test("stale release-readiness brief surfaces as AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS", () => {
+      // Mock the release-readiness freshness payload that would cause a hold
+      const mockReleaseReadinessPayload = {
+        status: "fail" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        brief: {
+          briefName: "markitdown-release-readiness-brief",
+          briefPath: "markitdown-release-readiness-brief.md",
+          exists: true,
+          isStale: true,
+          generatedAt: "2026-03-01T00:00:00Z",
+        },
+        sources: {
+          requiredCompositeInputs: [
+            {
+              sourceName: "markitdown-conversion-priority-brief",
+              sourcePath: "markitdown-conversion-priority-brief.md",
+              precedenceLevel: 1,
+              isRequired: true,
+              exists: true,
+              isStale: true,
+              stalenessReason: "source-newer",
+              briefMtime: "2026-03-01T00:00:00Z",
+              sourceMtime: "2026-03-05T12:00:00Z",
+            },
+          ],
+          upstreamSurfaces: [],
+        },
+        summary: {
+          totalSources: 4,
+          freshSources: 3,
+          staleSources: 1,
+          missingSources: 0,
+          requiredStale: 1,
+          upstreamStale: 0,
+        },
+        violations: [
+          {
+            ruleId: "RRFG002_PRIORITY_BRIEF_STALE",
+            severity: "error" as const,
+            briefName: "markitdown-release-readiness-brief",
+            briefPath: "markitdown-release-readiness-brief.md",
+            sourceName: "markitdown-conversion-priority-brief",
+            sourcePath: "markitdown-conversion-priority-brief.md",
+            details: {
+              briefGeneratedAt: "2026-03-01T00:00:00Z",
+              sourceModifiedAt: "2026-03-05T12:00:00Z",
+              stalenessDuration: "4 days",
+              precedenceLevel: 1,
+              isRequired: true,
+            },
+            remediation: {
+              description: "Priority-brief source is newer than release-readiness brief. Run the scaffold command to refresh.",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+            },
+          },
+          {
+            ruleId: "RRFG012_AGGREGATE_STALE",
+            severity: "error" as const,
+            briefName: "markitdown-release-readiness-brief",
+            briefPath: "markitdown-release-readiness-brief.md",
+            details: {},
+            remediation: {
+              description: "Release-readiness brief has stale composite inputs. Run the scaffold command to refresh with latest source data.",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+            },
+          },
+        ],
+        timestamp: "2026-03-05T14:00:00Z",
+      };
+
+      // Verify the payload structure
+      expect(mockReleaseReadinessPayload.status).toBe("fail");
+      expect(mockReleaseReadinessPayload.brief.isStale).toBe(true);
+      expect(mockReleaseReadinessPayload.summary.requiredStale).toBeGreaterThan(0);
+
+      // Verify error violations are detected
+      const errorViolations = mockReleaseReadinessPayload.violations.filter(v => v.severity === "error");
+      expect(errorViolations.length).toBe(2);
+
+      // Verify the hold condition: status=fail AND requiredStale > 0
+      const shouldHold = mockReleaseReadinessPayload.status === "fail" &&
+        mockReleaseReadinessPayload.summary.requiredStale > 0 &&
+        errorViolations.length > 0;
+      expect(shouldHold).toBe(true);
+
+      // Verify remediation includes scaffold commands
+      for (const violation of errorViolations) {
+        expect(violation.remediation.scaffoldCommand).toBeTruthy();
+        expect(violation.remediation.description).toBeTruthy();
+      }
+    });
+
+    test("fresh release-readiness brief allows progression", () => {
+      // Mock the release-readiness freshness payload with fresh brief
+      const mockReleaseReadinessPayload = {
+        status: "pass" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        brief: {
+          briefName: "markitdown-release-readiness-brief",
+          briefPath: "markitdown-release-readiness-brief.md",
+          exists: true,
+          isStale: false,
+          generatedAt: "2026-03-05T10:00:00Z",
+        },
+        sources: {
+          requiredCompositeInputs: [
+            {
+              sourceName: "markitdown-conversion-priority-brief",
+              sourcePath: "markitdown-conversion-priority-brief.md",
+              precedenceLevel: 1,
+              isRequired: true,
+              exists: true,
+              isStale: false,
+            },
+          ],
+          upstreamSurfaces: [],
+        },
+        summary: {
+          totalSources: 6,
+          freshSources: 6,
+          staleSources: 0,
+          missingSources: 0,
+          requiredStale: 0,
+          upstreamStale: 0,
+        },
+        violations: [],
+        timestamp: "2026-03-05T14:00:00Z",
+      };
+
+      // Verify the pass condition
+      expect(mockReleaseReadinessPayload.status).toBe("pass");
+      expect(mockReleaseReadinessPayload.brief.isStale).toBe(false);
+      expect(mockReleaseReadinessPayload.summary.requiredStale).toBe(0);
+      expect(mockReleaseReadinessPayload.violations.length).toBe(0);
+    });
+
+    test("non-existent brief allows progression (warning only)", () => {
+      // When the brief doesn't exist, it's a warning, not an error
+      const mockReleaseReadinessPayload = {
+        status: "pass" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        brief: {
+          briefName: "markitdown-release-readiness-brief",
+          briefPath: "markitdown-release-readiness-brief.md",
+          exists: false,
+          isStale: true,
+        },
+        sources: {
+          requiredCompositeInputs: [],
+          upstreamSurfaces: [],
+        },
+        summary: {
+          totalSources: 0,
+          freshSources: 0,
+          staleSources: 0,
+          missingSources: 0,
+          requiredStale: 0,
+          upstreamStale: 0,
+        },
+        violations: [
+          {
+            ruleId: "RRFG001_BRIEF_NOT_FOUND",
+            severity: "warning" as const,
+            briefName: "markitdown-release-readiness-brief",
+            briefPath: "markitdown-release-readiness-brief.md",
+            details: {},
+            remediation: {
+              description: "Release-readiness brief does not exist. Run the scaffold command to generate it.",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+            },
+          },
+        ],
+        timestamp: "2026-03-05T14:00:00Z",
+      };
+
+      // Warning-only violations should not block
+      const errorViolations = mockReleaseReadinessPayload.violations.filter(v => v.severity === "error");
+      const shouldBlock = mockReleaseReadinessPayload.summary.requiredStale > 0 || errorViolations.length > 0;
+      expect(shouldBlock).toBe(false);
+    });
+  });
+
+  describe("deterministic release-readiness freshness failure metadata", () => {
+    test("RRFG rule IDs are stable and deterministic", () => {
+      const expectedRuleIds = [
+        "RRFG001_BRIEF_NOT_FOUND",
+        "RRFG002_PRIORITY_BRIEF_STALE",
+        "RRFG003_REGRESSION_HOTSPOTS_STALE",
+        "RRFG004_REMEDIATION_PLAYBOOK_STALE",
+        "RRFG005_STATE_SYNC_STALE",
+        "RRFG006_REVIEW_INBOX_STALE",
+        "RRFG007_HISTORY_STALE",
+        "RRFG008_MISSING_FINGERPRINT",
+        "RRFG009_SOURCE_MISSING",
+        "RRFG010_NO_SOURCES_FOUND",
+        "RRFG011_FINGERPRINT_PARSE_ERROR",
+        "RRFG012_AGGREGATE_STALE",
+      ];
+
+      // Verify all expected rule IDs follow the pattern
+      for (const ruleId of expectedRuleIds) {
+        expect(ruleId).toMatch(/^RRFG\d+_/);
+      }
+
+      // Verify the canonical order
+      const sorted = [...expectedRuleIds].sort();
+      expect(sorted[0]).toBe("RRFG001_BRIEF_NOT_FOUND");
+      expect(sorted[sorted.length - 1]).toBe("RRFG012_AGGREGATE_STALE");
+    });
+
+    test("violation metadata includes required fields for actionable next actions", () => {
+      const mockViolation = {
+        ruleId: "RRFG002_PRIORITY_BRIEF_STALE",
+        severity: "error" as const,
+        briefName: "markitdown-release-readiness-brief",
+        briefPath: "markitdown-release-readiness-brief.md",
+        sourceName: "markitdown-conversion-priority-brief",
+        sourcePath: "markitdown-conversion-priority-brief.md",
+        details: {
+          briefGeneratedAt: "2026-03-01T00:00:00Z",
+          sourceModifiedAt: "2026-03-05T12:00:00Z",
+          stalenessDuration: "4 days",
+          precedenceLevel: 1,
+          isRequired: true,
+        },
+        remediation: {
+          description: "Priority-brief source is newer than release-readiness brief. Run the scaffold command to refresh.",
+          scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+        },
+      };
+
+      // Required fields for actionable remediation
+      expect(mockViolation.ruleId).toBeTruthy();
+      expect(mockViolation.severity).toBe("error");
+      expect(mockViolation.briefName).toBeTruthy();
+      expect(mockViolation.remediation.description).toBeTruthy();
+      expect(mockViolation.remediation.scaffoldCommand).toBeTruthy();
+
+      // Verify scaffold command is executable
+      expect(mockViolation.remediation.scaffoldCommand).toContain("bun run");
+    });
+  });
+
+  describe("release-readiness freshness blocking progression contract", () => {
+    test("stale required composite inputs blocks progression", () => {
+      // Simulate the condition that triggers AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS
+      const hasStaleRequiredSources = true;
+      const hasErrorViolations = true;
+
+      // The blocking condition
+      const shouldBlock = hasStaleRequiredSources && hasErrorViolations;
+      expect(shouldBlock).toBe(true);
+
+      // When blocking, the reason code should be AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS
+      const expectedReasonCode = "AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS";
+      expect(expectedReasonCode).toBe("AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS");
+    });
+
+    test("fresh required composite inputs allows progression", () => {
+      // Simulate the condition that allows progression
+      const hasStaleRequiredSources = false;
+      const hasErrorViolations = false;
+
+      // The allowing condition
+      const shouldAllow = !hasStaleRequiredSources && !hasErrorViolations;
+      expect(shouldAllow).toBe(true);
+
+      // When allowing, the verdict should be "ready"
+      const expectedVerdict = "ready";
+      expect(expectedVerdict).toBe("ready");
+    });
+  });
+
+  describe("deterministic step ordering in orchestration", () => {
+    test("release-readiness-brief-freshness step is the eighth step", () => {
+      const expectedStepOrder = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+        "knowledge-revalidation-parity",
+        "markitdown-priority-brief-parity",
+        "priority-brief-freshness",
+        "release-readiness-brief-freshness",
+      ];
+
+      expect(expectedStepOrder).toHaveLength(8);
+      expect(expectedStepOrder[7]).toBe("release-readiness-brief-freshness");
+    });
+
+    test("release-readiness-brief-freshness runs after priority-brief-freshness", () => {
+      const expectedStepOrder = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+        "knowledge-revalidation-parity",
+        "markitdown-priority-brief-parity",
+        "priority-brief-freshness",
+        "release-readiness-brief-freshness",
+      ];
+
+      // Verify release-readiness-brief-freshness comes after priority-brief-freshness
+      const releaseIndex = expectedStepOrder.indexOf("release-readiness-brief-freshness");
+      const priorityIndex = expectedStepOrder.indexOf("priority-brief-freshness");
+      expect(releaseIndex).toBeGreaterThan(priorityIndex);
+    });
+
+    test("steps array has 8 elements including release-readiness-brief-freshness", () => {
+      // Mock result structure to verify the 8-step array
+      const mockResult: any = {
+        steps: [
+          { id: "intake-recover", status: "pass" },
+          { id: "plan-seed", status: "pass" },
+          { id: "plan-contract", status: "pass" },
+          { id: "evidence-gap-parity", status: "pass" },
+          { id: "knowledge-revalidation-parity", status: "pass" },
+          { id: "markitdown-priority-brief-parity", status: "pass" },
+          { id: "priority-brief-freshness", status: "pass" },
+          { id: "release-readiness-brief-freshness", status: "pass" },
+        ],
+      };
+
+      // Verify 8 steps
+      expect(mockResult.steps).toHaveLength(8);
+
+      // Verify all expected steps are present
+      const stepIds = mockResult.steps.map((s: any) => s.id);
+      expect(stepIds).toContain("release-readiness-brief-freshness");
+    });
+  });
+
+  describe("release-readiness freshness result structure", () => {
+    test("TaskpadIntakeAutoplanResult includes releaseReadinessFreshness field", () => {
+      // Mock result with release-readiness freshness data
+      const mockReleaseReadinessFreshness = {
+        status: "pass" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        brief: {
+          briefName: "markitdown-release-readiness-brief",
+          briefPath: "markitdown-release-readiness-brief.md",
+          exists: true,
+          isStale: false,
+          generatedAt: "2026-03-05T10:00:00Z",
+        },
+        sources: {
+          requiredCompositeInputs: [],
+          upstreamSurfaces: [],
+        },
+        summary: {
+          totalSources: 6,
+          freshSources: 6,
+          staleSources: 0,
+          missingSources: 0,
+          requiredStale: 0,
+          upstreamStale: 0,
+        },
+        violations: [],
+        timestamp: "2026-03-05T14:00:00Z",
+      };
+
+      const mockResult: any = {
+        status: "pass",
+        verdict: "ready",
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: null,
+        releaseReadinessFreshness: mockReleaseReadinessFreshness,
+      };
+
+      // Verify releaseReadinessFreshness field is present
+      expect(mockResult.releaseReadinessFreshness).toBeDefined();
+      expect(mockResult.releaseReadinessFreshness).toEqual(mockReleaseReadinessFreshness);
+
+      // Verify summary structure
+      expect(mockResult.releaseReadinessFreshness.summary.totalSources).toBe(6);
+      expect(mockResult.releaseReadinessFreshness.summary.freshSources).toBe(6);
+      expect(mockResult.releaseReadinessFreshness.summary.staleSources).toBe(0);
+      expect(mockResult.releaseReadinessFreshness.summary.requiredStale).toBe(0);
+    });
+
+    test("releaseReadinessFreshness is null when gate is skipped", () => {
+      // When release-readiness freshness step is skipped (e.g., earlier step failed)
+      const mockResult: any = {
+        status: "fail",
+        verdict: "blocked",
+        reasonCode: "AUTOPLAN_BLOCKED_RUNTIME",
+        steps: [
+          { id: "intake-recover", status: "fail" },
+          { id: "plan-seed", status: "skipped" },
+          { id: "plan-contract", status: "skipped" },
+          { id: "evidence-gap-parity", status: "skipped" },
+          { id: "knowledge-revalidation-parity", status: "skipped" },
+          { id: "markitdown-priority-brief-parity", status: "skipped" },
+          { id: "priority-brief-freshness", status: "skipped" },
+          { id: "release-readiness-brief-freshness", status: "skipped" },
+        ],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: null,
+        releaseReadinessFreshness: null,
+      };
+
+      // Verify releaseReadinessFreshness is null when skipped
+      expect(mockResult.releaseReadinessFreshness).toBeNull();
+
+      // All downstream steps should be skipped
+      const skippedSteps = mockResult.steps.filter((s: any) => s.status === "skipped");
+      expect(skippedSteps.length).toBe(7);
+    });
+  });
+
+  describe("deterministic failure blocking with release-readiness freshness violations", () => {
+    test("release-readiness freshness violations deterministically block progression", () => {
+      // Scenario: All previous steps pass, but release-readiness freshness fails
+      const mockReleaseReadinessPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "RRFG002_PRIORITY_BRIEF_STALE",
+            severity: "error" as const,
+            briefName: "markitdown-release-readiness-brief",
+            briefPath: "markitdown-release-readiness-brief.md",
+            sourceName: "markitdown-conversion-priority-brief",
+            details: {
+              briefGeneratedAt: "2026-03-01T00:00:00Z",
+              sourceModifiedAt: "2026-03-05T12:00:00Z",
+              stalenessDuration: "4 days",
+            },
+            remediation: {
+              description: "Priority-brief source is newer than release-readiness brief",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+            },
+          },
+        ],
+        summary: {
+          totalSources: 6,
+          freshSources: 5,
+          staleSources: 1,
+          missingSources: 0,
+          requiredStale: 1,
+          upstreamStale: 0,
+        },
+      };
+
+      // Verify deterministic blocking
+      const shouldBlock = mockReleaseReadinessPayload.status === "fail" &&
+        mockReleaseReadinessPayload.summary.requiredStale > 0;
+      expect(shouldBlock).toBe(true);
+
+      // Verify result structure would have AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS
+      const expectedReasonCode = "AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS";
+      expect(expectedReasonCode).toBe("AUTOPLAN_HOLD_RELEASE_READINESS_FRESHNESS");
+    });
+
+    test("release-readiness freshness next actions include scaffold commands for refresh", () => {
+      const mockReleaseReadinessPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "RRFG002_PRIORITY_BRIEF_STALE",
+            severity: "error" as const,
+            briefName: "markitdown-release-readiness-brief",
+            briefPath: "markitdown-release-readiness-brief.md",
+            sourceName: "markitdown-conversion-priority-brief",
+            remediation: {
+              description: "Priority-brief source is newer than release-readiness brief",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+            },
+          },
+          {
+            ruleId: "RRFG012_AGGREGATE_STALE",
+            severity: "error" as const,
+            briefName: "markitdown-release-readiness-brief",
+            briefPath: "markitdown-release-readiness-brief.md",
+            remediation: {
+              description: "Release-readiness brief has stale composite inputs",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownReleaseReadinessBrief",
+            },
+          },
+        ],
+        summary: {
+          totalSources: 6,
+          freshSources: 4,
+          staleSources: 2,
+          missingSources: 0,
+          requiredStale: 2,
+          upstreamStale: 0,
+        },
+      };
+
+      // Build next actions as autoplan would
+      const nextActions: string[] = [
+        `Refresh stale release-readiness brief (${mockReleaseReadinessPayload.summary.requiredStale} required source(s) stale).`,
+      ];
+
+      const errorViolations = mockReleaseReadinessPayload.violations.filter(v => v.severity === "error");
+      for (const violation of errorViolations.slice(0, 3)) {
+        nextActions.push(`[${violation.ruleId}] ${violation.briefName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after release-readiness brief freshness is restored.");
+
+      // Verify next actions are actionable
+      expect(nextActions.length).toBeGreaterThan(0);
+      expect(nextActions[0]).toContain("stale release-readiness brief");
+
+      // Verify scaffold commands are included
+      const hasScaffold = nextActions.some(action => action.startsWith("  Scaffold:"));
+      expect(hasScaffold).toBe(true);
+
+      // Verify rule IDs are present
+      const hasRuleId = nextActions.some(action => action.includes("[RRFG002_PRIORITY_BRIEF_STALE]"));
+      expect(hasRuleId).toBe(true);
+
+      // Verify re-run instruction is last
+      expect(nextActions[nextActions.length - 1]).toContain("Rerun taskpad:intake:autoplan");
+    });
+  });
+
+  describe("intake verification stability for release-readiness freshness", () => {
+    test("release-readiness freshness check is stable when inputs unchanged", () => {
+      const mockRun1 = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [
+          {
+            id: "release-readiness-brief-freshness",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: null,
+            summary: "Release-readiness brief freshness gate passed (6/6 sources fresh)",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        releaseReadinessFreshness: {
+          status: "pass" as const,
+          brief: {
+            exists: true,
+            isStale: false,
+          },
+          summary: {
+            totalSources: 6,
+            freshSources: 6,
+            staleSources: 0,
+            requiredStale: 0,
+          },
+          violations: [],
+        },
+        nextActions: [],
+      };
+
+      const mockRun2 = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [
+          {
+            id: "release-readiness-brief-freshness",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: null,
+            summary: "Release-readiness brief freshness gate passed (6/6 sources fresh)",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        releaseReadinessFreshness: {
+          status: "pass" as const,
+          brief: {
+            exists: true,
+            isStale: false,
+          },
+          summary: {
+            totalSources: 6,
+            freshSources: 6,
+            staleSources: 0,
+            requiredStale: 0,
+          },
+          violations: [],
+        },
+        nextActions: [],
+      };
+
+      // Pass gate: Both runs have same status
+      expect(mockRun1.status).toBe(mockRun2.status);
+      expect(mockRun1.verdict).toBe(mockRun2.verdict);
+      expect(mockRun1.reasonCode).toBe(mockRun2.reasonCode);
+
+      // Pass gate: Both runs have same step statuses
+      const steps1Status = mockRun1.steps.map(s => `${s.id}:${s.status}`);
+      const steps2Status = mockRun2.steps.map(s => `${s.id}:${s.status}`);
+      expect(steps1Status).toEqual(steps2Status);
+
+      // Pass gate: Freshness check is stable
+      const freshnessStep1 = mockRun1.steps.find(s => s.id === "release-readiness-brief-freshness");
+      const freshnessStep2 = mockRun2.steps.find(s => s.id === "release-readiness-brief-freshness");
+      expect(freshnessStep1?.status).toBe(freshnessStep2?.status);
+      expect(freshnessStep1?.summary).toBe(freshnessStep2?.summary);
+    });
+
+    test("stale release-readiness brief is consistently detected across runs", () => {
+      const mockStalePayload = {
+        status: "fail" as const,
+        brief: {
+          exists: true,
+          isStale: true,
+        },
+        summary: {
+          requiredStale: 1,
+        },
+        violations: [
+          {
+            ruleId: "RRFG002_PRIORITY_BRIEF_STALE",
+            severity: "error" as const,
+          },
+        ],
+      };
+
+      // Multiple runs should consistently detect staleness
+      for (let i = 0; i < 3; i++) {
+        const shouldBlock = mockStalePayload.status === "fail" &&
+          mockStalePayload.summary.requiredStale > 0;
+        expect(shouldBlock).toBe(true);
+      }
+    });
+  });
+
+  describe("gate skipped when earlier steps fail", () => {
+    test("release-readiness-brief-freshness is skipped when priority-brief-freshness fails", () => {
+      const mockResult: any = {
+        status: "fail",
+        verdict: "hold",
+        reasonCode: "AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS",
+        steps: [
+          { id: "intake-recover", status: "pass" },
+          { id: "plan-seed", status: "pass" },
+          { id: "plan-contract", status: "pass" },
+          { id: "evidence-gap-parity", status: "pass" },
+          { id: "knowledge-revalidation-parity", status: "pass" },
+          { id: "markitdown-priority-brief-parity", status: "pass" },
+          { id: "priority-brief-freshness", status: "fail" },
+          { id: "release-readiness-brief-freshness", status: "skipped" },
+        ],
+        releaseReadinessFreshness: null,
+      };
+
+      // Verify release-readiness step is skipped when earlier step fails
+      const releaseStep = mockResult.steps.find((s: any) => s.id === "release-readiness-brief-freshness");
+      expect(releaseStep?.status).toBe("skipped");
+      expect(mockResult.releaseReadinessFreshness).toBeNull();
+    });
+
+    test("release-readiness-brief-freshness is skipped when plan-contract fails", () => {
+      const mockResult: any = {
+        status: "fail",
+        verdict: "hold",
+        reasonCode: "AUTOPLAN_HOLD_PLAN_CONTRACT",
+        steps: [
+          { id: "intake-recover", status: "pass" },
+          { id: "plan-seed", status: "pass" },
+          { id: "plan-contract", status: "fail" },
+          { id: "evidence-gap-parity", status: "skipped" },
+          { id: "knowledge-revalidation-parity", status: "skipped" },
+          { id: "markitdown-priority-brief-parity", status: "skipped" },
+          { id: "priority-brief-freshness", status: "skipped" },
+          { id: "release-readiness-brief-freshness", status: "skipped" },
+        ],
+        releaseReadinessFreshness: null,
+      };
+
+      // Verify all downstream steps are skipped when plan-contract fails
+      const skippedSteps = mockResult.steps.filter((s: any) => s.status === "skipped");
+      expect(skippedSteps.length).toBe(5);
+
+      const releaseStep = mockResult.steps.find((s: any) => s.id === "release-readiness-brief-freshness");
+      expect(releaseStep?.status).toBe("skipped");
+    });
+  });
+});

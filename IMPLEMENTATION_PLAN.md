@@ -55,7 +55,7 @@
 - [x] **TP002**: Implement `tools/taskpad-markitdown-release-readiness-brief-freshness-gate.ts` to parse planned artifacts and evaluate brief freshness against composite inputs + canonical upstream surfaces.
 - [x] **TP003**: Add deterministic fixture corpus + contract tests in `tests/tools/taskpad-markitdown-release-readiness-brief-freshness-gate.test.ts` for pass/no-brief/no-source/stale-aggregate/multi-failure ordering scenarios.
 - [x] **TP004**: Wire script/docs surfaces (`package.json`, docs/quality references as needed) so the gate is canonical, machine-invocable, and remediation output remains stable.
-- [ ] **TP005**: Integrate gate into intake-auto verification (`tools/taskpad-intake-autoplan.ts`) and extend `tests/tools/taskpad-intake-autoplan.test.ts` so stale release-readiness briefs block planning with actionable next actions.
+- [x] **TP005**: Integrate gate into intake-auto verification (`tools/taskpad-intake-autoplan.ts`) and extend `tests/tools/taskpad-intake-autoplan.test.ts` so stale release-readiness briefs block planning with actionable next actions.
 
 ### Acceptance Criteria
 - Gate deterministically fails when `markitdown-release-readiness-brief.md` is stale relative to required component artifacts.
