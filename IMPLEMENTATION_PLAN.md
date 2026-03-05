@@ -48,7 +48,7 @@
 
 ### Task Graph
 - [x] **TP001**: Specify `knowledge-trust-kickoff-brief.md` contract (inputs, deterministic ranking/tie-breaks, dedupe rules, truncation semantics, diagnostics defaults).
-- [ ] **TP002**: Implement shared builder utilities that merge unresolved trust dashboard entries with state-sync/history context and emit stable `recommended_next_action` output.
+- [x] **TP002**: Implement shared builder utilities that merge unresolved trust dashboard entries with state-sync/history context and emit stable `recommended_next_action` output.
 - [ ] **TP003**: Implement deterministic `knowledge-trust-kickoff-brief.md` exporter/renderer with explicit empty-state and bounded metadata behavior.
 - [ ] **TP004**: Wire refresh into save flow surfaces (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeTrustKickoffBrief.ts`, `src/popup/save.ts`) with non-fatal save behavior.
 - [ ] **TP005**: Add `tests/content/shared/knowledge-trust-kickoff-brief.test.ts` coverage for ranking, dedupe, truncation, and rerun determinism.
