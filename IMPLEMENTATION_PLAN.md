@@ -9,6 +9,69 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-04): Priority-brief freshness gate for stale kickoff context prevention
+
+### Distilled Scope
+**Problem**
+- `knowledge-trust-kickoff-brief.md` and `markitdown-conversion-priority-brief.md` now drive session-start prioritization, but current parity gates only validate wiring presence, not freshness versus upstream source artifacts.
+- A stale brief can pass wiring checks while silently lagging behind `knowledge-trust-dashboard*.md` or MarkItDown review/state-sync updates, causing AI coding/writing sessions to start from outdated risk priorities.
+- With no unchecked intake items and `SCRATCHPAD.md` still anchored on MarkItDown impact, the highest-impact low-risk next slice is a deterministic freshness gate that blocks stale briefing artifacts before release.
+
+**In scope**
+- Add deterministic `taskpad:priority-brief-freshness-gate` that validates the newest generated kickoff briefs are fresh versus source artifact fingerprints/mtime windows.
+- Cover both brief families:
+  - `knowledge-trust-kickoff-brief.md` against `knowledge-trust-dashboard.md`, `knowledge-trust-dashboard-state-sync.md`, `knowledge-trust-dashboard-history.ndjson`
+  - `markitdown-conversion-priority-brief.md` against `markitdown-conversion-review-inbox.md`, `markitdown-conversion-state-sync.md`, `markitdown-conversion-history.ndjson`
+- Emit stable rule IDs + machine-readable remediation hints with one scaffold command when staleness is detected.
+- Add focused tooling tests + intake-auto integration so stale briefs fail canonical verification deterministically.
+
+**Out of scope**
+- Changing brief ranking logic or markdown schemas.
+- Refactoring save-flow orchestration beyond adding freshness verification.
+- New UI surfaces or broader telemetry redesign.
+
+### Ideation Candidates Considered
+1. **[RELIABILITY]** Add deterministic `taskpad:priority-brief-freshness-gate` to fail when kickoff briefs are stale versus trust/MarkItDown source artifacts. **(selected)**
+2. **[PRODUCT]** Add deterministic `session-priority-brief.md` that merges trust + MarkItDown priority briefs into one unified kickoff artifact.
+3. **[OBSERVABILITY]** Add `priority-brief-refresh-history.ndjson` telemetry (`brief_name`, `source_fingerprint`, `stale_rule_id`, `generated_at`) for drift traceability.
+
+### Repo Context Handoff
+- Intake context:
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md`
+  - `IMPLEMENTATION_PLAN.md` recent brief/parity slices
+- Existing brief + source contracts:
+  - `src/shared/*knowledgeTrust*`
+  - `src/shared/*markitdown*priority*`
+  - `src/background/handlers/refreshKnowledgeTrustKickoffBrief.ts`
+  - `src/background/handlers/refreshMarkitdownConversionPriorityBrief.ts`
+- Tooling surfaces to extend:
+  - `tools/taskpad-intake-autoplan.ts`
+  - `tests/tools/taskpad-intake-autoplan.test.ts`
+  - new gate + test files under `tools/` and `tests/tools/`
+
+### Task Graph
+- [x] **TP001**: Specify freshness gate contract (source↔brief mapping, staleness heuristics, deterministic fingerprint precedence, rule IDs, remediation payload schema).
+- [ ] **TP002**: Implement `tools/taskpad-priority-brief-freshness-gate.ts` to evaluate freshness for trust + MarkItDown briefing artifacts using deterministic source evidence ordering.
+- [ ] **TP003**: Add deterministic fixture corpus + tests in `tests/tools/taskpad-priority-brief-freshness-gate.test.ts` for pass/no-brief/no-source/stale-trust/stale-markitdown/multi-failure ordering cases.
+- [ ] **TP004**: Wire script/integration surfaces (`package.json`, docs/quality references as needed) so the gate is canonical and machine-invocable.
+- [ ] **TP005**: Integrate gate into intake-auto verification flow and extend `tests/tools/taskpad-intake-autoplan.test.ts` so freshness failures block planning with actionable next actions.
+
+### Acceptance Criteria
+- Gate deterministically fails when either kickoff brief is older/staler than its required source artifact set.
+- Failure output includes stable rule IDs, machine-readable remediation hints, and one scaffold command.
+- Tests lock deterministic pass/fail/no-input behavior and failure ordering.
+- `verify:taskpad:intake:auto` includes the freshness gate as a blocking reliability check.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-priority-brief-freshness-gate.test.ts
+bun run taskpad:priority-brief-freshness-gate -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --project-root . --format json
+bun test tests/tools/taskpad-intake-autoplan.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-04): MarkItDown priority-brief refresh contract parity gate
 
 ### Distilled Scope
