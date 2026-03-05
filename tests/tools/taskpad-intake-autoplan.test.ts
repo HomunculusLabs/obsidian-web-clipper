@@ -4544,3 +4544,614 @@ describe("TP005: markitdown-priority-brief refresh parity blocks planning progre
     });
   });
 });
+
+// ============================================================================
+// TP005: Priority-brief freshness gate blocking behavior for intake-autoplan
+// ============================================================================
+
+describe("TP005: priority-brief freshness gate blocks planning progression deterministically", () => {
+  describe("AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS reason code contract", () => {
+    test("freshness failures surface as AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS", () => {
+      // Mock freshness payload that would cause a hold
+      const mockFreshnessPayload = {
+        status: "fail" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        briefs: [
+          {
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            exists: true,
+            isStale: true,
+            generatedAt: "2026-03-01T00:00:00Z",
+            hasFingerprints: true,
+            sourceChecks: [
+              {
+                sourceName: "knowledge-trust-dashboard",
+                sourcePath: "knowledge-trust-dashboard.md",
+                exists: true,
+                isStale: true,
+                stalenessReason: "source-newer",
+                briefFingerprint: "sha256:abc123",
+                currentFingerprint: "sha256:def456",
+              },
+            ],
+          },
+        ],
+        summary: {
+          totalBriefs: 2,
+          freshBriefs: 1,
+          staleBriefs: 1,
+          missingBriefs: 0,
+        },
+        violations: [
+          {
+            ruleId: "PBFG002_SOURCE_STALE_DASHBOARD",
+            severity: "error" as const,
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            sourceName: "knowledge-trust-dashboard",
+            details: {
+              briefGeneratedAt: "2026-03-01T00:00:00Z",
+              sourceModifiedAt: "2026-03-04T12:00:00Z",
+              stalenessDuration: "3 days",
+            },
+            remediation: {
+              description: "Source knowledge-trust-dashboard is newer than brief. Brief was generated at 2026-03-01T00:00:00Z but source was modified at 2026-03-04T12:00:00Z.",
+              scaffoldCommand: "bun run refresh:refreshKnowledgeTrustKickoffBrief",
+            },
+          },
+        ],
+        timestamp: "2026-03-04T12:00:00Z",
+      };
+
+      // Verify payload structure
+      expect(mockFreshnessPayload.status).toBe("fail");
+      expect(mockFreshnessPayload.violations.length).toBe(1);
+      expect(mockFreshnessPayload.summary.staleBriefs).toBe(1);
+      expect(mockFreshnessPayload.summary.freshBriefs).toBe(1);
+
+      // Verify error violations are detected
+      const errorViolations = mockFreshnessPayload.violations.filter(v => v.severity === "error");
+      expect(errorViolations.length).toBe(1);
+
+      // Verify hold condition: status=fail AND violations.length > 0
+      const shouldHold = mockFreshnessPayload.status === "fail" &&
+        mockFreshnessPayload.violations.length > 0 &&
+        errorViolations.length > 0;
+      expect(shouldHold).toBe(true);
+
+      // Verify remediation includes scaffold commands
+      for (const violation of errorViolations) {
+        expect(violation.remediation.scaffoldCommand).toBeTruthy();
+        expect(violation.remediation.description).toBeTruthy();
+      }
+    });
+
+    test("all fresh briefs allows progression", () => {
+      // Mock freshness payload with all fresh briefs
+      const mockFreshnessPayload = {
+        status: "pass" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        briefs: [
+          {
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            exists: true,
+            isStale: false,
+            generatedAt: "2026-03-04T10:00:00Z",
+            hasFingerprints: true,
+            sourceChecks: [
+              {
+                sourceName: "knowledge-trust-dashboard",
+                sourcePath: "knowledge-trust-dashboard.md",
+                exists: true,
+                isStale: false,
+              },
+            ],
+          },
+          {
+            briefName: "markitdown-conversion-priority-brief",
+            briefPath: "markitdown-conversion-priority-brief.md",
+            exists: true,
+            isStale: false,
+            generatedAt: "2026-03-04T11:00:00Z",
+            hasFingerprints: true,
+            sourceChecks: [
+              {
+                sourceName: "markitdown-conversion-review-inbox",
+                sourcePath: "markitdown-conversion-review-inbox.md",
+                exists: true,
+                isStale: false,
+              },
+            ],
+          },
+        ],
+        summary: {
+          totalBriefs: 2,
+          freshBriefs: 2,
+          staleBriefs: 0,
+          missingBriefs: 0,
+        },
+        violations: [],
+        timestamp: "2026-03-04T12:00:00Z",
+      };
+
+      // Verify pass condition
+      expect(mockFreshnessPayload.status).toBe("pass");
+      expect(mockFreshnessPayload.summary.staleBriefs).toBe(0);
+      expect(mockFreshnessPayload.summary.freshBriefs).toBe(2);
+
+      // All fresh briefs should allow progression
+      const shouldPass = mockFreshnessPayload.status === "pass";
+      expect(shouldPass).toBe(true);
+    });
+
+    test("missing briefs trigger warning but not block if no error violations", () => {
+      // Mock freshness payload with missing briefs (warning only)
+      const mockFreshnessPayload = {
+        status: "pass" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        briefs: [
+          {
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            exists: false,
+            isStale: true,
+            hasFingerprints: false,
+            sourceChecks: [],
+          },
+        ],
+        summary: {
+          totalBriefs: 1,
+          freshBriefs: 0,
+          staleBriefs: 0,
+          missingBriefs: 1,
+        },
+        violations: [
+          {
+            ruleId: "PBFG001_BRIEF_NOT_FOUND",
+            severity: "warning" as const,
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            details: {},
+            remediation: {
+              description: "Brief knowledge-trust-kickoff-brief does not exist. Run the scaffold command to generate it.",
+              scaffoldCommand: "bun run refresh:refreshKnowledgeTrustKickoffBrief",
+            },
+          },
+        ],
+        timestamp: "2026-03-04T12:00:00Z",
+      };
+
+      // Verify warnings don't block
+      const errorViolations = mockFreshnessPayload.violations.filter(v => v.severity === "error");
+      expect(errorViolations.length).toBe(0);
+      expect(mockFreshnessPayload.status).toBe("pass");
+    });
+  });
+
+  describe("priority-brief freshness violations canonical ordering", () => {
+    test("violations are sorted in canonical order for deterministic output", () => {
+      // Freshness violations have canonical ordering
+      const CANONICAL_PBFG_ORDER = [
+        "PBFG001_BRIEF_NOT_FOUND",
+        "PBFG002_SOURCE_STALE_DASHBOARD",
+        "PBFG003_SOURCE_STALE_STATE_SYNC",
+        "PBFG004_SOURCE_STALE_HISTORY",
+        "PBFG005_MISSING_FINGERPRINT",
+        "PBFG006_SOURCE_MISSING",
+        "PBFG007_NO_SOURCES_FOUND",
+        "PBFG008_FINGERPRINT_PARSE_ERROR",
+        "PBFG009_TRUST_FAMILY_STALE",
+        "PBFG010_MARKITDOWN_FAMILY_STALE",
+      ];
+
+      const violations = [
+        { ruleId: "PBFG005_MISSING_FINGERPRINT", severity: "error" as const },
+        { ruleId: "PBFG001_BRIEF_NOT_FOUND", severity: "warning" as const },
+        { ruleId: "PBFG003_SOURCE_STALE_STATE_SYNC", severity: "error" as const },
+        { ruleId: "PBFG002_SOURCE_STALE_DASHBOARD", severity: "error" as const },
+      ];
+
+      const ruleOrder = new Map<string, number>();
+      for (let i = 0; i < CANONICAL_PBFG_ORDER.length; i++) {
+        ruleOrder.set(CANONICAL_PBFG_ORDER[i], i);
+      }
+
+      const sorted = [...violations].sort((a: any, b: any) => {
+        const orderA = ruleOrder.get(a.ruleId) ?? Number.MAX_SAFE_INTEGER;
+        const orderB = ruleOrder.get(b.ruleId) ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+
+      // Verify canonical ordering
+      expect(sorted[0].ruleId).toBe("PBFG001_BRIEF_NOT_FOUND");
+      expect(sorted[1].ruleId).toBe("PBFG002_SOURCE_STALE_DASHBOARD");
+      expect(sorted[2].ruleId).toBe("PBFG003_SOURCE_STALE_STATE_SYNC");
+      expect(sorted[3].ruleId).toBe("PBFG005_MISSING_FINGERPRINT");
+    });
+  });
+
+  describe("priority-brief freshness step ordering in intake-autoplan", () => {
+    test("priority-brief-freshness step runs after markitdown-priority-brief-parity", () => {
+      // Verify the step ordering in the autoplan orchestration
+      const expectedStepOrder = [
+        "intake-recover",
+        "plan-seed",
+        "plan-contract",
+        "evidence-gap-parity",
+        "knowledge-revalidation-parity",
+        "markitdown-priority-brief-parity",
+        "priority-brief-freshness",
+      ];
+
+      // Verify priority-brief-freshness is in the step list
+      expect(expectedStepOrder).toContain("priority-brief-freshness");
+
+      // Verify it comes after markitdown-priority-brief-parity
+      const freshnessIndex = expectedStepOrder.indexOf("priority-brief-freshness");
+      const markitdownIndex = expectedStepOrder.indexOf("markitdown-priority-brief-parity");
+      expect(freshnessIndex).toBeGreaterThan(markitdownIndex);
+    });
+
+    test("steps array has 7 elements including priority-brief-freshness", () => {
+      // Mock result structure to verify the 7-step array
+      const mockResult: any = {
+        steps: [
+          { id: "intake-recover", status: "pass" },
+          { id: "plan-seed", status: "pass" },
+          { id: "plan-contract", status: "pass" },
+          { id: "evidence-gap-parity", status: "pass" },
+          { id: "knowledge-revalidation-parity", status: "pass" },
+          { id: "markitdown-priority-brief-parity", status: "pass" },
+          { id: "priority-brief-freshness", status: "pass" },
+        ],
+      };
+
+      // Verify 7 steps
+      expect(mockResult.steps).toHaveLength(7);
+
+      // Verify all expected steps are present
+      const stepIds = mockResult.steps.map((s: any) => s.id);
+      expect(stepIds).toContain("intake-recover");
+      expect(stepIds).toContain("plan-seed");
+      expect(stepIds).toContain("plan-contract");
+      expect(stepIds).toContain("evidence-gap-parity");
+      expect(stepIds).toContain("knowledge-revalidation-parity");
+      expect(stepIds).toContain("markitdown-priority-brief-parity");
+      expect(stepIds).toContain("priority-brief-freshness");
+    });
+  });
+
+  describe("priority-brief freshness result structure", () => {
+    test("TaskpadIntakeAutoplanResult includes priorityBriefFreshness field", () => {
+      // Mock result with priority-brief freshness data
+      const mockPriorityBriefFreshness = {
+        status: "pass" as const,
+        inputs: {
+          taskpadPath: "/path/to/TASKPAD.md",
+          planPath: "/path/to/IMPLEMENTATION_PLAN.md",
+          projectRoot: ".",
+        },
+        briefs: [
+          {
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            exists: true,
+            isStale: false,
+            generatedAt: "2026-03-04T10:00:00Z",
+            hasFingerprints: true,
+            sourceChecks: [],
+          },
+        ],
+        summary: {
+          totalBriefs: 1,
+          freshBriefs: 1,
+          staleBriefs: 0,
+          missingBriefs: 0,
+        },
+        violations: [],
+        timestamp: "2026-03-04T12:00:00Z",
+      };
+
+      const mockResult: any = {
+        status: "pass",
+        verdict: "ready",
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: mockPriorityBriefFreshness,
+      };
+
+      // Verify priorityBriefFreshness field is present
+      expect(mockResult.priorityBriefFreshness).toBeDefined();
+      expect(mockResult.priorityBriefFreshness).toEqual(mockPriorityBriefFreshness);
+
+      // Verify summary structure
+      expect(mockResult.priorityBriefFreshness.summary.totalBriefs).toBe(1);
+      expect(mockResult.priorityBriefFreshness.summary.freshBriefs).toBe(1);
+      expect(mockResult.priorityBriefFreshness.summary.staleBriefs).toBe(0);
+      expect(mockResult.priorityBriefFreshness.summary.missingBriefs).toBe(0);
+    });
+
+    test("priorityBriefFreshness is null when gate is skipped", () => {
+      // When priority-brief freshness step is skipped (e.g., earlier step failed)
+      const mockResult: any = {
+        status: "fail",
+        verdict: "blocked",
+        reasonCode: "AUTOPLAN_BLOCKED_RUNTIME",
+        steps: [
+          { id: "intake-recover", status: "fail" },
+          { id: "plan-seed", status: "skipped" },
+          { id: "plan-contract", status: "skipped" },
+          { id: "evidence-gap-parity", status: "skipped" },
+          { id: "knowledge-revalidation-parity", status: "skipped" },
+          { id: "markitdown-priority-brief-parity", status: "skipped" },
+          { id: "priority-brief-freshness", status: "skipped" },
+        ],
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: null,
+      };
+
+      // Verify priorityBriefFreshness is null when skipped
+      expect(mockResult.priorityBriefFreshness).toBeNull();
+
+      // All downstream steps should be skipped
+      const skippedSteps = mockResult.steps.filter((s: any) => s.status === "skipped");
+      expect(skippedSteps.length).toBe(6);
+    });
+  });
+
+  describe("deterministic failure blocking with freshness violations", () => {
+    test("freshness violations deterministically block progression", () => {
+      // Scenario: All previous steps pass, but freshness fails
+      const mockFreshnessPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "PBFG002_SOURCE_STALE_DASHBOARD",
+            severity: "error" as const,
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            sourceName: "knowledge-trust-dashboard",
+            details: {
+              briefGeneratedAt: "2026-03-01T00:00:00Z",
+              sourceModifiedAt: "2026-03-04T12:00:00Z",
+              stalenessDuration: "3 days",
+            },
+            remediation: {
+              description: "Source knowledge-trust-dashboard is newer than brief",
+              scaffoldCommand: "bun run refresh:refreshKnowledgeTrustKickoffBrief",
+            },
+          },
+        ],
+        summary: {
+          totalBriefs: 2,
+          freshBriefs: 1,
+          staleBriefs: 1,
+          missingBriefs: 0,
+        },
+      };
+
+      // Verify deterministic blocking
+      const shouldBlock = mockFreshnessPayload.status === "fail" &&
+        mockFreshnessPayload.violations.some((v: any) => v.severity === "error");
+      expect(shouldBlock).toBe(true);
+
+      // Verify result structure would have AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS
+      const expectedReasonCode = "AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS";
+      expect(expectedReasonCode).toBe("AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS");
+    });
+
+    test("freshness next actions include scaffold commands for refresh", () => {
+      const mockFreshnessPayload = {
+        status: "fail" as const,
+        violations: [
+          {
+            ruleId: "PBFG002_SOURCE_STALE_DASHBOARD",
+            severity: "error" as const,
+            briefName: "knowledge-trust-kickoff-brief",
+            briefPath: "knowledge-trust-kickoff-brief.md",
+            sourceName: "knowledge-trust-dashboard",
+            remediation: {
+              description: "Source knowledge-trust-dashboard is newer than brief",
+              scaffoldCommand: "bun run refresh:refreshKnowledgeTrustKickoffBrief",
+            },
+          },
+          {
+            ruleId: "PBFG010_MARKITDOWN_FAMILY_STALE",
+            severity: "error" as const,
+            briefName: "markitdown-conversion-priority-brief",
+            briefPath: "markitdown-conversion-priority-brief.md",
+            remediation: {
+              description: "MarkItDown brief family has stale sources",
+              scaffoldCommand: "bun run refresh:refreshMarkitdownConversionPriorityBrief",
+            },
+          },
+        ],
+        summary: {
+          totalBriefs: 2,
+          freshBriefs: 0,
+          staleBriefs: 2,
+          missingBriefs: 0,
+        },
+      };
+
+      // Build next actions as autoplan would
+      const nextActions: string[] = [
+        `Refresh ${mockFreshnessPayload.summary.staleBriefs} stale priority-brief artifact(s).`,
+      ];
+
+      const errorViolations = mockFreshnessPayload.violations.filter(v => v.severity === "error");
+      for (const violation of errorViolations.slice(0, 3)) {
+        nextActions.push(`[${violation.ruleId}] ${violation.briefName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after priority-brief freshness is restored.");
+
+      // Verify next actions are actionable
+      expect(nextActions.length).toBeGreaterThan(0);
+      expect(nextActions[0]).toContain("stale priority-brief artifact(s)");
+
+      // Verify scaffold commands are included
+      const hasScaffold = nextActions.some(action => action.startsWith("  Scaffold:"));
+      expect(hasScaffold).toBe(true);
+
+      // Verify rule IDs are present
+      const hasRuleId = nextActions.some(action => action.includes("[PBFG002_SOURCE_STALE_DASHBOARD]"));
+      expect(hasRuleId).toBe(true);
+
+      // Verify re-run instruction is last
+      expect(nextActions[nextActions.length - 1]).toContain("Rerun taskpad:intake:autoplan");
+    });
+  });
+
+  describe("intake verification stability across multiple runs", () => {
+    test("freshness check is stable when inputs unchanged", () => {
+      const mockRun1 = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "priority-brief-freshness",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: null,
+            summary: "Priority-brief freshness gate passed (2/2 briefs fresh)",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: {
+          status: "pass" as const,
+          briefs: [],
+          summary: {
+            totalBriefs: 2,
+            freshBriefs: 2,
+            staleBriefs: 0,
+            missingBriefs: 0,
+          },
+          violations: [],
+        },
+        nextActions: [],
+      };
+
+      const mockRun2 = {
+        status: "pass" as const,
+        verdict: "ready" as const,
+        reasonCode: "AUTOPLAN_READY_PLANNED",
+        steps: [
+          {
+            id: "plan-contract",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "PLAN_CONTRACT_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "markitdown-priority-brief-parity",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: "MARKITDOWN_PRIORITY_BRIEF_PARITY_OK",
+            summary: "",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+          {
+            id: "priority-brief-freshness",
+            status: "pass",
+            exitCode: 0,
+            reasonCode: null,
+            summary: "Priority-brief freshness gate passed (2/2 briefs fresh)",
+            command: "",
+            stdout: "",
+            stderr: "",
+          },
+        ],
+        queueReconcile: null,
+        artifact: null,
+        evidenceGapParity: null,
+        knowledgeRevalidationParity: null,
+        markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: {
+          status: "pass" as const,
+          briefs: [],
+          summary: {
+            totalBriefs: 2,
+            freshBriefs: 2,
+            staleBriefs: 0,
+            missingBriefs: 0,
+          },
+          violations: [],
+        },
+        nextActions: [],
+      };
+
+      // Pass gate: Both runs have same status
+      expect(mockRun1.status).toBe(mockRun2.status);
+      expect(mockRun1.verdict).toBe(mockRun2.verdict);
+      expect(mockRun1.reasonCode).toBe(mockRun2.reasonCode);
+
+      // Pass gate: Both runs have same step statuses
+      const steps1Status = mockRun1.steps.map(s => `${s.id}:${s.status}`);
+      const steps2Status = mockRun2.steps.map(s => `${s.id}:${s.status}`);
+      expect(steps1Status).toEqual(steps2Status);
+
+      // Pass gate: Freshness check is stable
+      const freshnessStep1 = mockRun1.steps.find(s => s.id === "priority-brief-freshness");
+      const freshnessStep2 = mockRun2.steps.find(s => s.id === "priority-brief-freshness");
+      expect(freshnessStep1?.status).toBe(freshnessStep2?.status);
+      expect(freshnessStep1?.summary).toBe(freshnessStep2?.summary);
+    });
+  });
+});

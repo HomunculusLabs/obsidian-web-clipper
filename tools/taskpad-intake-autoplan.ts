@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import type { QueueReconcileResult } from "./lib/taskpad-queue-reconcile";
 import type { TaskpadWritePreflightResult, TaskpadWritePreflightReasonCode } from "./taskpad-write-preflight";
 
-type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity" | "knowledge-revalidation-parity" | "markitdown-priority-brief-parity";
+type AutoplanStepId = "intake-recover" | "plan-seed" | "plan-contract" | "evidence-gap-parity" | "knowledge-revalidation-parity" | "markitdown-priority-brief-parity" | "priority-brief-freshness";
 type AutoplanStepStatus = "pass" | "fail" | "skipped";
 type AutoplanVerdict = "ready" | "hold" | "blocked";
 
@@ -62,6 +62,63 @@ interface MarkitdownPriorityBriefParityPayload {
   };
 }
 
+interface PriorityBriefFreshnessPayload {
+  status: "pass" | "fail";
+  inputs: {
+    taskpadPath: string;
+    planPath: string;
+    projectRoot: string;
+    vaultPath?: string;
+  };
+  briefs: {
+    briefName: string;
+    briefPath: string;
+    exists: boolean;
+    isStale: boolean;
+    generatedAt?: string;
+    hasFingerprints: boolean;
+    sourceChecks: {
+      sourceName: string;
+      sourcePath: string;
+      exists: boolean;
+      isStale: boolean;
+      stalenessReason?: string;
+      briefFingerprint?: string;
+      currentFingerprint?: string;
+      briefMtime?: string;
+      sourceMtime?: string;
+    }[];
+  }[];
+  summary: {
+    totalBriefs: number;
+    freshBriefs: number;
+    staleBriefs: number;
+    missingBriefs: number;
+  };
+  violations: FreshnessViolation[];
+  timestamp: string;
+}
+
+interface FreshnessViolation {
+  ruleId: string;
+  severity: "error" | "warning";
+  briefName: string;
+  briefPath: string;
+  sourceName?: string;
+  sourcePath?: string;
+  details: {
+    briefFingerprint?: string;
+    currentFingerprint?: string;
+    briefGeneratedAt?: string;
+    sourceModifiedAt?: string;
+    stalenessDuration?: string;
+  };
+  remediation: {
+    description: string;
+    scaffoldCommand: string;
+  };
+}
+
 interface EvidenceGapParityViolation {
   ruleId: string;
   severity: "error" | "warning";
@@ -104,12 +161,13 @@ interface TaskpadIntakeAutoplanResult {
   selectedBacklogLine: number | null;
   plannedMarker: string | null;
   newSliceHeading: string | null;
-  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
+  steps: [AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult, AutoplanStepResult];
   queueReconcile: QueueReconcileResult | null;
   artifact: PlanSeedArtifactMetadata;
   evidenceGapParity: EvidenceGapParityPayload | null;
   knowledgeRevalidationParity: KnowledgeRevalidationParityPayload | null;
   markitdownPriorityBriefParity: MarkitdownPriorityBriefParityPayload | null;
+  priorityBriefFreshness: PriorityBriefFreshnessPayload | null;
   nextActions: string[];
 }
 
@@ -177,6 +235,7 @@ const AUTOPLAN_HOLD_STRICT_ACTIVE_SLICE = "AUTOPLAN_HOLD_STRICT_ACTIVE_SLICE";
 const AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY = "AUTOPLAN_HOLD_EVIDENCE_GAP_PARITY";
 const AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY = "AUTOPLAN_HOLD_KNOWLEDGE_REVALIDATION_PARITY";
 const AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY = "AUTOPLAN_HOLD_MARKITDOWN_PRIORITY_BRIEF_PARITY";
+const AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS = "AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS";
 const AUTOPLAN_BLOCKED_RUNTIME = "AUTOPLAN_BLOCKED_RUNTIME";
 
 const STRICT_MODE_RULE_NO_UNCHECKED = "PLI009_NO_UNCHECKED_TP_TASKS";
@@ -587,6 +646,68 @@ function parseMarkitdownPriorityBriefParityPayload(stdout: string): MarkitdownPr
   }
 }
 
+function parsePriorityBriefFreshnessPayload(stdout: string): PriorityBriefFreshnessPayload | null {
+  // The priority-brief-freshness-gate outputs raw JSON when --format json is used
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null) {
+      return null;
+    }
+
+    const report = parsed as Record<string, unknown>;
+
+    // Validate required fields
+    if (report.status !== "pass" && report.status !== "fail") {
+      return null;
+    }
+
+    if (typeof report.inputs !== "object" || report.inputs === null) {
+      return null;
+    }
+
+    if (!Array.isArray(report.briefs)) {
+      return null;
+    }
+
+    if (typeof report.summary !== "object" || report.summary === null) {
+      return null;
+    }
+
+    if (!Array.isArray(report.violations)) {
+      return null;
+    }
+
+    const summary = report.summary as Record<string, unknown>;
+    if (typeof summary.totalBriefs !== "number" ||
+        typeof summary.freshBriefs !== "number" ||
+        typeof summary.staleBriefs !== "number" ||
+        typeof summary.missingBriefs !== "number") {
+      return null;
+    }
+
+    return {
+      status: report.status,
+      inputs: report.inputs as PriorityBriefFreshnessPayload["inputs"],
+      briefs: report.briefs as PriorityBriefFreshnessPayload["briefs"],
+      summary: {
+        totalBriefs: summary.totalBriefs,
+        freshBriefs: summary.freshBriefs,
+        staleBriefs: summary.staleBriefs,
+        missingBriefs: summary.missingBriefs,
+      },
+      violations: report.violations as FreshnessViolation[],
+      timestamp: report.timestamp as string,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function makeSkippedStep(id: AutoplanStepId, command: string, reasonCode: string, summary: string): AutoplanStepResult {
   return {
     id,
@@ -628,6 +749,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
   let parityStep: AutoplanStepResult;
   let knowledgeRevalidationParityStep: AutoplanStepResult;
   let markitdownPriorityBriefParityStep: AutoplanStepResult;
+  let freshnessStep: AutoplanStepResult;
 
   if (!recoverPayload) {
     recoverStep = {
@@ -677,6 +799,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       "Skipped because intake-recover did not return a ready verdict.",
     );
 
+    freshnessStep = makeSkippedStep(
+      "priority-brief-freshness",
+      buildCommand("taskpad:priority-brief-freshness-gate", ["--taskpad", taskpadPath, "--plan", planPath, "--project-root", ".", "--format", "json"]),
+      SKIP_RECOVER_NOT_READY,
+      "Skipped because intake-recover did not return a ready verdict.",
+    );
+
     return {
       status: "fail",
       verdict: "blocked",
@@ -686,7 +815,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       selectedBacklogLine: null,
       plannedMarker: null,
       newSliceHeading: null,
-      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
       queueReconcile: null,
       artifact: {
         artifactPath: null,
@@ -696,6 +825,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
       nextActions: [
         "Inspect taskpad:intake:recover output contract markers and rerun taskpad:intake:autoplan.",
         "Resolve runtime/contract issues before retrying orchestration.",
@@ -774,6 +904,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
       evidenceGapParity: null,
       knowledgeRevalidationParity: null,
       markitdownPriorityBriefParity: null,
+      priorityBriefFreshness: null,
       nextActions: [
         "Fix intake-recover exit semantics so ready maps to exit 0 and non-ready maps to non-zero.",
         "Rerun taskpad:intake:autoplan after contract semantics are restored.",
@@ -842,7 +973,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         selectedBacklogLine: null,
         plannedMarker: null,
         newSliceHeading: null,
-        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
         queueReconcile: null,
         artifact: {
           artifactPath: null,
@@ -852,6 +983,7 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
         evidenceGapParity: null,
         knowledgeRevalidationParity: null,
         markitdownPriorityBriefParity: null,
+        priorityBriefFreshness: null,
         nextActions: [
           "Follow intake-recover next actions and rerun taskpad:intake:autoplan once intake is ready.",
           "Keep plan-seed and plan-contract skipped until recovery reaches ready.",
@@ -1856,6 +1988,159 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     stderr: markitdownParityRun.stderr,
   };
 
+  // Priority-brief freshness gate runs after markitdown-priority-brief parity passes
+  const freshnessRun = runScript("taskpad:priority-brief-freshness-gate", [
+    "--taskpad", taskpadPath,
+    "--plan", planPath,
+    "--project-root", ".",
+    "--format", "json",
+  ]);
+  const freshnessPayload = parsePriorityBriefFreshnessPayload(freshnessRun.stdout);
+
+  if (!freshnessPayload) {
+    freshnessStep = {
+      id: "priority-brief-freshness",
+      command: freshnessRun.command,
+      status: "fail",
+      exitCode: freshnessRun.exitCode,
+      reasonCode: "PRIORITY_BRIEF_FRESHNESS_JSON_MISSING_OR_INVALID",
+      summary: "Priority-brief freshness gate did not emit a parseable machine-readable payload.",
+      stdout: freshnessRun.stdout,
+      stderr: freshnessRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: knowledgeRevalidationPayload,
+      markitdownPriorityBriefParity: markitdownPayload,
+      priorityBriefFreshness: null,
+      nextActions: [
+        "Fix taskpad:priority-brief-freshness-gate output contract markers.",
+        "Ensure the gate returns valid JSON with status, briefs, violations, and summary fields.",
+      ],
+    };
+  }
+
+  const freshnessContractValid =
+    (freshnessPayload.status === "pass" && freshnessRun.exitCode === 0) ||
+    (freshnessPayload.status === "fail" && freshnessRun.exitCode !== 0);
+
+  if (!freshnessContractValid) {
+    freshnessStep = {
+      id: "priority-brief-freshness",
+      command: freshnessRun.command,
+      status: "fail",
+      exitCode: freshnessRun.exitCode,
+      reasonCode: "PRIORITY_BRIEF_FRESHNESS_EXIT_SEMANTICS_INVALID",
+      summary: "Priority-brief freshness output violated deterministic status/exit semantics.",
+      stdout: freshnessRun.stdout,
+      stderr: freshnessRun.stderr,
+    };
+
+    return {
+      status: "fail",
+      verdict: "blocked",
+      reasonCode: AUTOPLAN_BLOCKED_RUNTIME,
+      taskpadPath,
+      planPath,
+      selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+      plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+      newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+      steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
+      queueReconcile: seedPayload.queueReconcile,
+      artifact: seedPayload.artifact,
+      evidenceGapParity: evidenceGapPayload,
+      knowledgeRevalidationParity: knowledgeRevalidationPayload,
+      markitdownPriorityBriefParity: markitdownPayload,
+      priorityBriefFreshness: freshnessPayload,
+      nextActions: [
+        "Repair priority-brief freshness exit semantics so pass exits 0 and fail exits non-zero.",
+        "Rerun taskpad:intake:autoplan after freshness contract is restored.",
+      ],
+    };
+  }
+
+  // Check if freshness gate failed with violations
+  if (freshnessPayload.status === "fail" && freshnessPayload.violations.length > 0) {
+    const errorViolations = freshnessPayload.violations.filter(v => v.severity === "error");
+    const hasStaleBriefs = freshnessPayload.summary.staleBriefs > 0;
+
+    if (errorViolations.length > 0 || hasStaleBriefs) {
+      freshnessStep = {
+        id: "priority-brief-freshness",
+        command: freshnessRun.command,
+        status: "fail",
+        exitCode: freshnessRun.exitCode,
+        reasonCode: AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS,
+        summary: `Priority-brief freshness gate failed with ${errorViolations.length} error violations and ${freshnessPayload.summary.staleBriefs} stale brief(s).`,
+        stdout: freshnessRun.stdout,
+        stderr: freshnessRun.stderr,
+      };
+
+      const nextActions: string[] = [
+        `Refresh ${freshnessPayload.summary.staleBriefs} stale priority-brief artifact(s).`,
+      ];
+
+      // Add specific remediation actions for each error violation
+      for (const violation of errorViolations.slice(0, 3)) {
+        nextActions.push(`[${violation.ruleId}] ${violation.briefName}: ${violation.remediation.description}`);
+        if (violation.remediation.scaffoldCommand) {
+          nextActions.push(`  Scaffold: ${violation.remediation.scaffoldCommand}`);
+        }
+      }
+
+      if (errorViolations.length > 3) {
+        nextActions.push(`... and ${errorViolations.length - 3} more violations.`);
+      }
+
+      nextActions.push("Rerun taskpad:intake:autoplan after priority-brief freshness is restored.");
+
+      return {
+        status: "fail",
+        verdict: "hold",
+        reasonCode: AUTOPLAN_HOLD_PRIORITY_BRIEF_FRESHNESS,
+        taskpadPath,
+        planPath,
+        selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
+        plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
+        newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
+        steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
+        queueReconcile: seedPayload.queueReconcile,
+        artifact: seedPayload.artifact,
+        evidenceGapParity: evidenceGapPayload,
+        knowledgeRevalidationParity: knowledgeRevalidationPayload,
+        markitdownPriorityBriefParity: markitdownPayload,
+        priorityBriefFreshness: freshnessPayload,
+        nextActions,
+      };
+    }
+  }
+
+  // Priority-brief freshness passed (or has no stale briefs)
+  freshnessStep = {
+    id: "priority-brief-freshness",
+    command: freshnessRun.command,
+    status: "pass",
+    exitCode: freshnessRun.exitCode,
+    reasonCode: null,
+    summary: freshnessPayload.summary.totalBriefs === 0
+      ? "Priority-brief freshness gate passed (no priority-brief artifacts to check)."
+      : `Priority-brief freshness gate passed (${freshnessPayload.summary.freshBriefs}/${freshnessPayload.summary.totalBriefs} briefs fresh, ${freshnessPayload.summary.staleBriefs} stale, ${freshnessPayload.summary.missingBriefs} missing).`,
+    stdout: freshnessRun.stdout,
+    stderr: freshnessRun.stderr,
+  };
+
   return {
     status: "pass",
     verdict: "ready",
@@ -1865,12 +2150,13 @@ export function runTaskpadIntakeAutoplan(taskpadPath: string, planPath: string, 
     selectedBacklogLine: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.selectedBacklogLine : null,
     plannedMarker: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? plannedMarker : null,
     newSliceHeading: (seedPayload.status === "seeded" || seedPayload.status === "fallback") ? seedPayload.newSliceHeading : null,
-    steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep],
+    steps: [recoverStep, seedStep, contractStep, parityStep, knowledgeRevalidationParityStep, markitdownPriorityBriefParityStep, freshnessStep],
     queueReconcile: seedPayload.queueReconcile,
     artifact: seedPayload.artifact,
     evidenceGapParity: evidenceGapPayload,
     knowledgeRevalidationParity: knowledgeRevalidationPayload,
     markitdownPriorityBriefParity: markitdownPayload,
+    priorityBriefFreshness: freshnessPayload,
     nextActions: ["Proceed with Builder dispatch using the newest active plan slice."],
   };
 }
