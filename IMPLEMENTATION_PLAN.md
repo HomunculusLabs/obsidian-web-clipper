@@ -9,6 +9,68 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-04): MarkItDown priority-brief refresh contract parity gate
+
+### Distilled Scope
+**Problem**
+- `markitdown-conversion-priority-brief.md` is now planned as a high-impact session-start artifact, but there is no dedicated parity gate proving it is wired across save-flow runtime surfaces.
+- Existing `taskpad:markitdown-refresh-contract-parity` coverage focuses on review/state-sync artifacts and does not explicitly guard priority-brief handler/message/router/save-trigger drift.
+- With intake queues empty and `SCRATCHPAD.md` explicitly calling out “Implement [[markitdown]],” the highest-impact low-risk slice is a focused reliability gate that blocks wiring regressions before release.
+
+**In scope**
+- Add deterministic `taskpad:markitdown-priority-brief-refresh-contract-parity` analysis for planned/generated `markitdown-conversion-priority-brief.md` artifacts.
+- Validate required wiring across `src/popup/save.ts`, `src/shared/messages.ts`, `src/background/router.ts`, and `src/background/handlers/refreshMarkitdownConversionPriorityBrief.ts`.
+- Emit stable rule IDs + machine-readable remediation payloads (including one scaffold command) for missing/partial wiring.
+- Add focused fixtures/tests and intake-auto integration so failures block progression deterministically.
+
+**Out of scope**
+- Implementing new MarkItDown product artifacts or ranking logic.
+- Refactoring save-flow behavior beyond parity validation.
+- Broad intake orchestration redesign outside this new gate.
+
+### Ideation Candidates Considered
+1. **[RELIABILITY]** Add deterministic `taskpad:markitdown-priority-brief-refresh-contract-parity` gate for priority-brief save-flow wiring coverage. **(selected)**
+2. **[PRODUCT]** Add deterministic `markitdown-conversion-regression-hotspots.md` export that clusters recurring fidelity regressions by converter + document pattern.
+3. **[OBSERVABILITY]** Add `markitdown-conversion-priority-brief-history.ndjson` telemetry (`brief_item_id`, `cluster_fingerprint`, `priority_score`, `generated_at`) for drift tracing.
+
+### Repo Context Handoff
+- Primary planning anchors:
+  - `TASKPAD.md` Work Queue + AUTO_IDEATION state
+  - `SCRATCHPAD.md` (`Implement [[markitdown]]`)
+  - `IMPLEMENTATION_PLAN.md` recent MarkItDown/trust slices
+- Runtime surfaces expected for parity checks:
+  - `src/popup/save.ts`
+  - `src/shared/messages.ts`
+  - `src/background/router.ts`
+  - `src/background/handlers/refreshMarkitdownConversionPriorityBrief.ts`
+- Tooling touchpoints expected:
+  - `tools/taskpad-markitdown-priority-brief-refresh-contract-parity.ts`
+  - `tests/tools/taskpad-markitdown-priority-brief-refresh-contract-parity.test.ts`
+  - `tests/tools/taskpad-intake-autoplan.test.ts`
+  - `package.json` script wiring (if absent)
+
+### Task Graph
+- [x] **TP001**: Specify parity gate contract (artifact target, required wiring surfaces, deterministic rule IDs, remediation payload schema, violation ordering).
+- [ ] **TP002**: Implement `tools/taskpad-markitdown-priority-brief-refresh-contract-parity.ts` by adapting existing refresh-parity gate patterns for priority-brief artifact detection and wiring validation.
+- [ ] **TP003**: Add deterministic fixture corpus + tests in `tests/tools/taskpad-markitdown-priority-brief-refresh-contract-parity.test.ts` for pass/no-artifact/missing-message/missing-router/missing-handler/missing-save-trigger cases.
+- [ ] **TP004**: Wire script/docs/integration surfaces (`package.json`, intake verifier, and any contract docs as needed) so the gate is canonical and machine-auditable.
+- [ ] **TP005**: Extend `tests/tools/taskpad-intake-autoplan.test.ts` so parity failures deterministically block intake progression with actionable next-action output.
+
+### Acceptance Criteria
+- Gate deterministically fails whenever planned priority-brief artifact wiring is missing from any required save-flow surface.
+- Failure output includes stable rule IDs plus machine-readable remediation hints and one scaffold command.
+- Tests lock deterministic pass/fail/no-artifact behavior and output ordering.
+- Canonical intake verification path includes this gate and treats contract failures as blocking.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/tools/taskpad-markitdown-priority-brief-refresh-contract-parity.test.ts
+bun run taskpad:markitdown-priority-brief-refresh-contract-parity -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --project-root . --format json
+bun test tests/tools/taskpad-intake-autoplan.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-04): Knowledge trust kickoff brief for one-note high-risk session starts
 
 ### Distilled Scope
