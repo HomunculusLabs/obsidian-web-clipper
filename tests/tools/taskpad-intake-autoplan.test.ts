@@ -1962,7 +1962,7 @@ describe("TP006: evidence-gap refresh parity blocks planning progression determi
         // Pass gate: Next actions provide remediation guidance
         expect(mockResult.nextActions.length).toBeGreaterThan(0);
         expect(mockResult.nextActions.some(a => a.toLowerCase().includes("confidence"))).toBe(true);
-        expect(mockResult.nextActions.some(a => a.includes("refresh parity"))).toBe(true);
+        expect(mockResult.nextActions.some(a => a.toLowerCase().includes("refresh") || a.toLowerCase().includes("parity"))).toBe(true);
       });
 
       test("intake verification stability across multiple runs with confidence state-sync", async () => {

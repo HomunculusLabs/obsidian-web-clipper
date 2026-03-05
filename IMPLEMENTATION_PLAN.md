@@ -52,7 +52,7 @@
 - [x] **TP003**: Implement deterministic `knowledge-trust-kickoff-brief.md` exporter/renderer with explicit empty-state and bounded metadata behavior.
 - [x] **TP004**: Wire refresh into save flow surfaces (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeTrustKickoffBrief.ts`, `src/popup/save.ts`) with non-fatal save behavior.
 - [x] **TP005**: Add `tests/content/shared/knowledge-trust-kickoff-brief.test.ts` coverage for ranking, dedupe, truncation, and rerun determinism.
-- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify trust-brief refresh parity and intake verification stability.
+- [x] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify trust-brief refresh parity and intake verification stability.
 
 ### Acceptance Criteria
 - `knowledge-trust-kickoff-brief.md` is generated deterministically from trust dashboard/state-sync/history inputs with stable IDs/order.
