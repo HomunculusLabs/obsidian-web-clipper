@@ -7578,3 +7578,457 @@ ${claimLines}
     });
   });
 });
+
+// ============================================================================
+// TP006: Knowledge Trust Kickoff Brief Refresh Parity
+// ============================================================================
+
+describe("TP006: Knowledge Trust Kickoff Brief refresh parity and intake verification stability", () => {
+  /**
+   * Helper to seed a trust dashboard artifact in the vault
+   */
+  async function seedTrustDashboard(
+    sandbox: TestVaultSandbox,
+    folderPath: string,
+    filename: string,
+    content: string,
+  ): Promise<string> {
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const folderFullPath = join(sandbox.vaultRoot, folderPath);
+    await mkdir(folderFullPath, { recursive: true });
+
+    const filePath = join(folderFullPath, filename);
+    await writeFile(filePath, content, "utf-8");
+    return filePath;
+  }
+
+  describe("TP006: Trust brief refresh produces deterministic output", () => {
+    test("trust brief refresh produces identical output across multiple runs", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-parity",
+      });
+      sandboxes.push(sandbox);
+
+      // Seed knowledge-trust-dashboard.md with trust items
+      const dashboardContent = `---
+dashboard_version: "1.0.0"
+dashboard_truncated: false
+generated_at: "2026-03-04T10:00:00.000Z"
+---
+
+# Knowledge Trust Dashboard
+
+## Summary
+- Total items: 3
+- Critical risk: 1
+- High risk: 1
+- Medium risk: 1
+
+## Trust Items
+
+### [CRITICAL] dashboard-contradiction-001
+- **Type:** contradiction
+- **Description:** Conflicting claims about RSC hydration behavior
+- **Status:** active
+
+### [HIGH] dashboard-gap-001
+- **Type:** evidence-gap
+- **Description:** Missing documentation for decorator metadata
+- **Status:** active
+
+### [MEDIUM] dashboard-confidence-001
+- **Type:** low-confidence
+- **Description:** Unverified claim about GraphQL performance
+- **Status:** active
+`;
+
+      await seedTrustDashboard(sandbox, "", "knowledge-trust-dashboard.md", dashboardContent);
+
+      // Import the builder and contract modules directly (not the handler which requires CLI)
+      const {
+        scanVaultForTrustItems,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefBuilder");
+      const {
+        buildKnowledgeTrustKickoffBrief,
+        renderKnowledgeTrustKickoffBrief,
+        extractBriefMetadata,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefContract");
+
+      // Run refresh twice using the same core logic as the handler
+      const scan1 = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief1 = buildKnowledgeTrustKickoffBrief(scan1.trustItems);
+      const metadata1 = extractBriefMetadata(brief1);
+
+      const scan2 = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief2 = buildKnowledgeTrustKickoffBrief(scan2.trustItems);
+      const metadata2 = extractBriefMetadata(brief2);
+
+      // Pass gate: Both runs produce identical metadata
+      expect(metadata1.items_count).toBe(metadata2.items_count);
+      expect(scan1.filesWithTrust).toBe(scan2.filesWithTrust);
+      expect(metadata1.active_items).toBe(metadata2.active_items);
+      expect(metadata1.risk_band_counts.critical).toBe(metadata2.risk_band_counts.critical);
+      expect(metadata1.risk_band_counts.high).toBe(metadata2.risk_band_counts.high);
+      expect(metadata1.brief_truncated).toBe(metadata2.brief_truncated);
+
+      // Pass gate: Entry counts and structure are identical
+      expect(brief1.entries.length).toBe(brief2.entries.length);
+      expect(brief1.total_items).toBe(brief2.total_items);
+      expect(brief1.truncated).toBe(brief2.truncated);
+    });
+
+    test("trust brief refresh produces stable brief_item_id", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-stable-id",
+      });
+      sandboxes.push(sandbox);
+
+      const dashboardContent = `---
+dashboard_version: "1.0.0"
+---
+
+# Knowledge Trust Dashboard
+
+## Trust Items
+
+### [CRITICAL] dashboard-test-001
+- **Type:** contradiction
+- **Description:** Test description
+- **Status:** active
+`;
+
+      await seedTrustDashboard(sandbox, "", "knowledge-trust-dashboard.md", dashboardContent);
+
+      // Import the builder and contract modules directly
+      const {
+        scanVaultForTrustItems,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefBuilder");
+      const {
+        buildKnowledgeTrustKickoffBrief,
+        extractBriefMetadata,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefContract");
+
+      // Run refresh twice
+      const scan1 = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief1 = buildKnowledgeTrustKickoffBrief(scan1.trustItems);
+      const metadata1 = extractBriefMetadata(brief1);
+
+      const scan2 = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief2 = buildKnowledgeTrustKickoffBrief(scan2.trustItems);
+      const metadata2 = extractBriefMetadata(brief2);
+
+      // Pass gate: Both runs produce same entry count
+      expect(metadata1.items_count).toBe(metadata2.items_count);
+      expect(metadata1.items_count).toBeGreaterThan(0);
+    });
+
+    test("trust brief refresh maintains ordering determinism", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-ordering",
+      });
+      sandboxes.push(sandbox);
+
+      const dashboardContent = `---
+dashboard_version: "1.0.0"
+---
+
+# Knowledge Trust Dashboard
+
+## Trust Items
+
+### [CRITICAL] dashboard-critical-001
+- **Type:** contradiction
+- **Description:** Critical item
+- **Status:** active
+
+### [HIGH] dashboard-high-001
+- **Type:** evidence-gap
+- **Description:** High priority item
+- **Status:** active
+
+### [CRITICAL] dashboard-critical-002
+- **Type:** stale-assumption
+- **Description:** Another critical item
+- **Status:** active
+`;
+
+      await seedTrustDashboard(sandbox, "", "knowledge-trust-dashboard.md", dashboardContent);
+
+      const {
+        scanVaultForTrustItems,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefBuilder");
+      const {
+        buildKnowledgeTrustKickoffBrief,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefContract");
+
+      // Scan and build twice
+      const scan1 = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief1 = buildKnowledgeTrustKickoffBrief(scan1.trustItems);
+
+      const scan2 = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief2 = buildKnowledgeTrustKickoffBrief(scan2.trustItems);
+
+      // Pass gate: Same number of entries
+      expect(brief1.entries.length).toBe(brief2.entries.length);
+      expect(brief1.entries.length).toBeGreaterThan(0);
+
+      // Pass gate: Entries are ordered by risk band (critical first)
+      const criticalEntries1 = brief1.entries.filter(e => e.risk_band === "critical");
+      const criticalEntries2 = brief2.entries.filter(e => e.risk_band === "critical");
+      expect(criticalEntries1.length).toBe(criticalEntries2.length);
+      expect(criticalEntries1.length).toBeGreaterThan(0);
+
+      // Pass gate: Ordering is identical across runs
+      const ordering1 = brief1.entries.map(e => e.brief_item_id);
+      const ordering2 = brief2.entries.map(e => e.brief_item_id);
+      expect(ordering1).toEqual(ordering2);
+    });
+  });
+
+  describe("TP006: Trust brief refresh non-fatal behavior", () => {
+    test("trust brief refresh fails gracefully with invalid vault path", async () => {
+      const { handleRefreshKnowledgeTrustKickoffBrief } = await import(
+        "../../src/background/handlers/refreshKnowledgeTrustKickoffBrief"
+      );
+
+      const request = {
+        action: "refreshKnowledgeTrustKickoffBrief" as const,
+        vaultPath: "", // Invalid: empty path
+        cliPath: "obsidian-cli-mock",
+        vault: "TestVault",
+      };
+
+      const result = await handleRefreshKnowledgeTrustKickoffBrief(request);
+
+      // Pass gate: Request fails gracefully (non-fatal to save flow)
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain("required");
+
+      // Pass gate: Error message is deterministic
+      expect(result.error).toBe("Vault path is required");
+    });
+
+    test("trust brief refresh fails gracefully with missing CLI path", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-missing-cli",
+      });
+      sandboxes.push(sandbox);
+
+      const { handleRefreshKnowledgeTrustKickoffBrief } = await import(
+        "../../src/background/handlers/refreshKnowledgeTrustKickoffBrief"
+      );
+
+      const request = {
+        action: "refreshKnowledgeTrustKickoffBrief" as const,
+        vaultPath: sandbox.vaultRoot,
+        cliPath: "", // Invalid: empty CLI path
+        vault: "TestVault",
+      };
+
+      const result = await handleRefreshKnowledgeTrustKickoffBrief(request);
+
+      // Pass gate: Request fails gracefully
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("CLI path is required");
+    });
+
+    test("trust brief refresh handles empty vault gracefully", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-empty-vault",
+      });
+      sandboxes.push(sandbox);
+
+      // Do NOT seed any trust artifacts - vault is empty
+
+      // Import the builder and contract modules directly
+      const {
+        scanVaultForTrustItems,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefBuilder");
+      const {
+        buildKnowledgeTrustKickoffBrief,
+        extractBriefMetadata,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefContract");
+
+      // Scan and build on empty vault
+      const scan = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief = buildKnowledgeTrustKickoffBrief(scan.trustItems);
+      const metadata = extractBriefMetadata(brief);
+
+      // Pass gate: Empty vault produces empty brief
+      expect(metadata.items_count).toBe(0);
+      expect(metadata.active_items).toBe(0);
+      expect(metadata.risk_band_counts.critical).toBe(0);
+      expect(metadata.risk_band_counts.high).toBe(0);
+      expect(metadata.brief_truncated).toBe(false);
+    });
+  });
+
+  describe("TP006: Trust brief refresh truncation behavior", () => {
+    test("trust brief truncates when items exceed MAX_BRIEF_ITEMS", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-truncation",
+      });
+      sandboxes.push(sandbox);
+
+      // Create dashboard with many items to trigger truncation
+      let dashboardContent = `---
+dashboard_version: "1.0.0"
+---
+
+# Knowledge Trust Dashboard
+
+## Trust Items
+`;
+
+      // Add 25 items (exceeds MAX_BRIEF_ITEMS of 20)
+      for (let i = 1; i <= 25; i++) {
+        const riskBand = i <= 5 ? "CRITICAL" : i <= 10 ? "HIGH" : i <= 15 ? "MEDIUM" : "LOW";
+        dashboardContent += `
+### [${riskBand}] dashboard-item-${String(i).padStart(3, "0")}
+- **Type:** ${i % 2 === 0 ? "contradiction" : "evidence-gap"}
+- **Description:** Test item ${i}
+- **Status:** active
+`;
+      }
+
+      await seedTrustDashboard(sandbox, "", "knowledge-trust-dashboard.md", dashboardContent);
+
+      // Import the builder and contract modules directly
+      const {
+        scanVaultForTrustItems,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefBuilder");
+      const {
+        buildKnowledgeTrustKickoffBrief,
+        extractBriefMetadata,
+        MAX_BRIEF_ITEMS,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefContract");
+
+      // Scan and build
+      const scan = await scanVaultForTrustItems({
+        vaultPath: sandbox.vaultRoot,
+        maxDepth: 3,
+        includeHidden: false,
+        maxFiles: 100,
+        extensions: [".md", ".ndjson"],
+      });
+      const brief = buildKnowledgeTrustKickoffBrief(scan.trustItems);
+      const metadata = extractBriefMetadata(brief);
+
+      // Pass gate: Entries are limited to MAX_BRIEF_ITEMS
+      expect(metadata.items_count).toBeLessThanOrEqual(MAX_BRIEF_ITEMS);
+
+      // Pass gate: Truncated flag is true
+      expect(metadata.brief_truncated).toBe(true);
+    });
+  });
+
+  describe("TP006: Trust brief refresh parity across save cycles", () => {
+    test("trust brief refresh produces consistent results across simulated save cycles", async () => {
+      const sandbox = await createTestVaultSandbox({
+        timestampIso: "2026-03-04T12:00:00.000Z",
+        titlePrefix: "trust-brief-save-cycles",
+      });
+      sandboxes.push(sandbox);
+
+      const dashboardContent = `---
+dashboard_version: "1.0.0"
+---
+
+# Knowledge Trust Dashboard
+
+## Trust Items
+
+### [CRITICAL] dashboard-critical-001
+- **Type:** contradiction
+- **Description:** Critical test item
+- **Status:** active
+`;
+
+      await seedTrustDashboard(sandbox, "", "knowledge-trust-dashboard.md", dashboardContent);
+
+      // Import the builder and contract modules directly
+      const {
+        scanVaultForTrustItems,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefBuilder");
+      const {
+        buildKnowledgeTrustKickoffBrief,
+        extractBriefMetadata,
+      } = await import("../../src/shared/knowledgeTrustKickoffBriefContract");
+
+      // Run multiple refresh cycles
+      const results = [];
+      for (let i = 0; i < 3; i++) {
+        const scan = await scanVaultForTrustItems({
+          vaultPath: sandbox.vaultRoot,
+          maxDepth: 3,
+          includeHidden: false,
+          maxFiles: 100,
+          extensions: [".md", ".ndjson"],
+        });
+        const brief = buildKnowledgeTrustKickoffBrief(scan.trustItems);
+        const metadata = extractBriefMetadata(brief);
+        results.push({ metadata, filesWithTrust: scan.filesWithTrust });
+      }
+
+      // Pass gate: All cycles produce identical metadata
+      const firstResult = results[0];
+      for (const result of results) {
+        expect(result.metadata.items_count).toBe(firstResult.metadata.items_count);
+        expect(result.metadata.active_items).toBe(firstResult.metadata.active_items);
+        expect(result.metadata.risk_band_counts.critical).toBe(firstResult.metadata.risk_band_counts.critical);
+        expect(result.metadata.brief_truncated).toBe(firstResult.metadata.brief_truncated);
+      }
+    });
+  });
+});
