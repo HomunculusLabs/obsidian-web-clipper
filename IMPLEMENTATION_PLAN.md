@@ -54,7 +54,7 @@
 - [x] **TP001**: Specify freshness-gate contract (required artifact set, source precedence, stale-threshold policy, deterministic rule IDs, remediation payload schema, and violation ordering).
 - [x] **TP002**: Implement `tools/taskpad-markitdown-release-readiness-brief-freshness-gate.ts` to parse planned artifacts and evaluate brief freshness against composite inputs + canonical upstream surfaces.
 - [x] **TP003**: Add deterministic fixture corpus + contract tests in `tests/tools/taskpad-markitdown-release-readiness-brief-freshness-gate.test.ts` for pass/no-brief/no-source/stale-aggregate/multi-failure ordering scenarios.
-- [ ] **TP004**: Wire script/docs surfaces (`package.json`, docs/quality references as needed) so the gate is canonical, machine-invocable, and remediation output remains stable.
+- [x] **TP004**: Wire script/docs surfaces (`package.json`, docs/quality references as needed) so the gate is canonical, machine-invocable, and remediation output remains stable.
 - [ ] **TP005**: Integrate gate into intake-auto verification (`tools/taskpad-intake-autoplan.ts`) and extend `tests/tools/taskpad-intake-autoplan.test.ts` so stale release-readiness briefs block planning with actionable next actions.
 
 ### Acceptance Criteria
