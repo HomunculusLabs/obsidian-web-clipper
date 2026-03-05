@@ -9,6 +9,68 @@
 
 ---
 
+## TASKPAD Intake Slice (2026-03-04): Knowledge trust kickoff brief for one-note high-risk session starts
+
+### Distilled Scope
+**Problem**
+- Trust-risk signals now live across `knowledge-trust-dashboard.md`, `knowledge-trust-dashboard-state-sync.md`, and `knowledge-trust-dashboard-history.ndjson`, but session starts still require manual multi-file scanning.
+- This slows AI coding/writing kickoff and increases missed high-risk unresolved items despite recent trust dashboard investments.
+- With intake queues empty in ideation mode, the highest-impact next slice is a deterministic trust kickoff brief that compresses unresolved risk into one actionable artifact.
+
+**In scope**
+- Define deterministic `knowledge-trust-kickoff-brief.md` contract sourced from trust dashboard + state-sync + history artifacts.
+- Implement builder/exporter logic for stable prioritization fields (`brief_item_id`, `dashboard_item_id`, `risk_band`, `priority_reason`, `recommended_next_action`, `brief_version`, `brief_truncated`).
+- Wire incremental refresh into existing save flow with non-fatal behavior matching current inbox/dashboard artifact conventions.
+- Add focused contract + e2e coverage validating ordering, dedupe, truncation, and rerun determinism.
+
+**Out of scope**
+- New trust scoring models or dashboard ranking redesign.
+- UI changes outside markdown artifact generation.
+- Broad intake orchestration changes unrelated to this artifact.
+
+### Ideation Candidates Considered
+1. **[PRODUCT]** Add deterministic `knowledge-trust-kickoff-brief.md` export + incremental refresh so sessions start from one high-risk trust brief. **(selected)**
+2. **[RELIABILITY]** Add deterministic `taskpad:trust-brief-refresh-contract-parity` gate to fail when trust kickoff brief save-flow wiring drifts across popup/messages/router/handler surfaces.
+3. **[OBSERVABILITY]** Add `knowledge-trust-kickoff-history.ndjson` telemetry (`brief_item_id`, `dashboard_item_id`, `risk_band`, `action_status`, `generated_at`) for run-to-run brief drift analysis.
+
+### RepoPrompt Builder Context
+- **Commands used:**
+  - `tree "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `search "knowledge-trust-dashboard|session-kickoff-brief|markitdown-conversion-priority-brief|AUTO_IDEATION|ideation" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper"`
+  - `search "session-kickoff-brief|knowledge-trust-dashboard-state-sync|knowledge-trust-dashboard-history|markitdown-conversion-priority-brief" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md"`
+  - `select set "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md" "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/FLOW_STATUS.md"`
+  - `context --files --tree`
+- **Selected files (core):**
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/SCRATCHPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/IMPLEMENTATION_PLAN.md`
+  - `8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/FLOW_STATUS.md`
+
+### Task Graph
+- [x] **TP001**: Specify `knowledge-trust-kickoff-brief.md` contract (inputs, deterministic ranking/tie-breaks, dedupe rules, truncation semantics, diagnostics defaults).
+- [ ] **TP002**: Implement shared builder utilities that merge unresolved trust dashboard entries with state-sync/history context and emit stable `recommended_next_action` output.
+- [ ] **TP003**: Implement deterministic `knowledge-trust-kickoff-brief.md` exporter/renderer with explicit empty-state and bounded metadata behavior.
+- [ ] **TP004**: Wire refresh into save flow surfaces (`src/shared/messages.ts`, `src/background/router.ts`, `src/background/handlers/refreshKnowledgeTrustKickoffBrief.ts`, `src/popup/save.ts`) with non-fatal save behavior.
+- [ ] **TP005**: Add `tests/content/shared/knowledge-trust-kickoff-brief.test.ts` coverage for ranking, dedupe, truncation, and rerun determinism.
+- [ ] **TP006**: Extend `tests/e2e/headless-clip-harness.test.ts` and `tests/tools/taskpad-intake-autoplan.test.ts` to verify trust-brief refresh parity and intake verification stability.
+
+### Acceptance Criteria
+- `knowledge-trust-kickoff-brief.md` is generated deterministically from trust dashboard/state-sync/history inputs with stable IDs/order.
+- Session-start brief highlights highest-risk unresolved items with actionable next-step text and no duplicate resurfacing on unchanged inputs.
+- Save flow remains resilient: trust kickoff brief refresh failures are observable but do not block primary clip saves.
+- Contract + e2e/tooling tests fail on drift and pass with stable output parity.
+
+### Verification Commands
+```bash
+bun run typecheck
+bun test tests/content/shared/knowledge-trust-kickoff-brief.test.ts
+bun test tests/content/shared/knowledge-trust-dashboard.test.ts
+bun test tests/content/shared/knowledge-trust-dashboard-state-sync.test.ts
+bun test tests/content/shared/knowledge-trust-dashboard-history.test.ts
+bun test tests/e2e/headless-clip-harness.test.ts
+bun run verify:taskpad:intake:auto -- --taskpad "8 - Projects/Homunculus Labs/Projects/Software/Obsidian Web Clipper/TASKPAD.md" --plan IMPLEMENTATION_PLAN.md --format json
+```
+
 ## TASKPAD Intake Slice (2026-03-03): Revalidation refresh wiring parity gate for deterministic save-flow coverage
 
 ### Distilled Scope
