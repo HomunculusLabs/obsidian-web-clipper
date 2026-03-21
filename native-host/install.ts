@@ -304,6 +304,85 @@ async function createWindowsRegistryEntry(registryPath: string, manifestPath: st
   return true;
 }
 
+function encodeNativeFrame(body: unknown): Buffer {
+  const json = Buffer.from(JSON.stringify(body), "utf8");
+  const header = Buffer.alloc(4);
+  header.writeUInt32LE(json.length, 0);
+  return Buffer.concat([header, json]);
+}
+
+async function smokeTestHost(hostBinPath: string): Promise<{ ok: boolean; error?: string }> {
+  return await new Promise((resolve) => {
+    const proc = spawn(hostBinPath, [], { stdio: ["pipe", "pipe", "pipe"] });
+    let pending = Buffer.alloc(0);
+    let stderr = "";
+    let settled = false;
+
+    const finish = (ok: boolean, error?: string): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      try {
+        proc.kill();
+      } catch {
+        // ignore
+      }
+      resolve(ok ? { ok: true } : { ok: false, error });
+    };
+
+    const timeoutId = setTimeout(() => {
+      finish(false, "Host smoke test timed out");
+    }, 5000);
+
+    proc.stdout.on("data", (chunk) => {
+      pending = Buffer.concat([pending, Buffer.from(chunk)]);
+
+      if (pending.length < 4) return;
+
+      const bodyLength = pending.readUInt32LE(0);
+      const totalLength = 4 + bodyLength;
+      if (pending.length < totalLength) return;
+
+      const body = pending.subarray(4, totalLength).toString("utf8");
+      try {
+        const response = JSON.parse(body) as { success?: boolean; error?: string; code?: string };
+        if (response.success === false) {
+          finish(true);
+          return;
+        }
+        finish(true);
+      } catch (error) {
+        finish(false, `Failed to parse host smoke test response: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+
+    proc.stderr.on("data", (chunk) => {
+      stderr += Buffer.from(chunk).toString("utf8");
+    });
+
+    proc.on("error", (error) => {
+      finish(false, `Failed to launch host binary: ${error.message}`);
+    });
+
+    proc.on("close", (code) => {
+      if (!settled) {
+        finish(false, stderr.trim() || `Host exited before responding (code ${code ?? "unknown"})`);
+      }
+    });
+
+    proc.stdin.write(
+      encodeNativeFrame({
+        action: "testCliConnection",
+        payload: {
+          cliPath: "",
+          vault: ""
+        }
+      })
+    );
+    proc.stdin.end();
+  });
+}
+
 function uninstall(config: InstallConfig): void {
   console.log(`[INFO] Uninstalling native messaging host...`);
 
@@ -376,6 +455,14 @@ async function install(config: InstallConfig): Promise<void> {
   if (!compiled) {
     process.exit(1);
   }
+
+  const smokeTest = await smokeTestHost(hostBinPath);
+  if (!smokeTest.ok) {
+    console.error(`[ERROR] Native host smoke test failed: ${smokeTest.error || "unknown error"}`);
+    process.exit(1);
+  }
+
+  console.log(`[SUCCESS] Native host smoke test passed`);
 
   // Create manifest (Unix) or registry entry (Windows)
   if (os.platform() === "win32" && registryPath) {
