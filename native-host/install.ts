@@ -251,7 +251,7 @@ async function compileHost(hostBinPath: string): Promise<boolean> {
   if (os.platform() === "win32") {
     compileArgs.push("--windows-hide-console");
   }
-  compileArgs.push("--outfile", hostBinPath, "./host.ts");
+  compileArgs.push("--outfile", hostBinPath, hostSource);
 
   const result = await runCommand("bun", compileArgs);
 
@@ -291,16 +291,12 @@ function createManifest(manifestPath: string, hostBinPath: string, extensionId: 
   console.log(`[SUCCESS] Created manifest: ${manifestPath}`);
 }
 
-function createWindowsRegistryEntry(registryPath: string, manifestPath: string): boolean {
+async function createWindowsRegistryEntry(registryPath: string, manifestPath: string): Promise<boolean> {
   // On Windows, we need to create a registry entry instead of a manifest file
-  const result = spawn(
-    "reg",
-    ["add", registryPath, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"],
-    { stdio: "inherit" }
-  );
+  const result = await runCommand("reg", ["add", registryPath, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"]);
 
-  if (result.exitCode !== 0) {
-    console.error(`[ERROR] Failed to create registry entry`);
+  if (result.code !== 0) {
+    console.error(`[ERROR] Failed to create registry entry: ${result.stderr || result.stdout}`);
     return false;
   }
 
@@ -385,7 +381,7 @@ async function install(config: InstallConfig): Promise<void> {
   if (os.platform() === "win32" && registryPath) {
     // Windows: Create manifest file AND registry entry
     createManifest(manifestPath, hostBinPath, config.extensionId);
-    const registryCreated = createWindowsRegistryEntry(registryPath, manifestPath);
+    const registryCreated = await createWindowsRegistryEntry(registryPath, manifestPath);
     if (!registryCreated) {
       process.exit(1);
     }
