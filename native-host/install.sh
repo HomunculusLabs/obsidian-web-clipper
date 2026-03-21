@@ -41,6 +41,117 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+smoke_test_host() {
+    local smoke_test_script
+    local smoke_test_output
+
+    smoke_test_script=$(cat <<'EOF'
+const { spawn } = await import("node:child_process");
+
+function encodeFrame(body) {
+  const json = Buffer.from(JSON.stringify(body), "utf8");
+  const header = Buffer.alloc(4);
+  header.writeUInt32LE(json.length, 0);
+  return Buffer.concat([header, json]);
+}
+
+const hostPath = process.env.HOST_BIN_PATH;
+if (!hostPath) {
+  console.error("Missing HOST_BIN_PATH");
+  process.exit(1);
+}
+
+const proc = spawn(hostPath, [], { stdio: ["pipe", "pipe", "pipe"] });
+let pending = Buffer.alloc(0);
+let stderr = "";
+let settled = false;
+
+const timeoutId = setTimeout(() => {
+  if (settled) return;
+  settled = true;
+  try {
+    proc.kill();
+  } catch {
+    // ignore
+  }
+  console.error("Host smoke test timed out");
+  process.exit(1);
+}, 5000);
+
+function fail(message) {
+  if (settled) return;
+  settled = true;
+  clearTimeout(timeoutId);
+  try {
+    proc.kill();
+  } catch {
+    // ignore
+  }
+  console.error(message);
+  process.exit(1);
+}
+
+proc.on("error", (error) => {
+  fail(`Failed to launch host binary: ${error.message}`);
+});
+
+proc.stdout.on("data", (chunk) => {
+  pending = Buffer.concat([pending, Buffer.from(chunk)]);
+
+  if (pending.length < 4) {
+    return;
+  }
+
+  const bodyLength = pending.readUInt32LE(0);
+  const totalLength = 4 + bodyLength;
+  if (pending.length < totalLength) {
+    return;
+  }
+
+  clearTimeout(timeoutId);
+  settled = true;
+
+  try {
+    proc.kill();
+  } catch {
+    // ignore
+  }
+
+  process.exit(0);
+});
+
+proc.stderr.on("data", (chunk) => {
+  stderr += Buffer.from(chunk).toString("utf8");
+});
+
+proc.on("close", (code) => {
+  if (!settled) {
+    fail(stderr.trim() || `Host exited before responding (code ${code ?? "unknown"})`);
+  }
+});
+
+proc.stdin.write(
+  encodeFrame({
+    action: "testCliConnection",
+    payload: {
+      cliPath: "",
+      vault: "",
+    },
+  })
+);
+proc.stdin.end();
+EOF
+)
+
+    if ! smoke_test_output=$(HOST_BIN_PATH="$HOST_BIN_PATH" bun -e "$smoke_test_script" 2>&1); then
+        print_error "Native host smoke test failed"
+        echo "$smoke_test_output"
+        exit 1
+    fi
+
+    print_success "Native host smoke test passed"
+}
+
 usage() {
     cat << EOF
 Native Messaging Host Installer for Obsidian Web Clipper
@@ -236,6 +347,10 @@ bun build --compile --outfile="$HOST_BIN_PATH" ./host.ts
 chmod +x "$HOST_BIN_PATH"
 
 print_success "Created host binary: $HOST_BIN_PATH"
+
+# Verify the compiled host can answer a native messaging frame before installing it
+print_info "Running native host smoke test..."
+smoke_test_host
 
 # Create manifest directory
 print_info "Creating manifest directory..."

@@ -212,7 +212,7 @@ Tasks added during implementation that don't fit an existing phase.
 - [x] **Task E7**: Wire `testCliConnection` through the Native Messaging bridge for real CLI binary/vault validation instead of path-shape-only checks.
 - [x] **Task E8**: Restore top-level options persistence for `defaultTags` when vault profile editor fields are absent, so edits in the visible Content Options section are not dropped on save.
 - [x] **Task E9**: Fix the Bun native-host installer so it compiles `native-host/host.ts` from the correct directory and waits for Windows `reg add` to complete before reporting success.
-- [ ] **Task E10**: Mirror the native-host installer smoke test in the shell installer path so `native:install` fails fast if the compiled host cannot actually answer a native messaging frame.
+- [x] **Task E10**: Mirror the native-host installer smoke test in the shell installer path so `native:install` fails fast if the compiled host cannot actually answer a native messaging frame.
 
 ---
 
