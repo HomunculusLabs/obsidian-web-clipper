@@ -725,8 +725,24 @@ async function saveCurrentSettings(): Promise<void> {
   const topLevelDefaultFolder = (defaultFolderEl?.value || "").trim();
   const topLevelDefaultTags = (defaultTagsEl?.value || "").trim();
 
+  const nextCliConfig = {
+    enabled: cliEnabled?.checked ?? false,
+    cliPath: (cliPath?.value || "").trim(),
+    vault: (cliVault?.value || "").trim() || activeProfile.vaultName
+  };
+
   const effectiveVaultProfiles = hasProfileVaultFields
-    ? normalizedVaultProfiles
+    ? normalizedVaultProfiles.map((profile) => {
+        if (profile.id !== activeProfile.id) return profile;
+
+        return {
+          ...profile,
+          obsidianCli: {
+            ...nextCliConfig,
+            vault: nextCliConfig.vault || profile.vaultName
+          }
+        };
+      })
     : normalizedVaultProfiles.map((profile) => {
         if (profile.id !== activeProfile.id) return profile;
 
@@ -739,7 +755,11 @@ async function saveCurrentSettings(): Promise<void> {
           vaultName: nextVaultName,
           name: nextVaultName,
           defaultFolder: nextDefaultFolder,
-          defaultTags: nextDefaultTags
+          defaultTags: nextDefaultTags,
+          obsidianCli: {
+            ...nextCliConfig,
+            vault: nextCliConfig.vault || nextVaultName
+          }
         };
       });
 
@@ -811,9 +831,8 @@ async function saveCurrentSettings(): Promise<void> {
       DEFAULT_SETTINGS.saveMethod
     ),
     obsidianCli: {
-      enabled: cliEnabled?.checked ?? false,
-      cliPath: (cliPath?.value || "").trim(),
-      vault: (cliVault?.value || "").trim() || effectiveActiveProfile.vaultName
+      ...nextCliConfig,
+      vault: nextCliConfig.vault || effectiveActiveProfile.vaultName
     },
 
     // Title cleanup
