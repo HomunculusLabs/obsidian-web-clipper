@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings";
 import { storageSet } from "../shared/chromeAsync";
-import { detectObsidianCli } from "../shared/cliDetect";
+import { detectVerifiedCli } from "./handlers/detectCli";
 import { debug } from "../shared/debug";
 
 export async function ensureDefaultsOnInstall(details: chrome.runtime.InstalledDetails): Promise<void> {
@@ -11,7 +11,7 @@ export async function ensureDefaultsOnInstall(details: chrome.runtime.InstalledD
 
   // Auto-detect Obsidian CLI path
   try {
-    const detection = detectObsidianCli();
+    const detection = await detectVerifiedCli();
     if (detection.cliPath) {
       settings.obsidianCli = {
         ...settings.obsidianCli,
@@ -19,7 +19,7 @@ export async function ensureDefaultsOnInstall(details: chrome.runtime.InstalledD
       };
       debug(
         "CLI Auto-Detect",
-        `Platform: ${detection.platform}, Suggested path: ${detection.cliPath}`
+        `Platform: ${detection.platform}, Verified path: ${detection.cliPath}`
       );
     }
   } catch (err) {
