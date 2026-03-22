@@ -147,10 +147,10 @@ type TestEnv = {
   markerPath: string;
 };
 
-async function createTestEnv(): Promise<TestEnv> {
+async function createTestEnv(cliFilename = "mock-cli.cjs"): Promise<TestEnv> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "owc-native-host-test-"));
   const vaultPath = path.join(tempDir, "vault");
-  const cliPath = path.join(tempDir, "mock-cli.cjs");
+  const cliPath = path.join(tempDir, cliFilename);
   const cliLogPath = path.join(tempDir, "mock-cli.log");
   const markerPath = path.join(tempDir, "injected-marker.txt");
 
@@ -169,12 +169,22 @@ if (args[0] === "--version") {
   process.exit(0);
 }
 
+if (args[0] === "version") {
+  console.log("1.12.4 (installer 1.12.4)");
+  process.exit(0);
+}
+
 if (args[0] === "print-default") {
   console.log(process.env.MOCK_CLI_DEFAULT_VAULT || "UnknownVault");
   process.exit(0);
 }
 
-if (args[0] === "create") {
+if (args[0] === "vaults") {
+  console.log(process.env.MOCK_CLI_DEFAULT_VAULT || "UnknownVault");
+  process.exit(0);
+}
+
+if (args[0] === "create" || args[0] === "append") {
   console.log("create ok");
   process.exit(0);
 }
@@ -317,6 +327,52 @@ describe("native host action dispatch", () => {
       expect(attachmentResponse.success).toBe(true);
       const attachmentPath = path.join(env.vaultPath, "Attachments", "example.txt");
       await expect(readFile(attachmentPath, "utf8")).resolves.toBe("hello from attachment");
+    } finally {
+      await host.close();
+      await rm(env.tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("native host modern obsidian CLI support", () => {
+  test("supports the modern obsidian CLI command dialect", async () => {
+    const env = await createTestEnv("obsidian");
+    const host = await startHost({
+      MOCK_CLI_LOG: env.cliLogPath,
+      MOCK_CLI_DEFAULT_VAULT: "Main Vault",
+    });
+
+    try {
+      const saveResponse = await host.request({
+        action: "saveToCli",
+        payload: {
+          cliPath: env.cliPath,
+          vault: "Vault Missing In Test Config",
+          filePath: "notes/modern.md",
+          content: "# Modern",
+        },
+      });
+
+      expect(saveResponse.success).toBe(true);
+
+      const cliCallsAfterSave = await readCliCalls(env.cliLogPath);
+      expect(cliCallsAfterSave[0]?.[0]).toBe("create");
+      expect(cliCallsAfterSave[0]).toContain("path=notes/modern.md");
+      expect(cliCallsAfterSave[0]).toContain("content=# Modern");
+      expect(cliCallsAfterSave[0]).toContain("vault=Vault Missing In Test Config");
+      expect(cliCallsAfterSave[0]).toContain("overwrite");
+
+      const cliConnectionResponse = await host.request({
+        action: "testCliConnection",
+        payload: {
+          cliPath: env.cliPath,
+          vault: "Main Vault",
+        },
+      });
+
+      expect(cliConnectionResponse.success).toBe(true);
+      expect(cliConnectionResponse.data?.version).toBe("1.12.4");
+      expect(cliConnectionResponse.data?.vaultAccessible).toBe(true);
     } finally {
       await host.close();
       await rm(env.tempDir, { recursive: true, force: true });

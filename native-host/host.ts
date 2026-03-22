@@ -78,6 +78,29 @@ function sanitizePath(rawPath: string): string {
     .replace(/^\/+/, "");         // Remove leading slashes
 }
 
+function usesModernObsidianCli(cliPath: string): boolean {
+  const normalized = cliPath.trim().toLowerCase();
+  const slashIndex = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  const commandName = slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+  return commandName === "obsidian" || commandName === "obsidian.exe";
+}
+
+function buildCreateArgs(cliPath: string, filePath: string, content: string, vault: string, overwrite: boolean): string[] {
+  if (usesModernObsidianCli(cliPath)) {
+    const args = ["create", `path=${filePath}`, `content=${content}`, `vault=${vault}`];
+    if (overwrite) {
+      args.push("overwrite");
+    }
+    return args;
+  }
+
+  const args = ["create", filePath, "--content", content, "--vault", vault];
+  if (overwrite) {
+    args.push("--overwrite");
+  }
+  return args;
+}
+
 async function handleSaveToCli(payload: Record<string, unknown>): Promise<NativeResponse> {
   // Extract and validate required fields
   const cliPath = payload.cliPath;
@@ -138,10 +161,7 @@ async function handleSaveToCli(payload: Record<string, unknown>): Promise<Native
   // characters like '&' in content payloads.
 
   async function saveViaCliProcess(): Promise<NativeResponse> {
-    const args = ["create", sanitizedPath, "--content", content, "--vault", vault];
-    if (overwrite !== false) {
-      args.push("--overwrite");
-    }
+    const args = buildCreateArgs(cliPath, sanitizedPath, content, vault, overwrite !== false);
 
     try {
       const { spawn } = await import("child_process");
@@ -545,10 +565,9 @@ async function handleTestCliConnection(
   try {
     const { spawn } = await import("child_process");
 
-    // First, test if the CLI exists and is executable by getting version
-    const versionResult = await new Promise<{ stdout: string; stderr: string; code: number | null }>(
-      (resolve) => {
-        const proc = spawn(cliPath, ["--version"], {
+    const runCommand = async (args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> => {
+      return await new Promise((resolve) => {
+        const proc = spawn(cliPath, args, {
           stdio: ["ignore", "pipe", "pipe"]
         });
 
@@ -574,15 +593,32 @@ async function handleTestCliConnection(
         proc.on("close", (code) => {
           resolve({ stdout, stderr, code });
         });
-      }
-    );
+      });
+    };
 
-    // If CLI failed to run, return error
-    if (versionResult.code === null) {
+    const versionAttempts = usesModernObsidianCli(cliPath)
+      ? [["version"], ["--version"]]
+      : [["--version"], ["version"]];
+
+    let versionResult: { stdout: string; stderr: string; code: number | null } | null = null;
+    for (const args of versionAttempts) {
+      const result = await runCommand(args);
+      if (result.code === 0) {
+        versionResult = result;
+        break;
+      }
+      if (result.code === null) {
+        versionResult = result;
+        break;
+      }
+      versionResult = result;
+    }
+
+    if (!versionResult || versionResult.code === null) {
       return {
         success: false,
         code: "CLI_SPAWN_ERROR",
-        error: `Failed to spawn CLI at ${cliPath}: ${versionResult.stderr}`
+        error: `Failed to spawn CLI at ${cliPath}: ${versionResult?.stderr || "unknown error"}`
       };
     }
 
@@ -597,45 +633,27 @@ async function handleTestCliConnection(
       };
     }
 
-    // Extract version from stdout (e.g., "obsidian-cli v1.2.3" or "1.2.3")
     const versionOutput = versionResult.stdout.trim();
     const versionMatch = versionOutput.match(/(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)/);
     const version = versionMatch?.[1] ?? versionOutput.split("\n")[0]?.trim() ?? versionOutput;
 
-    // Optionally verify vault is accessible
-    // Run `obsidian print-default` or `obsidian ls` to verify CLI can communicate with Obsidian
     let vaultAccessible = false;
-    const vaultCheckResult = await new Promise<{ stdout: string; stderr: string; code: number | null }>(
-      (resolve) => {
-        const proc = spawn(cliPath, ["print-default"], {
-          stdio: ["ignore", "pipe", "pipe"]
-        });
+    const vaultAttempts = usesModernObsidianCli(cliPath)
+      ? [["vaults"], ["print-default"]]
+      : [["print-default"], ["vaults"]];
 
-        let stdout = "";
-        let stderr = "";
-
-        proc.stdout?.on("data", (data) => {
-          stdout += data.toString();
-        });
-
-        proc.stderr?.on("data", (data) => {
-          stderr += data.toString();
-        });
-
-        proc.on("error", () => {
-          // If print-default command doesn't exist, that's OK
-          resolve({ stdout: "", stderr: "", code: 0 });
-        });
-
-        proc.on("close", (code) => {
-          resolve({ stdout, stderr, code: code ?? 0 });
-        });
+    for (const args of vaultAttempts) {
+      const vaultCheckResult = await runCommand(args);
+      if (vaultCheckResult.code === 0) {
+        const output = `${vaultCheckResult.stdout}\n${vaultCheckResult.stderr}`.toLowerCase();
+        if (output.includes(vault.toLowerCase())) {
+          vaultAccessible = true;
+        }
+        break;
       }
-    );
-
-    // Check if the default vault matches or if vault is in the list
-    if (vaultCheckResult.code === 0 && vaultCheckResult.stdout.toLowerCase().includes(vault.toLowerCase())) {
-      vaultAccessible = true;
+      if (vaultCheckResult.code === null) {
+        break;
+      }
     }
 
     return {

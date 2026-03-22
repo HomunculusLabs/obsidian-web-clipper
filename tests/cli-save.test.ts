@@ -100,6 +100,12 @@ describe("buildCliCommand", () => {
     enabled: true,
   };
 
+  const modernConfig: ObsidianCliConfig = {
+    cliPath: "/home/user/.local/bin/obsidian",
+    vault: "Main Vault",
+    enabled: true,
+  };
+
   test("builds basic create command", () => {
     const options: CliSaveOptions = {
       filePath: "Notes/My Note",
@@ -141,6 +147,35 @@ describe("buildCliCommand", () => {
     };
     const cmd = buildCliCommand(config, options);
     expect(cmd).toContain("My Note");
+  });
+
+  test("builds modern obsidian create command", () => {
+    const options: CliSaveOptions = {
+      filePath: "Notes/My Note.md",
+      content: "# Hello",
+    };
+    const cmd = buildCliCommand(modernConfig, options);
+    expect(cmd).toContain("/home/user/.local/bin/obsidian");
+    expect(cmd).toContain("create");
+    expect(cmd).toContain("path=Notes/My Note.md");
+    expect(cmd).toContain("content=# Hello");
+    expect(cmd).toContain("vault=Main Vault");
+    expect(cmd).toContain("overwrite");
+    expect(cmd).not.toContain("--vault");
+  });
+
+  test("builds modern obsidian append command", () => {
+    const options: CliSaveOptions = {
+      filePath: "Notes/My Note.md",
+      content: "more",
+      append: true,
+    };
+    const cmd = buildCliCommand(modernConfig, options);
+    expect(cmd).toContain("append");
+    expect(cmd).toContain("path=Notes/My Note.md");
+    expect(cmd).toContain("content=more");
+    expect(cmd).toContain("vault=Main Vault");
+    expect(cmd).not.toContain("overwrite");
   });
 });
 

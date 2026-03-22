@@ -214,6 +214,7 @@ Tasks added during implementation that don't fit an existing phase.
 - [x] **Task E9**: Fix the Bun native-host installer so it compiles `native-host/host.ts` from the correct directory and waits for Windows `reg add` to complete before reporting success.
 - [x] **Task E10**: Mirror the native-host installer smoke test in the shell installer path so `native:install` fails fast if the compiled host cannot actually answer a native messaging frame.
 - [x] **Task E11**: Replace heuristic CLI auto-detection with native-host verification so the onboarding wizard only pre-fills a CLI path that can actually be spawned, instead of guessing `/usr/local/bin/obsidian-cli`.
+- [x] **Task E12**: Add support for the new official `obsidian` CLI dialect (`version`, `vaults`, `create path=...`) in the native host and shared CLI helpers, while preserving backward compatibility with legacy `obsidian-cli` flags.
 
 ---
 

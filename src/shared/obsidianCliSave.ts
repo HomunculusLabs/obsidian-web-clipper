@@ -11,6 +11,42 @@
 
 import type { ObsidianCliConfig } from "./obsidianCli";
 
+function usesModernObsidianCli(cliPath: string): boolean {
+  const normalized = cliPath.trim().toLowerCase();
+  const slashIndex = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  const commandName = slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+  return commandName === "obsidian" || commandName === "obsidian.exe";
+}
+
+function buildSaveArgs(
+  cliPath: string,
+  filePath: string,
+  content: string,
+  vault: string,
+  overwrite: boolean,
+  append: boolean
+): string[] {
+  if (usesModernObsidianCli(cliPath)) {
+    if (append) {
+      return ["append", `path=${filePath}`, `content=${content}`, `vault=${vault}`];
+    }
+
+    const args = ["create", `path=${filePath}`, `content=${content}`, `vault=${vault}`];
+    if (overwrite) {
+      args.push("overwrite");
+    }
+    return args;
+  }
+
+  const args = ["create", filePath, "--content", content, "--vault", vault];
+  if (append) {
+    args.push("--append");
+  } else if (overwrite) {
+    args.push("--overwrite");
+  }
+  return args;
+}
+
 /**
  * Result of a CLI save operation
  */
@@ -116,20 +152,8 @@ export async function saveViaCli(
     };
   }
 
-  // Build command arguments
-  // obsidian-cli create <note> --content "..." --vault "..." [--overwrite | --append]
-  const args = ["create", filePath];
-  
-  // Add content (escape quotes for shell safety)
-  args.push("--content", content);
-  args.push("--vault", vault);
-
-  // Handle overwrite/append flags
-  if (append) {
-    args.push("--append");
-  } else if (overwrite) {
-    args.push("--overwrite");
-  }
+  // Build command arguments for either legacy obsidian-cli or modern obsidian CLI.
+  const args = buildSaveArgs(cliPath, filePath, content, vault, overwrite, append);
 
   try {
     // Dynamic import for Node.js/Bun environment only
@@ -215,73 +239,95 @@ export async function testCliConnection(config: ObsidianCliConfig): Promise<CliS
   try {
     const { spawn } = await import("child_process");
     
-    // Try to run `obsidian-cli --version` to verify the binary exists
-    const result = await new Promise<CliSaveResult>((resolve) => {
-      const proc = spawn(cliPath, ["--version"], {
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-
-      let stdout = "";
-      let stderr = "";
-
-      proc.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      proc.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      proc.on("error", (err) => {
-        resolve({
-          success: false,
-          error: `CLI not found or not executable: ${err.message}`
-        });
-      });
-
-      proc.on("close", (code) => {
-        if (code === 0) {
-          const version = stdout.trim();
-          resolve({
-            success: true,
-            command: `${cliPath} --version`,
-            error: version ? `CLI version: ${version}` : undefined
-          });
-        } else {
-          resolve({
-            success: false,
-            error: stderr.trim() || `CLI test failed with code ${code}`
-          });
-        }
-      });
-    });
-
-    // If we have a vault configured, try to verify it exists
-    if (result.success && vault) {
-      // Use print-default to check if vault is configured
-      const vaultTest = await new Promise<boolean>((resolve) => {
-        const proc = spawn(cliPath, ["print-default"], {
+    const runCommand = async (args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> => {
+      return await new Promise((resolve) => {
+        const proc = spawn(cliPath, args, {
           stdio: ["ignore", "pipe", "pipe"]
         });
 
-        let output = "";
+        let stdout = "";
+        let stderr = "";
+
         proc.stdout?.on("data", (data) => {
-          output += data.toString();
+          stdout += data.toString();
         });
 
-        proc.on("close", () => {
-          // If default is set or vault arg works, we're good
-          resolve(true);
+        proc.stderr?.on("data", (data) => {
+          stderr += data.toString();
         });
 
-        proc.on("error", () => {
-          resolve(false);
+        proc.on("error", (err) => {
+          resolve({ stdout: "", stderr: err.message, code: null });
+        });
+
+        proc.on("close", (code) => {
+          resolve({ stdout, stderr, code });
         });
       });
+    };
 
-      if (!vaultTest) {
+    const versionAttempts = usesModernObsidianCli(cliPath)
+      ? [["version"], ["--version"]]
+      : [["--version"], ["version"]];
+
+    let versionResult: { stdout: string; stderr: string; code: number | null } | null = null;
+    let versionCommand = "";
+
+    for (const args of versionAttempts) {
+      const result = await runCommand(args);
+      versionResult = result;
+      versionCommand = `${cliPath} ${args.join(" ")}`;
+      if (result.code === 0 || result.code === null) {
+        break;
+      }
+    }
+
+    if (!versionResult || versionResult.code === null) {
+      return {
+        success: false,
+        error: `CLI not found or not executable: ${versionResult?.stderr || "unknown error"}`
+      };
+    }
+
+    if (versionResult.code !== 0) {
+      return {
+        success: false,
+        error: versionResult.stderr.trim() || `CLI test failed with code ${versionResult.code}`
+      };
+    }
+
+    const version = versionResult.stdout.trim();
+    const result: CliSaveResult = {
+      success: true,
+      command: versionCommand,
+      error: version ? `CLI version: ${version}` : undefined
+    };
+
+    if (result.success && vault) {
+      const vaultAttempts = usesModernObsidianCli(cliPath)
+        ? [["vaults"], ["print-default"]]
+        : [["print-default"], ["vaults"]];
+
+      let vaultVerified = false;
+      let attemptedVaultCheck = false;
+
+      for (const args of vaultAttempts) {
+        const vaultResult = await runCommand(args);
+        if (vaultResult.code === null) {
+          continue;
+        }
+        if (vaultResult.code === 0) {
+          attemptedVaultCheck = true;
+          const output = `${vaultResult.stdout}\n${vaultResult.stderr}`.toLowerCase();
+          vaultVerified = output.includes(vault.toLowerCase());
+          break;
+        }
+      }
+
+      if (attemptedVaultCheck && !vaultVerified) {
         return {
           success: true,
+          command: versionCommand,
           error: `CLI found but could not verify vault "${vault}". Ensure vault exists and is accessible.`
         };
       }
@@ -307,15 +353,7 @@ export function buildCliCommand(
   const { cliPath, vault } = config;
   const { filePath, content, overwrite = true, append = false } = options;
 
-  const args = ["create", filePath];
-  args.push("--content", content);
-  args.push("--vault", vault);
-
-  if (append) {
-    args.push("--append");
-  } else if (overwrite) {
-    args.push("--overwrite");
-  }
+  const args = buildSaveArgs(cliPath, filePath, content, vault, overwrite, append);
 
   // Escape arguments for shell display
   const escapedArgs = args.map(arg => {
