@@ -6,9 +6,21 @@ import { loadSettings } from "../shared/settingsService";
 import { refreshBadgeCounter } from "../shared/badgeCounter";
 
 const SIDE_PANEL_PATH = "popup/popup.html?view=sidepanel";
+const POPUP_PAGE_PATH = "popup/popup.html";
+
+type SidePanelApi = {
+  open?: (options: { windowId: number }) => Promise<void>;
+  setOptions?: (options: { tabId: number; path: string; enabled: boolean }) => Promise<void>;
+  setPanelBehavior?: (options: { openPanelOnActionClick: boolean }) => Promise<void>;
+};
+
+function getSidePanelApi(): SidePanelApi | undefined {
+  return (chrome as unknown as Record<string, unknown>)["sidePanel"] as SidePanelApi | undefined;
+}
 
 async function openClipperInSidePanel(): Promise<boolean> {
-  if (!chrome.sidePanel?.open) {
+  const sidePanel = getSidePanelApi();
+  if (!sidePanel?.open) {
     return false;
   }
 
@@ -20,14 +32,14 @@ async function openClipperInSidePanel(): Promise<boolean> {
     }
 
     if (activeTab.id !== undefined) {
-      await chrome.sidePanel.setOptions({
+      await sidePanel.setOptions?.({
         tabId: activeTab.id,
         path: SIDE_PANEL_PATH,
         enabled: true
       });
     }
 
-    await chrome.sidePanel.open({ windowId: activeTab.windowId });
+    await sidePanel.open({ windowId: activeTab.windowId });
     return true;
   } catch (err) {
     console.warn("Unable to open side panel:", err);
@@ -40,20 +52,30 @@ async function openClipperSurface(): Promise<void> {
   if (openedInSidePanel) return;
 
   try {
-    const maybePromise = chrome.action.openPopup();
-    await Promise.resolve(maybePromise);
+    if (chrome.action.openPopup) {
+      const maybePromise = chrome.action.openPopup();
+      await Promise.resolve(maybePromise);
+      return;
+    }
+  } catch (err) {
+    console.warn("Unable to open clipper popup directly, falling back to tab:", err);
+  }
+
+  try {
+    await chrome.tabs.create({ url: chrome.runtime.getURL(POPUP_PAGE_PATH) });
   } catch (err) {
     console.error("Failed to open clipper surface:", err);
   }
 }
 
 async function configureSidePanelBehavior(): Promise<void> {
-  if (!chrome.sidePanel?.setPanelBehavior) {
+  const sidePanel = getSidePanelApi();
+  if (!sidePanel?.setPanelBehavior) {
     return;
   }
 
   try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    await sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   } catch (err) {
     console.warn("Failed to enable side panel action behavior:", err);
   }

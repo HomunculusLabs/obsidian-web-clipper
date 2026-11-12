@@ -41,8 +41,11 @@ import {
   type QueryPackDiagnostics
 } from "../shared/retrievalQueryPackContract";
 import type { RefreshOpenQuestionsInboxResponse, RefreshKnowledgeTriageStateSyncResponse, RefreshContradictionInboxResponse, RefreshKnowledgeConfidenceStateSyncResponse } from "../shared/messages";
-
-const MAX_URI_CONTENT_CHARS = 180000;
+import {
+  MAX_OBSIDIAN_URI_CONTENT_CHARS,
+  buildObsidianBaseUri,
+  handoffClipboardToObsidian
+} from "../shared/obsidianUri";
 
 export type SaveOptions = {
   result: ClipResult;
@@ -435,11 +438,9 @@ async function prepareSave(options: SaveOptions): Promise<PreparedSave> {
   const markdown = imageProcessed.markdown;
   const encodedContent = encodeURIComponent(markdown);
 
-  const baseObsidianUri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(
-    filePath
-  )}`;
+  const baseObsidianUri = buildObsidianBaseUri(vault, filePath);
 
-  const contentTooLargeForUri = encodedContent.length > MAX_URI_CONTENT_CHARS;
+  const contentTooLargeForUri = encodedContent.length > MAX_OBSIDIAN_URI_CONTENT_CHARS;
 
   return {
     markdown,
@@ -516,25 +517,29 @@ async function saveViaUri(prepared: PreparedSave): Promise<{ success: boolean; e
 async function saveViaClipboard(
   prepared: PreparedSave,
   openObsidian: boolean = true
-): Promise<{ success: boolean; error?: string }> {
-  await runtimeSendMessage<RuntimeRequest, unknown>({
-    action: "copyToClipboard",
-    data: prepared.markdown
+): Promise<{ success: boolean; error?: string; openedObsidian?: boolean }> {
+  const result = await handoffClipboardToObsidian({
+    content: prepared.markdown,
+    vault: prepared.vault,
+    filePath: prepared.filePath,
+    openObsidianUri: openObsidian
+      ? async (uri) =>
+          await runtimeSendMessage<RuntimeRequest, OpenUriResponse>({
+            action: "openObsidianUri",
+            uri
+          })
+      : undefined
   });
 
-  if (openObsidian) {
-    // Best-effort: open Obsidian without content so the user can paste
-    try {
-      await runtimeSendMessage<RuntimeRequest, OpenUriResponse>({
-        action: "openObsidianUri",
-        uri: prepared.baseObsidianUri
-      });
-    } catch {
-      // Ignore; clipboard copy already succeeded
-    }
+  if (!result.success) {
+    return { success: false, error: result.error };
   }
 
-  return { success: true };
+  return {
+    success: true,
+    openedObsidian: result.openedObsidian,
+    error: result.error
+  };
 }
 
 /**
@@ -996,7 +1001,7 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
   let lastError: string | undefined;
 
   for (const method of methodOrder) {
-    let result: { success: boolean; error?: string };
+    let result: { success: boolean; error?: string; openedObsidian?: boolean };
 
     try {
       if (method === "cli") {
@@ -1015,20 +1020,37 @@ export async function saveToObsidian(options: SaveOptions): Promise<SaveResult> 
         const usedClipboardFallback = method === "clipboard" && saveMethod !== "clipboard";
         
         if (method === "clipboard") {
-          if (prepared.contentTooLargeForUri) {
+          if (result.openedObsidian === false) {
+            if (prepared.contentTooLargeForUri) {
+              showStatus(
+                "success",
+                "Content copied to clipboard (URI content too large). Open Obsidian and paste into a new note."
+              );
+            } else if (saveMethod !== "clipboard") {
+              showStatus(
+                "success",
+                "Content copied to clipboard (fallback). Open Obsidian and paste into a new note."
+              );
+            } else {
+              showStatus(
+                "success",
+                "Content copied to clipboard. Open Obsidian and paste into a new note."
+              );
+            }
+          } else if (prepared.contentTooLargeForUri) {
             showStatus(
               "success",
-              "Content copied to clipboard (too large for Obsidian URI). Paste into a new note."
+              "Sent to Obsidian via clipboard handoff (URI content too large)."
             );
           } else if (saveMethod !== "clipboard") {
             showStatus(
               "success",
-              "Content copied to clipboard (fallback). Paste into a new note."
+              "Sent to Obsidian via clipboard handoff (fallback)."
             );
           } else {
             showStatus(
               "success",
-              "Content copied to clipboard. Paste into a new note."
+              "Sent to Obsidian via clipboard handoff."
             );
           }
         } else if (method === "cli") {

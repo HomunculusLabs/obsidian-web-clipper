@@ -22,6 +22,10 @@ import { debug } from "../../shared/debug";
 import { toErrorMessage } from "../../shared/errors";
 import { showClipSavedNotification } from "../../shared/notifications";
 import { incrementBadgeCounter } from "../../shared/badgeCounter";
+import {
+  MAX_OBSIDIAN_URI_CONTENT_CHARS,
+  buildObsidianContentUri
+} from "../../shared/obsidianUri";
 import { handleSaveToCli } from "./saveToCli";
 import type { TabRequest, TabResponse } from "../../shared/messages";
 import type { PageType, ClipResult } from "../../shared/types";
@@ -102,8 +106,6 @@ interface ClipSelectionResult {
   error?: string;
 }
 
-const MAX_URI_CONTENT_CHARS = 180_000;
-
 /**
  * Build the markdown content for the clip result
  */
@@ -168,11 +170,11 @@ async function saveViaUri(
 ): Promise<{ success: boolean; error?: string }> {
   const encodedContent = encodeURIComponent(content);
 
-  if (encodedContent.length > MAX_URI_CONTENT_CHARS) {
+  if (encodedContent.length > MAX_OBSIDIAN_URI_CONTENT_CHARS) {
     return { success: false, error: "Content too large for URI" };
   }
 
-  const uri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(filePath)}&content=${encodedContent}`;
+  const uri = buildObsidianContentUri(vault, filePath, content);
 
   try {
     // Use chrome.tabs.create to open the URI

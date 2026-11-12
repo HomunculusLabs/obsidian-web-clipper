@@ -8,6 +8,7 @@ export type RuntimeRequest =
   | { action: "getSettings" }
   | { action: "copyToClipboard"; data: string }
   | { action: "openObsidianUri"; uri: string }
+  | { action: "recordSuccessfulSave"; noteTitle: string; vault: string }
   | { action: "extractPdf"; url: string; maxPages?: number; maxChars?: number }
   | { action: "testCliConnection"; cliPath: string; vault: string }
   | { action: "detectCli" }

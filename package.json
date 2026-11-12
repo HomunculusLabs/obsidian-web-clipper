@@ -4,7 +4,23 @@
   "version": "0.0.0",
   "scripts": {
     "build": "bun run build/build.ts",
+    "build:firefox": "bun run build/build.ts --target firefox",
+    "build:firefox:android": "bun run build/build.ts --target firefox-android",
     "dev": "bun run build/build.ts --watch",
+    "dev:firefox": "bun run build/build.ts --target firefox --watch",
+    "dev:firefox:android": "bun run build/build.ts --target firefox-android --watch",
+    "android:doctor": "bash tools/android-doctor.sh",
+    "android:emulator": "bash tools/android-start-emulator.sh",
+    "android:emulator:headless": "bash tools/android-start-emulator.sh --headless",
+    "android:appium": "bash tools/android-start-appium.sh",
+    "android:scrcpy": "bash tools/android-scrcpy.sh",
+    "android:install:apks": "bash tools/android-install-apks.sh",
+    "android:install:default-apps": "bash tools/android-install-default-apps.sh",
+    "android:smoke:appium": "bun run tools/android-appium-smoke.ts",
+    "firefox:android:lint": "bun run build:firefox:android && npx web-ext lint -s dist-firefox-android",
+    "firefox:android:run": "bash tools/firefox-android-run.sh",
+    "firefox:android:package": "bash tools/firefox-android-package.sh",
+    "firefox:android:sign": "bash tools/firefox-android-sign.sh",
     "typecheck": "tsc --noEmit",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src tools tests build --ext .ts,.tsx",
     "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint src tools tests build --ext .ts,.tsx --fix",
@@ -13,6 +29,7 @@
     "test": "bun test",
     "test:e2e": "bun test tests/e2e",
     "test:e2e:headless": "bun test tests/e2e/headless-clip-harness.test.ts",
+    "test:e2e:android:smoke": "RUN_ANDROID_SMOKE=1 bun test tests/e2e/android-appium-smoke.test.ts",
     "test:e2e:matrix": "bun run tools/test-e2e-matrix.ts",
     "test:seedfinder": "bun test tests/templates/seedfinder.test.ts tests/extractors/web.test.ts tests/shared/buildFrontmatter-seedfinder.test.ts tests/extractors/seedfinder-profile.test.ts",
     "test:seedfinder:smoke": "bun test tests/extractors/web.test.ts -t \"SeedFinder full profile smoke\"",
@@ -90,6 +107,7 @@
     "happy-dom": "^15.0.0",
     "prettier": "^3.2.0",
     "puppeteer": "^24.37.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "web-ext": "^9.4.0"
   }
 }

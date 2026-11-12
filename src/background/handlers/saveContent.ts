@@ -12,11 +12,13 @@ import { loadSettings } from "../../shared/settingsService";
 import { showClipSavedNotification } from "../../shared/notifications";
 import { incrementBadgeCounter } from "../../shared/badgeCounter";
 import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages";
+import {
+  MAX_OBSIDIAN_URI_CONTENT_CHARS,
+  buildObsidianContentUri
+} from "../../shared/obsidianUri";
 import { handleSaveToCli } from "./saveToCli";
 
 type SaveContentRequest = Extract<RuntimeRequest, { action: "saveContent" }>;
-
-const MAX_URI_CONTENT_CHARS = 180_000;
 
 type SaveAttemptResult = {
   success: boolean;
@@ -58,11 +60,11 @@ async function saveViaUri(
 ): Promise<SaveAttemptResult> {
   const encodedContent = encodeURIComponent(content);
 
-  if (encodedContent.length > MAX_URI_CONTENT_CHARS) {
+  if (encodedContent.length > MAX_OBSIDIAN_URI_CONTENT_CHARS) {
     return { success: false, error: "Content too large for URI" };
   }
 
-  const uri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(filePath)}&content=${encodedContent}`;
+  const uri = buildObsidianContentUri(vault, filePath, content);
 
   try {
     const tab = await tabsCreate({ url: uri });

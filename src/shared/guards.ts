@@ -17,6 +17,7 @@ const RUNTIME_REQUEST_ACTIONS = [
   "getSettings",
   "copyToClipboard",
   "openObsidianUri",
+  "recordSuccessfulSave",
   "extractPdf",
   "testCliConnection",
   "detectCli",
@@ -26,6 +27,11 @@ const RUNTIME_REQUEST_ACTIONS = [
   "createVaultFolder",
   "saveContent",
   "refreshOpenQuestionsInbox",
+  "refreshKeyTakeawaysInbox",
+  "refreshKnowledgeTriageStateSync",
+  "refreshContradictionInbox",
+  "refreshKnowledgeConfidenceStateSync",
+  "refreshKnowledgeTrustKickoffBrief",
   "testNativeHost"
 ] as const;
 

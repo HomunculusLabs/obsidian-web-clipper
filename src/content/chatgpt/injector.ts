@@ -15,11 +15,42 @@ import type { RuntimeRequest, SaveContentResponse } from "../../shared/messages"
 import { getSelection } from "../selection";
 import { htmlToMarkdownLite } from "../../shared/htmlToMarkdown";
 import { debug } from "../../shared/debug";
+import {
+  MAX_OBSIDIAN_URI_CONTENT_CHARS,
+  handoffClipboardToObsidian
+} from "../../shared/obsidianUri";
 
 const CLIP_BUTTON_ATTR = "data-obsidian-clip-injected";
 
 // SVG icon for the clip button (a small bookmark/clip icon)
 const CLIP_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>`;
+
+async function saveViaClipboardHandoff(
+  markdown: string,
+  vault: string,
+  filePath: string
+): Promise<{ success: boolean; openedObsidian?: boolean; error?: string }> {
+  const result = await handoffClipboardToObsidian({
+    content: markdown,
+    vault,
+    filePath,
+    openObsidianUri: async (uri) =>
+      await runtimeSendMessage<RuntimeRequest, { success: boolean; error?: string }>({
+        action: "openObsidianUri",
+        uri
+      })
+  });
+
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  return {
+    success: true,
+    openedObsidian: result.openedObsidian,
+    error: result.error
+  };
+}
 
 /**
  * Find the message content element associated with an action bar.
@@ -139,9 +170,36 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
   const fullMarkdown = buildClipMarkdown(frontmatter, body);
 
   const vault = (settings.vaultName || DEFAULT_SETTINGS.vaultName).trim() || "Main Vault";
+  const encodedContent = encodeURIComponent(fullMarkdown);
+  const shouldUseDirectClipboardHandoff =
+    settings.saveMethod === "clipboard" ||
+    (settings.saveMethod !== "cli" && encodedContent.length > MAX_OBSIDIAN_URI_CONTENT_CHARS);
 
   // Use the configured save pipeline via background handler.
   try {
+    if (shouldUseDirectClipboardHandoff) {
+      const directResult = await saveViaClipboardHandoff(fullMarkdown, vault, filePath);
+      if (directResult.success) {
+        const modeMsg = clipMode === "selection" ? "Selection" : "Response";
+        if (directResult.openedObsidian === false) {
+          showToast(`${modeMsg} copied to clipboard. Open Obsidian and paste.`);
+        } else {
+          void runtimeSendMessage<RuntimeRequest, { success: boolean }>({
+            action: "recordSuccessfulSave",
+            noteTitle: finalTitle,
+            vault
+          }).catch(() => {});
+
+          if (settings.saveMethod === "clipboard") {
+            showToast(`${modeMsg} sent to Obsidian via clipboard handoff ✓`);
+          } else {
+            showToast(`${modeMsg} sent to Obsidian via clipboard fallback ✓`);
+          }
+        }
+        return;
+      }
+    }
+
     const response = await runtimeSendMessage<RuntimeRequest, SaveContentResponse>({
       action: "saveContent",
       markdown: fullMarkdown,
@@ -158,7 +216,7 @@ async function clipMessage(messageEl: HTMLElement): Promise<void> {
       } else if (response.usedMethod === "uri") {
         showToast(`${modeMsg} sent to Obsidian via URI ✓`);
       } else {
-        showToast(`${modeMsg} copied to clipboard. Paste into Obsidian.`);
+        showToast(`${modeMsg} copied to clipboard. Open Obsidian and paste.`);
       }
     } else {
       // Save failed, show error

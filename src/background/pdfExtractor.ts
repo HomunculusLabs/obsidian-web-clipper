@@ -12,7 +12,31 @@ export type PdfExtractResult = {
   hasTextLayer: boolean;
 };
 
+type OffscreenApi = {
+  createDocument?: (options: {
+    url: string;
+    reasons: string[];
+    justification: string;
+  }) => Promise<void>;
+  Reason?: {
+    DOM_PARSER?: string;
+  };
+};
+
 let creatingOffscreen: Promise<void> | null = null;
+
+function getOffscreenApi(): OffscreenApi | undefined {
+  return (chrome as unknown as Record<string, unknown>)["offscreen"] as OffscreenApi | undefined;
+}
+
+function supportsOffscreenPdfExtraction(): boolean {
+  const offscreen = getOffscreenApi();
+  return (
+    typeof offscreen?.createDocument === "function" &&
+    typeof chrome.runtime.getContexts === "function" &&
+    typeof chrome.runtime.ContextType?.OFFSCREEN_DOCUMENT === "string"
+  );
+}
 
 async function ensureOffscreenDocument(): Promise<void> {
   const offscreenUrl = chrome.runtime.getURL("offscreen/offscreen.html");
@@ -33,9 +57,17 @@ async function ensureOffscreenDocument(): Promise<void> {
     return;
   }
 
-  creatingOffscreen = chrome.offscreen.createDocument({
+  const offscreen = getOffscreenApi();
+  if (!offscreen?.createDocument || !offscreen.Reason?.DOM_PARSER) {
+    throw new ExtractionError(
+      "PDF extraction is not available in this browser build yet",
+      "PDF_EXTRACTION_FAILED"
+    );
+  }
+
+  creatingOffscreen = offscreen.createDocument({
     url: offscreenUrl,
-    reasons: [chrome.offscreen.Reason.DOM_PARSER],
+    reasons: [offscreen.Reason.DOM_PARSER],
     justification: "PDF.js requires DOM access for web worker setup"
   });
 
@@ -49,6 +81,13 @@ export async function extractPdfFromUrl(
   maxChars = 120000
 ): Promise<PdfExtractResult> {
   debug("PDF Background", "Delegating to offscreen document:", url);
+
+  if (!supportsOffscreenPdfExtraction()) {
+    throw new ExtractionError(
+      "PDF extraction is not available in this browser build yet",
+      "PDF_EXTRACTION_FAILED"
+    );
+  }
 
   await ensureOffscreenDocument();
 

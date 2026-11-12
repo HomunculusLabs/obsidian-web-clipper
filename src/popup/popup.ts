@@ -242,13 +242,13 @@ function resolveSaveMethodLabel(currentSettings: Settings): string {
       const cliReady = Boolean(
         currentSettings.obsidianCli?.enabled && currentSettings.obsidianCli.cliPath && currentSettings.obsidianCli.vault
       );
-      return cliReady ? "CLI (fallback: URI → Clipboard)" : "CLI not configured (fallback active)";
+      return cliReady ? "CLI (fallback: URI → Clipboard handoff)" : "CLI not configured (fallback active)";
     }
     case "clipboard":
-      return "Clipboard";
+      return "Clipboard handoff";
     case "uri":
     default:
-      return "Obsidian URI (fallback: Clipboard)";
+      return "Obsidian URI (fallback: Clipboard handoff)";
   }
 }
 

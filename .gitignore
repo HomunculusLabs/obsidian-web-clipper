@@ -1,4 +1,7 @@
 dist/
+dist-firefox/
+dist-firefox-android/
+web-ext-artifacts/
 node_modules/
 bun.lockb
 .DS_Store

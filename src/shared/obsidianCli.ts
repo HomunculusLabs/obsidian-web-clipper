@@ -22,6 +22,6 @@ export interface ObsidianCliConfig {
  * Available save methods for clipping content
  * - cli: Use Obsidian CLI for direct file creation
  * - uri: Use obsidian:// URI scheme
- * - clipboard: Copy to clipboard
+ * - clipboard: Copy to clipboard and hand off to Obsidian when supported
  */
 export type SaveMethod = "cli" | "uri" | "clipboard";

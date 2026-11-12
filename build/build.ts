@@ -1,13 +1,44 @@
-import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync, watch as fsWatch } from "node:fs";
 import { dirname, join } from "node:path";
 
 const PROJECT_ROOT = process.cwd();
-const DIST_DIR = join(PROJECT_ROOT, "dist");
+
+type BuildTarget = "chrome" | "firefox" | "firefox-android";
+
+const DEFAULT_TARGET: BuildTarget = "chrome";
+let DIST_DIR = join(PROJECT_ROOT, "dist");
+
+function resolveDistDir(target: BuildTarget) {
+  switch (target) {
+    case "firefox":
+      return join(PROJECT_ROOT, "dist-firefox");
+    case "firefox-android":
+      return join(PROJECT_ROOT, "dist-firefox-android");
+    default:
+      return join(PROJECT_ROOT, "dist");
+  }
+}
 
 function parseArgs(argv: string[]) {
+  const targetIndex = argv.indexOf("--target");
+  const targetValue =
+    targetIndex >= 0 && argv[targetIndex + 1]
+      ? argv[targetIndex + 1]
+      : argv.includes("--firefox")
+        ? "firefox"
+        : DEFAULT_TARGET;
+
+  const target: BuildTarget =
+    targetValue === "firefox"
+      ? "firefox"
+      : targetValue === "firefox-android"
+        ? "firefox-android"
+        : "chrome";
+
   return {
-    watch: argv.includes("--watch") || argv.includes("-w")
+    watch: argv.includes("--watch") || argv.includes("-w"),
+    target
   };
 }
 
@@ -104,6 +135,122 @@ async function manifestReferencesLib(manifestPath: string | null) {
   }
 }
 
+type ManifestShape = Record<string, unknown> & {
+  permissions?: unknown;
+  action?: Record<string, unknown>;
+  background?: Record<string, unknown>;
+  browser_specific_settings?: Record<string, unknown>;
+  side_panel?: unknown;
+};
+
+function getBrowserSpecificSettings(manifest: ManifestShape) {
+  return manifest.browser_specific_settings &&
+    typeof manifest.browser_specific_settings === "object"
+    ? (manifest.browser_specific_settings as Record<string, unknown>)
+    : {};
+}
+
+function getNestedSettings(
+  source: Record<string, unknown>,
+  key: "gecko" | "gecko_android"
+) {
+  const value = source[key];
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function transformManifestForFirefoxBase(manifest: ManifestShape): ManifestShape {
+  const permissions = Array.isArray(manifest.permissions)
+    ? manifest.permissions.filter(
+        (permission) => permission !== "sidePanel" && permission !== "offscreen"
+      )
+    : manifest.permissions;
+
+  const browserSpecificSettings = getBrowserSpecificSettings(manifest);
+  const geckoSettings = getNestedSettings(browserSpecificSettings, "gecko");
+  const background =
+    manifest.background && typeof manifest.background === "object"
+      ? (manifest.background as Record<string, unknown>)
+      : {};
+
+  const serviceWorkerPath =
+    typeof background.service_worker === "string"
+      ? background.service_worker
+      : "background/background.js";
+
+  // The Firefox Android/Desktop builds export the visited page URL and clipped
+  // page content into Obsidian, so AMO review/disclosure metadata must account
+  // for browsing activity and website content when no explicit override exists.
+  const dataCollectionPermissions =
+    geckoSettings.data_collection_permissions &&
+    typeof geckoSettings.data_collection_permissions === "object"
+      ? geckoSettings.data_collection_permissions
+      : {
+          required: ["browsingActivity", "websiteContent"]
+        };
+
+  const { side_panel: _sidePanel, ...rest } = manifest;
+
+  return {
+    ...rest,
+    permissions,
+    background: {
+      scripts: [serviceWorkerPath]
+    },
+    action: {
+      ...(manifest.action || {}),
+      default_popup: "popup/popup.html"
+    },
+    browser_specific_settings: {
+      ...browserSpecificSettings,
+      gecko: {
+        ...geckoSettings,
+        id: String(geckoSettings.id || "obsidian-web-clipper@t3rpz.local"),
+        data_collection_permissions: dataCollectionPermissions
+      }
+    }
+  };
+}
+
+function transformManifestForFirefoxAndroid(manifest: ManifestShape): ManifestShape {
+  const browserSpecificSettings = getBrowserSpecificSettings(manifest);
+  const geckoAndroidSettings = getNestedSettings(browserSpecificSettings, "gecko_android");
+
+  const permissions = Array.isArray(manifest.permissions)
+    ? manifest.permissions.filter((permission) => permission !== "nativeMessaging")
+    : manifest.permissions;
+
+  return {
+    ...manifest,
+    permissions,
+    browser_specific_settings: {
+      ...browserSpecificSettings,
+      gecko: {
+        ...getNestedSettings(browserSpecificSettings, "gecko"),
+        strict_min_version: String(
+          getNestedSettings(browserSpecificSettings, "gecko").strict_min_version || "140.0"
+        )
+      },
+      gecko_android: {
+        ...geckoAndroidSettings,
+        strict_min_version: String(geckoAndroidSettings.strict_min_version || "142.0")
+      }
+    }
+  };
+}
+
+function transformManifestForTarget(manifest: ManifestShape, target: BuildTarget): ManifestShape {
+  if (target === "chrome") {
+    return manifest;
+  }
+
+  const firefoxBase = transformManifestForFirefoxBase(manifest);
+  return target === "firefox-android"
+    ? transformManifestForFirefoxAndroid(firefoxBase)
+    : firefoxBase;
+}
+
 async function copyPdfWorker() {
   const workerSrc = resolvePath("node_modules/pdfjs-dist/build/pdf.worker.min.js");
   const workerDest = join(DIST_DIR, "pdfjs/pdf.worker.js");
@@ -111,9 +258,16 @@ async function copyPdfWorker() {
   await cp(workerSrc, workerDest, { force: true });
 }
 
-async function copyStaticAssets() {
+async function copyStaticAssets(target: BuildTarget) {
   const manifestPath = pickFirstExisting(["src/manifest.json", "manifest.json"]);
-  await copyFileIfExists(manifestPath, "manifest.json");
+  if (manifestPath) {
+    const manifestText = await readFile(manifestPath, "utf8");
+    const manifest = JSON.parse(manifestText) as ManifestShape;
+    const transformedManifest = transformManifestForTarget(manifest, target);
+    const manifestDest = join(DIST_DIR, "manifest.json");
+    await ensureDir(dirname(manifestDest));
+    await writeFile(manifestDest, `${JSON.stringify(transformedManifest, null, 2)}\n`, "utf8");
+  }
 
   const popupHtml = pickFirstExisting(["src/popup/popup.html", "popup/popup.html"]);
   const popupCss = pickFirstExisting(["src/popup/popup.css", "popup/popup.css"]);
@@ -125,8 +279,10 @@ async function copyStaticAssets() {
   await copyFileIfExists(optionsHtml, "options/options.html");
   await copyFileIfExists(optionsCss, "options/options.css");
 
-  const offscreenHtml = pickFirstExisting(["src/offscreen/offscreen.html"]);
-  await copyFileIfExists(offscreenHtml, "offscreen/offscreen.html");
+  if (target !== "firefox-android") {
+    const offscreenHtml = pickFirstExisting(["src/offscreen/offscreen.html"]);
+    await copyFileIfExists(offscreenHtml, "offscreen/offscreen.html");
+  }
 
   const iconsDir = pickFirstExisting(["src/icons", "icons"]);
   await copyDirIfExists(iconsDir, "icons");
@@ -138,7 +294,7 @@ async function copyStaticAssets() {
   }
 }
 
-async function buildAll(watchMode: boolean) {
+async function buildAll(watchMode: boolean, target: BuildTarget) {
   const backgroundEntrypoint = pickFirstExisting(["src/background/background.ts", "background.js"]);
   const contentEntrypoint = pickFirstExisting(["src/content/content.ts", "content.js"]);
   const popupEntrypoint = pickFirstExisting(["src/popup/popup.ts", "popup/popup.js"]);
@@ -163,12 +319,14 @@ async function buildAll(watchMode: boolean) {
   await bundleEntrypoint(contentEntrypoint!, "content", watchMode);
   await bundleEntrypoint(popupEntrypoint!, "popup", watchMode);
   await bundleEntrypoint(optionsEntrypoint!, "options", watchMode);
-  if (offscreenEntrypoint) {
+  if (offscreenEntrypoint && target !== "firefox-android") {
     await bundleEntrypoint(offscreenEntrypoint, "offscreen", watchMode);
   }
 
-  await copyStaticAssets();
-  await copyPdfWorker();
+  await copyStaticAssets(target);
+  if (target !== "firefox-android") {
+    await copyPdfWorker();
+  }
 }
 
 function startWatch(onChange: () => void) {
@@ -210,6 +368,7 @@ function startWatch(onChange: () => void) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  DIST_DIR = resolveDistDir(args.target);
 
   if (!args.watch) {
     await cleanDist();
@@ -227,8 +386,8 @@ async function main() {
 
     building = true;
     try {
-      await buildAll(args.watch);
-      console.log("Build complete.");
+      await buildAll(args.watch, args.target);
+      console.log(`Build complete (${args.target}).`);
     } catch (err: any) {
       console.error(err?.message || err);
     } finally {

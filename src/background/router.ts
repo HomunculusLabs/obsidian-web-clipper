@@ -5,6 +5,7 @@ import { RouterError } from "../shared/errors";
 import { handleGetSettings } from "./handlers/getSettings";
 import { handleCopyToClipboard } from "./handlers/copyToClipboard";
 import { handleOpenObsidianUri } from "./handlers/openObsidianUri";
+import { handleRecordSuccessfulSave } from "./handlers/recordSuccessfulSave";
 import { handleExtractPdf } from "./handlers/extractPdf";
 import { handleTestCliConnection } from "./handlers/testCliConnection";
 import { handleDetectCli } from "./handlers/detectCli";
@@ -29,6 +30,8 @@ export async function dispatch(request: RuntimeRequest): Promise<unknown> {
       return handleCopyToClipboard(request);
     case "openObsidianUri":
       return handleOpenObsidianUri(request);
+    case "recordSuccessfulSave":
+      return handleRecordSuccessfulSave(request);
     case "extractPdf":
       return handleExtractPdf(request);
     case "testCliConnection":
